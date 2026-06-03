@@ -1,0 +1,57 @@
+id,title,body,question_id,question_response,metadata,active
+1,Brain fog again?,A break from weed clears the filter.,Break-Reason,Gain Mental Clarity,,true
+2,Always kinda on edge?,Take a break. Rebuild your baseline.,Break-Reason,Reduce Anxiety,,true
+3,Mood stuck on low?,Clear30 can help lift the fog.,Break-Reason,Reduce Depression,,true
+4,Feel kinda far from yourself?,Clear30 helps you come home to you.,Break-Reason,Reduce Being Stuck in Own Head,,true
+5,Tired of being tired?,Clear30 helps your sleep reset itself.,Break-Reason,Improve Sleep Quality,,true
+6,You're not lazy.,You're just stuck in the loop.,Break-Reason,Improve Self-Control and Intention,,true
+7,Just getting high to feel normal?,You're not alone. Clear30 can help.,Break-Reason,Reduce Dependency on Cannabis,,true
+8,Who are you without weed?,Clear30 helps you find out.,Break-Reason,Explore Life Without Cannabis,,true
+9,You want to feel better,Clear30 helps your body catch up.,Break-Reason,Improve Overall Health,,true
+10,Your lungs deserve better,Give them 30 clear days.,Break-Reason,Improve Lung Health,,true
+11,To-do list > couch,Clear30 helps you get back in gear,Break-Reason,Increase Productivity,,true
+12,Big goals? Small habits.,Start with 30 days of clarity.,Break-Reason,Increase Productivity,,true
+13,Motivation isn't missing,It's buried under the fog.,Break-Reason,Increase Motivation,,true
+14,The slump is real,So is your comeback. Start today.,Break-Reason,Increase Motivation,,true
+15,Tired of talking about it?,Do something different for 30 days.,Break-Reason,Increase Motivation,,true
+16,"$40 here, $60 there...",It adds up. Clear30 helps stop the bleed.,Break-Reason,Save Money,,true
+17,Where'd your money go?,Weed. Probably. Wanna switch that up?,Break-Reason,Save Money,,true
+18,You ever do the math?,30 days off = real savings.,Break-Reason,Save Money,,true
+19,Weed tax is real,Take a break. Reclaim your cash.,Break-Reason,Save Money,,true
+20,Connection > distraction,Take a break. Be more available.,Break-Reason,Improve Current Relationships,,true
+21,"High, but disconnected",Clear30 helps rebuild real connection.,Break-Reason,Improve Current Relationships,,true
+22,Feeling kind of alone?,Clarity can help open things up.,Break-Reason,Enhance Social Connections,,true
+23,Social but not connected?,Clear30 clears the static.,Break-Reason,Enhance Social Connections,,true
+24,You're not just background energy,Clear30 helps you light up a room.,Break-Reason,Enhance Social Connections,,true
+25,Clear mind. Clean results.,Start now. You've got this.,Break-Reason,Pass Work-Required Drug Test,,true
+26,Eyes on the goal,Clear30 helps you stay eligible + focused.,Break-Reason,Pass Work-Required Drug Test,,true
+27,Clean test = open door,Clear30 helps you walk through it.,Break-Reason,Pass Work-Required Drug Test,,true
+28,Most people wait too long,You've got time. Let's use it right.,Break-Reason,Pass Work-Required Drug Test,,true
+29,Forget fake detox kits,Clear30 actually helps you stay clean.,Break-Reason,Pass Work-Required Drug Test,,true
+30,Clean record > close call,30 days can help you stay on track.,Break-Reason,Meet Legal Obligations,,true
+31,Freedom hits different,Clear30 helps you protect it.,Break-Reason,Meet Legal Obligations,,true
+32,Freedom takes discipline,Clear30 helps you lock that in.,Break-Reason,Meet Legal Obligations,,true
+33,You've come too far,Stay clean. Protect what you've built.,Break-Reason,Meet Legal Obligations,,true
+34,Wake up proud,"30 days = more energy, less regret.",,,,true
+35,"Clear head, less weed",Clarity hits different when you take a break.,,,,true
+36,Quit weed. Keep your edge.,Your sharpest self is one tap away,,,,true
+37,Less weed. More you.,"Feel sharper, calmer, more alive.",,,,true
+38,Weed got too routine?,Break the autopilot. Clear30 can help.,,,,true
+39,Imagine 30 days clear,"No weed. Better sleep, energy, focus.",,,,true
+40,One tap from clarity 👑,"Cut the weed, keep your power.",,,,true
+41,You're not quitting forever.,You're just seeing what's possible.,,,,true
+42,Glow-up starts here,Cut the haze. Tap in.,,,,true
+43,Clear mind energy,One break away. Try it.,,,,true
+44,Peace > Numb,A break can help. Just tap.,,,,true
+45,Main character moment,Cut the haze. Take back the plot.,,,,true
+46,Take the fog off,Clarity looks better on you.,,,,true
+47,Still in airplane mode?,Clear30 reconnects you. Try it.,,,,true
+48,Imagine 30 clear days,Sleep deeper. Think sharper. Save money.,,,,true
+49,Less autopilot. More intention.,Clear30 helps you take the wheel.,,,,true
+50,Want to reset without pressure?,We guide. You decide. Tap to start.,,,,true
+51,Your future self is watching,This might be their favorite decision.,,,,true
+52,Feeling a craving? 😖,"Try a free meditation, no subscription needed",,,"{""url"":""https://clear30.org/redir/?des=craving""}",true
+53,Feeling stuck? Write it out. ✍️,With your free 30-day journaling pack,,,"{""url"":""https://clear30.org/redir/?des=journal""}",true
+54,🌱 Want extra support?,We partnered with BetterHelp — get 20% off therapy,,,"{""url"":""https://clear30.org/redir/?des=therapy_noti""}",true
+55,🎁 Your free Support Kit is ready,"Strategies, roadmaps, and planners — all in one place",,,"{""url"":""https://clear30.org/redir/?des=suppkt""}",true
+56,We’ve got you covered 💚,Take 33% off Clear30 — your journey’s still waiting,,,"{""placement"":""33off""}",false

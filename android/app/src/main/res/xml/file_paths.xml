@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Where video journals are stored — must match `JournalEntry.videoFile()`
+         which looks under filesDir/videos. The camera intent writes here. -->
+    <files-path
+        name="journal_videos"
+        path="videos/" />
+</paths>

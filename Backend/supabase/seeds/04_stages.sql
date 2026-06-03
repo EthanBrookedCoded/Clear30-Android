@@ -1,0 +1,190 @@
+INSERT INTO "programs"."program_stages" ("stage", "title", "subtitle", "body", "color1", "color2", "fred_experience") VALUES ('awareness', 'Awareness', 'Understanding Triggers and Emotions', 'Welcome to the Awareness section of your Clear30 journey! This week, we’ll focus on increasing your self-awareness and understanding the triggers that influence your cannabis use. Here’s a high-level overview of what you’ll explore:
+
+**Self-Acceptance** 💖: Embrace yourself unconditionally.
+
+**Identify Triggers** 🔍: Recognize patterns in your behavior.
+
+**Emotional Awareness** 🧠: Understand how emotions impact your use.
+
+**Environmental & Social Triggers** 🏠👥: Manage your surroundings and interactions.
+
+**Socratic Self-Examination** 🌟: Explore your deeper motivations.
+
+By becoming more aware of these factors, you’ll gain valuable insights and develop strategies to support your goals. Let’s dive in and uncover the triggers that influence your journey! 🚀', '51A86E', '489D64', null), ('building_habits', 'Building Habits', 'Establish Routines for Lasting Success', 'Welcome to the Building Habits section of your Clear30 journey! This week, we’ll focus on creating and reinforcing habits that support your goals.
+
+**Here’s what you’ll gain:**
+
+**Consistency** 🔄: Build routines that stick.
+**Well-being** 🧘: Incorporate relaxation techniques.
+**Activity** 🏃‍♂️: Stay physically active.
+**Motivation** 🌟: Stay driven and focused.
+
+Together, we’ll establish a strong foundation for lasting change. Get ready to transform your habits and achieve your goals! 🚀', 'E07548', 'D56C42', null), ('celebration', 'Celebration', 'Recognize Your Achievements', 'Welcome to the Celebration section of Clear30! This week, we’ll help you appreciate your progress and achievements, enhancing your motivation and well-being. Here’s how this section will help you:
+
+**Savor Positive Experiences** 🌅: Enhance well-being by appreciating positive moments.
+
+**Document Your Journey** 📔: Track progress and celebrate milestones.
+
+**Letters to Self** 💌: Reflect on growth and offer encouragement.
+
+By focusing on celebration, you can reinforce your achievements, boost your motivation, and enjoy the journey. 🌟', 'e0a552', 'dd9a3c', null), ('discovering_motivations', 'Discovering Your Motivations', 'Understanding and Strengthening Your Why', 'Welcome to the Motivations section of your Clear30 journey! This week, we’ll delve into understanding and strengthening your motivations for moderating cannabis use. Here’s a high-level overview of what you’ll explore:
+
+**Understanding Your Why** 🔍: Dive deep into your core motivations.
+
+**Benefits Reflection** 🌿: Recognize positive changes and set future goals.
+
+**Healthy Living** 🏃‍♂️🥗: Transform your lifestyle with small, impactful changes.
+
+**Sharing Your Plans** 🗣️: Strengthen your commitment through thoughtful sharing.
+
+By understanding and reinforcing your motivations, you’ll stay focused and driven. Let’s uncover what truly drives you! 🚀', 'DD6956', 'D25F4E', null), ('exploration', 'Exploration', 'Discover New Passions', 'Welcome to the Exploration section of Clear30! This week, we’ll focus on discovering new hobbies and stepping out of your comfort zone. Here’s what you’ll gain:
+
+**Discover New Hobbies** 🎨: Try exciting new activities.
+
+**Routine Exploration** 📅: Make new hobbies a regular part of your life.
+
+**Embrace Change** 🌟: Find joy in breaking monotony.
+
+**Celebrate Growth** 🌱: Reflect on the positive changes and new strengths you’ve developed.
+
+By exploring new activities and embracing change, you can discover new passions, enhance your well-being, and continue growing. 🌟', '7A7DC4', '7173B7', null), ('finding_balance', 'Finding Balance in Your Life', 'Create Stability and Well-Being', 'Welcome to the Balance section of your Clear30 journey! This week, we’ll explore how to create harmony in different areas of your life, ensuring you maintain well-being and fulfillment. Here’s a high-level overview of what you’ll explore:
+
+**Identifying Forces** 🌟: Understand what helps or hinders your goals.
+
+**Finding Your Balance** ⚖️: Embrace Aristotle’s Golden Mean for moderation.
+
+**Daily Routines** 🗓️: Establish consistent habits for stability.
+
+**Healthy Living** 🥗🏋️: Focus on nutrition, exercise, and relaxation.
+
+**Avoiding Burnout** 🔄: Learn how to stay consistent without overdoing it.
+
+By focusing on these aspects, you’ll create a balanced and sustainable lifestyle that supports your goals. Let’s find your perfect balance! 🚀', '53acac', '64b4b4', null), ('foundations', 'Foundations', 'Laying the Groundwork', 'Welcome to the Foundation section of your Clear30 journey! This week, we’ll focus on setting the groundwork for your success by exploring key concepts and practical strategies. Here’s a high-level overview of what you’ll explore:
+
+**Goal Setting and Leverage Points** 🌱: Learn to set achievable goals and discover small changes that create big impacts.
+
+**Optimizing Environment and Consistency** 🏡📅: Design surroundings that support your habits and embrace daily progress.
+
+**Motivation and Mindset** 🏃‍♂️💬: Find your motivation for physical activity and strengthen your mindset with affirmations and relaxation techniques.
+
+**Productivity and Resilience** 📝🛠️: Boost productivity with effective methods and prepare for potential obstacles.
+
+By focusing on these foundational elements, you’ll build a strong base to support your moderation goals and overall well-being. Let’s get started and create lasting change! 🚀', '6693D0', '6089C3', null), ('growth', 'Growth', 'Embrace and Empower Yourself', 'Welcome to the Growth section of your Clear30 journey! This week, we’ll focus on self-improvement and developing a growth mindset to help you achieve your goals. Here’s what you’ll explore:
+
+**Visualize Success** 🎯: Harness the power of visualization to achieve your goals.
+
+**Build Healthy Habits** 🏆: Establish routines that support your overall well-being.
+
+**Embrace Relaxation** 🌿: Incorporate relaxation techniques for stress management.
+
+**Stay Motivated** 🏃‍♂️: Find your motivation through fitness and consistency.
+
+By focusing on growth, you’ll develop the resilience and mindset needed to achieve lasting change. Let’s grow together! 🚀', '5b9b4b', '65ac53', null), ('health', 'Health', 'Nurture Your Well-Being', 'Welcome to the Health section of your Clear30 journey! This week, we’ll focus on enhancing your physical and mental well-being. Here’s how you’ll benefit:
+
+**Balanced Nutrition** 🥗: Discover the power of nutritious meals.
+
+**Regular Exercise** 🏋️: Boost your mood and energy through physical activity.
+
+**Optimal Sleep** 🛌: Improve your sleep quality for better health.
+
+**Mental Health Reflection** 🧠: Evaluate and strengthen your mental health practices.
+
+By focusing on these areas, you’ll support your overall health and make it easier to achieve your goals. 🌟', 'E07750', 'D56C47', null), ('lock_it_in', 'Lock It In', 'Solidify and lock in your new habits', 'In this stage, we’ll help you cement the strategies and habits you’ve built so far and introduce new ones to reinforce your progress.
+
+It’s all about shifting from motivation to discipline, from willpower to guaranteed systems.
+
+By the end of this stage, you’ll transition from actively working on your habits to having your habits work for you.', '5B9CF0', '5BAEE6', 'Over the next few days, we’ll help you cement the strategies and habits that work for you and introduce concepts to help you start thinking about your next stages. While this is just a guide and doesn’t always jibe with everyone’s experience, it follows a bit of a pattern.
+
+For me, it was saying to myself, these things appear to be working. I need to grind on them. It was also the time where I really needed to acknowledge my desire to escape existential angst and explore just how much I was ignoring my long-term goals for short-term relief.
+
+Specifically, it is about taking things like acceptance and thinking about how to lock them into your life a bit more. We have and will present a bunch of topics. The key here is to focus on what works for you using Clairebot and the support groups.'), ('looking_back', 'Looking back', 'Understand Your Growth', 'Welcome to the Reflection section of Clear30! This week, we’ll help you solve challenges by understanding and reframing your experiences. Here’s how this section will help you:
+
+**Re-author Your Story** 📖: Rewrite challenging experiences to highlight your resilience.
+
+**Externalize Challenges** 🎯: View problems as external obstacles, not personal failures.
+
+**Unique Outcomes** 🌟: Reflect on past successes to build confidence.
+
+**Visualize Your Future** ✨: Create a motivating vision of your preferred reality.
+
+By focusing on reflection, you can gain valuable insights and develop effective strategies to overcome challenges and stay committed to your goals. 🌟', 'D5AB38', 'CA9F33', null), ('mental_withdrawal', 'Mental Withdrawal', 'Resist temptation to give-in & stay strong', 'Days 5-8 are when some people start to veer because either they are feeling better or the mental symptoms like irritability get worse - which is likely. But you will not veer because you know that it is temporary.
+
+Use this time to reinforce your determination and stay focused on your goals.
+
+With the right mindset and tools, you can navigate this challenging period and stay on track.', 'DE3745', 'F24957', 'The next several days are a weird period where some people are beginning to feel a little better physically but the mental discomfort may start to come in. I can’t tell you how many times I relapsed after the majority of my physical symptoms were over. This is where things like distraction, managing boredom and other issues, and social support really matter.  You almost have to try your hardest this week to stay committed mentally. Being vigilant can create a wonderful sense of confidence during this time -. Confidence that you don’t have to react on every emotion or craving and you will be okay.'), ('mindfulness', 'Mindfulness', 'Enhance Your Awareness', 'Welcome to the Mindfulness section of your Clear30 journey! This week, we’ll focus on incorporating mindfulness practices into your daily routine to enhance your awareness and well-being. Here’s how you’ll benefit:
+
+**Self-Reflection** 🪞: Reflect on your experiences for mindful consumption.
+
+**Context Awareness** 🌆: Understand how different contexts affect your use.
+
+**Consumption Patterns** 🔍: Identify and understand your usage habits.
+
+**Mindful Activities** 🌿: Engage in mindful walking, eating, and other practices to stay present.
+
+By focusing on mindfulness, you can improve your awareness, reduce stress, and make more intentional choices. 🌟', '6F90D5', '6785C8', null), ('moving_forward', 'Planning for Tomorrow', 'Plan a future of continued growth', 'This stage is about preparing for life after Clear30 with the tools you’ve gained, including continuing your journey with our long-term programs.
+
+You’ll learn how to integrate your new habits and strategies into your daily routine for lasting success no matter your goals.
+
+By the end of this stage, you’ll be ready to continue your growth and thrive beyond the program.', '80C97A', '5BB4A9', 'This stage is about preparing for life after Clear30 with the tools you’ve gained focusing on what worked for you and the barriers you faced. As I have said, there is no right or wrong, only progress towards your intentional self. Call yourself out for your bullshit excuses while celebrating sincerity and growth. Really appreciate yourself for trying. Only focus on the trying part. When you actively created a world where you would focus on growth.
+
+My biggest wins were simple. Dragging myself to therapy and self-help groups. Taking care of myself by not giving a shit what others thought of me during this period. Fighting through fear and asking friends for feedback and support. These things set the foundation for more than a break but help learning to live the life I wanted.
+
+No matter the substance - big wins are always simple. The act of just throwing your cart away one day will do more for you than 100 mental showdowns with it, staring at it and trying not to use it. When quitting anything, the little changes you make to your routine and environment will compound over time, and after a few months, everything will change.
+
+As you move forward, be radically honest with yourself. If you are going to stop all together, own it. Be that person who doesn’t smoke. If you are going to moderate / use mindfully, make a plan now and never veer from it. There is NEVER a legitimate reason to veer from your plan if you are moderating. Creating clear goals for yourself allows you to be set free from getting caught in a decision making loop - which will eventually steal your ability to act with intention. Stay intentional in all you do. Own your mistakes. Seek feedback from those closest to you. Embrace the crazy rollercoaster of life with curiosity and awe.'), ('reflection', 'Reflection', 'Reflect on your journey and growth', 'In this stage, you’ll reflect on your progress, identifying what worked and what didn’t, and how to leverage these insights for continued improvement.
+
+You’ll also gain a deeper understanding of your relationship with cannabis and your identity.
+
+By the end of this stage, you’ll have a clearer perspective on your journey, the obstacles you need to overcome, and the changes you’ve achieved.', 'F0D042', 'EFCC34', 'I consider myself a pretty mellow guy. Yes, I can get obsessed with things but my identity is as an easy going person. I liked the culture of people who were not so fucking intense cutthroat but creative and mellow. I thought it was the weed. Reflection is an ongoing process. I found it helpful to come back to reflection often.
+
+Use the next week to reflect and understand what is working and what is not, reflecting on who you want to be.  What was it like trying a new identity? Where does weed fit into your identity six months ago and where do you want it to six months from now? By the end of this stage, you’ll have a clearer perspective on your journey.'), ('relationships', 'Relationships', 'Leverage Your Social Environment', 'Welcome to the Relationships section of Clear30! This week, we’ll focus on leveraging your social environment and connections to achieve your goals. Here’s what you’ll gain:
+
+**Build Strong Connections** 🤝: Tips to make and strengthen friendships.
+
+**Reconnect with Old Friends** 📞: Revitalize past connections.
+
+**Effective Communication** 🗣️: Improve your communication skills.
+
+**Quality Time** 😊: Prioritize meaningful activities with loved ones.
+
+By focusing on your relationships, you can create a supportive network that boosts your well-being and helps you stay on track. 🌟', 'E25F7F', 'D85573', null), ('resilience', 'Resilience', 'Strengthen Your Resolve', 'Welcome to the Resilience section of Clear30! This week, we’ll focus on building a resilient mindset to handle challenges and setbacks with strength and grace. Here’s what you’ll gain:
+
+**Resilient Mindset** 💪: Develop mental toughness to handle setbacks.
+
+**Embrace Setbacks** 🔄: Turn challenges into growth opportunities.
+
+**Support Systems** 🤝: Build a strong network for encouragement.
+
+**Positive Affirmations** 🌟: Use empowering self-talk to stay strong.
+
+By strengthening your resilience, you can navigate life’s challenges with confidence and maintain a positive outlook. 🌟', 'AD4D4D', 'A24646', null), ('spirituality', 'Spirituality and Inner Peace', 'Nurture Your Soul', 'Welcome to the Spirituality and Inner Peace section of Clear30! This week, we’ll help you solve challenges by exploring spiritual practices and finding inner tranquility. Here’s how this section will help you:
+
+**Connecting with Nature** 🌿: Enhance your sense of peace through nature.
+
+**Engaging Your Senses** 👀: Stay present and grounded.
+
+**Exploring Spiritual Practices** 🧘‍♂️: Discover what resonates with you.
+
+**Creating a Sacred Space** 🛋️: Design a personal sanctuary.
+
+**Mindful Spiritual Practice** 🌿: Enhance your practices with mindfulness.
+
+By focusing on spirituality and inner peace, you can cultivate a sense of calm and well-being, helping you stay committed to your goals. 🌟', 'A353C1', '9849B2', null), ('withdrawal', 'Physical Withdrawal', 'Power through physical withdrawal and cravings', 'Weed withdrawal sucks, but it’s a necessary first step for many.
+
+At this stage, we help you turn the discomfort into motivation, breaking your smoking habit and managing withdrawal symptoms.
+
+We’ll provide you with effective strategies and tools to navigate these initial days and stay smoke-free.', 'FF9359', 'FA8957', 'Through many failures, I discovered **three** strategies that fundamentally changed my approach to change as I began:
+
+**Make Growth a Priority:** First, I made personal growth my top priority in the beginning. I set aside all the "shoulds" and "musts" that weren’t essential to me dealing with the discomfort from changing. I realized that my effort had to be focused on growth, not dealing with things that don’t matter to my future including temporary pleasure and escape. Shifting the effort I put into my life to focus almost entirely on growth made it so much easier.
+
+**Choose Your Identity:** Second, I embraced a new identity. Both in terms of my mind, and my surroundings. The clearest example of this was when I quit smoking cigarettes. Whenever I craved one, I’d tell myself, "Why would I want a cigarette? I don’t smoke." It might sound crazy, but it worked. Adopting a new identity means shaping your life around it. For Clear30, embrace being a non-user for 30-days, no matter your goals after the break. You don’t smoke. You are doing a Clear30.
+
+**Move:** I would try to fight urges on my own thinking I needed to tough it out in my head. II would try to muster up all this motivation on my own with a new mindset. It was only part of it. It wasn’t until I realized that I had to actively move towards growth that I changed. Hanging out with positive people. Putting myself in vulnerable social situations without drugs. “Doing” instead of thinking gave me a break shifting between thoughts of nothingness and rumination. It allowed me to engage in the world.
+
+During your Clear30, we will send weekly messages to introduce different stages, with some of my personal story. While all may not apply at the moment, it will hopefully give you some insight on the process of living with intention.
+
+When all is said and done, act “as if” and move towards intention. If you do, everything will fall into place. You got this!'), ('your_mindset', 'Mindset Mastery', 'Cultivate a stronger & healthier frame of mind', 'In this stage, your mood and mental wellness may still be unsteady as your brain adjusts to a new equilibrium without cannabis.
+
+We guide you through this transition with strategies to enhance your mood, mindset, and perspective on your journey', '944BE7', 'A051FA', 'I consider myself a pretty mellow guy. Yes, I can get obsessed with things but my identity is as an easy going person. I liked the culture of people who were not so fucking intense cutthroat but creative and mellow. I thought it was the weed. Reflection is an ongoing process. I found it helpful to come back to reflection often.
+
+Use the next week to reflect and understand what is working and what is not, reflecting on who you want to be.  What was it like trying a new identity? Where does weed fit into your identity six months ago and where do you want it to six months from now? By the end of this stage, you’ll have a clearer perspective on your journey.');

@@ -1,0 +1,11 @@
+id,symptom,title,subtitle,image_url,type,extra_info,enabled,created_at,local_image_name
+3,Appetite Problems,Eating feels off?,We got you,https://m.clear30.org/images/clear_pack.png,supplement,"{""popup_title"":""Appetite issues suck"",""supplement_pack"":""clear-pack-1""}",false,2025-12-04 20:53:56.677747+00,Clear Pack
+4,Stomach Problems,Gut acting up?,There's help here,https://m.clear30.org/images/clear_pack.png,supplement,"{""popup_title"":""Stomach stuff is rough"",""supplement_pack"":""clear-pack-1""}",false,2025-12-04 20:53:56.677747+00,Clear Pack
+5,Lasting Brain Fog,Can't think straight?,Check this out,https://m.clear30.org/images/clear_pack.png,supplement,"{""popup_title"":""Brain fog is real"",""supplement_pack"":""clear-pack-1""}",false,2025-12-04 20:53:56.677747+00,Clear Pack
+6,Nausea,Feeling sick again?,We have something,https://m.clear30.org/images/clear_pack.png,supplement,"{""popup_title"":""Nausea is the worst"",""supplement_pack"":""clear-pack-1""}",false,2025-12-04 20:53:56.677747+00,Clear Pack
+7,Cravings,2am urges?,Check this out,https://m.clear30.org/images/clear_pack.png,supplement,"{""popup_title"":""Cravings can be rough"",""supplement_pack"":""clear-pack-1""}",false,2025-12-04 20:53:56.677747+00,Clear Pack
+8,Insomnia,Can't sleep again?,Try this pack,https://m.clear30.org/images/sleep_pack.png,supplement,"{""popup_title"":""Sleep issues are brutal"",""supplement_pack"":""sleep-pack-1""}",false,2025-12-04 20:53:56.677747+00,Sleep Pack
+9,Social Pressure,Feeling the weight?,Talk to someone,https://m.clear30.org/images/betterhelp.png,betterhelp,,true,2025-12-04 21:53:15.454409+00,better help
+10,Depression,It's been heavy?,Get real help,https://m.clear30.org/images/betterhelp.png,betterhelp,,true,2025-12-04 21:53:15.454409+00,better help
+11,Loneliness,Feeling isolated?,You're not alone,https://m.clear30.org/images/betterhelp.png,betterhelp,,true,2025-12-04 21:53:15.454409+00,better help
+12,Anxiety,Can't calm down?,Professional support helps,https://m.clear30.org/images/betterhelp.png,betterhelp,,true,2025-12-04 21:53:15.454409+00,better help

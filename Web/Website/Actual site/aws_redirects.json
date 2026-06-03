@@ -1,0 +1,384 @@
+[
+    {
+        "Condition": {
+            "KeyPrefixEquals": "mlb"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "referral/?code=free2mlb"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "dr-wade"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "referral/?code=free2wade"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "kit"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "promote-pack/?scroll_to=toolkit"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "why-break"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "why-take-a-break-from-weed"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "gabe"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "join-a-group/?group_id=0d47fe33-0752-47f7-a6fc-e8fcfcde7ba7&name=Gabe"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "mitch"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "join-a-group/?group_id=c1dbb18b-e224-48a8-9a6b-48e2e2abb34b&name=Mitch"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "app"
+        },
+        "Redirect": {
+            "HostName": "apps.apple.com",
+            "Protocol": "https",
+            "ReplaceKeyWith": "us/app/clear30/id6476418203"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "wellness-toolkit-embed"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "embed"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "quit-city"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "join-a-group/?group_id=4667dadc-bb44-4f2a-9d37-994709e22be7&name=Asher"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "iowning"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "influencer/?influencer=iOwning&group_id=95ab8071-df67-4c7f-9166-03b9713e45ac"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "baby-hk"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "influencer/?influencer=BabyHK&group_id=20560c4e-409a-49aa-8c08-c5279c50c8af"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "zoom"
+        },
+        "Redirect": {
+            "HostName": "us06web.zoom.us",
+            "Protocol": "https",
+            "ReplaceKeyWith": "j/81512693951?pwd=ZxAmxsTvKrDXZeK1fohQya6r15qLXP.1"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "support-group"
+        },
+        "Redirect": {
+            "HostName": "us06web.zoom.us",
+            "Protocol": "https",
+            "ReplaceKeyWith": "j/83374445141"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "testimonial"
+        },
+        "Redirect": {
+            "HostName": "notion.so",
+            "Protocol": "https",
+            "ReplaceKeyWith": "Clear30-Testimonial-Video-Guide-26bdd984ff8d80ccb035e90a84bbd2dd"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "emily"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "influencer/?influencer=Emiy&group_id=b33bc6a1-efbb-43ba-9625-80d8403232de"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "charlie"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "influencer/?influencer=Charlie&group_id=958079a8-c8cf-4063-8dbb-78b48214f4bd"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "emerson"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "influencer/?influencer=Emerson&group_id=c2920582-1635-48c9-901c-d1663076004f"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "shiesty_asher_group"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "join-a-group/?group_id=ab4fd3e2-5ca8-44d7-9082-4c93a6af2f06&name=Asher"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "gerad"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "join-a-group/?group_id=339504c9-2346-428c-aded-47d6686ac2de&name=Gerad"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "asher"
+        },
+        "Redirect": {
+            "HostName": "calendly.com",
+            "Protocol": "https",
+            "ReplaceKeyWith": "asher-clear30/chat-with-asher"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "birchy"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "join-a-group/?group_id=133d856c-7b8f-406a-a1bb-90473a38fe90&name=Tom-Birchy"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "gremlin"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "join-a-group/?group_id=ab3b71d6-c162-4895-b87a-589060841e57&name=Gremlin"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "nathan"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "join-a-group/?group_id=d84ef3fb-ea0d-473f-900a-8d4af6143379&name=Nathan"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "leek"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "join-a-group/?group_id=1b2f3830-3a42-4f4a-9840-b630406e7f78&name=Malik"
+        }
+    },
+    {
+        "Condition": {
+            "HttpErrorCodeReturnedEquals": "404"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "not-found"
+        }
+    },
+    
+    
+    {
+        "Condition": {
+            "KeyPrefixEquals": "det"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "school-link?school=city_of_detroit&key=general"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "umich"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "school-link?school=umich&key=general"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "massart"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "school-link?school=massart&key=general"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "dartmouth"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "school-link?school=dartmouth&key=general"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "odu"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "schools/referral/?school=Old%20Dominion%20University&students=Monarchs&email=@odu.edu"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "northwestern"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "school-link?school=northwestern&key=general"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "amherst"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "school-link?school=amherst&key=general"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "wustl"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "school-link?school=wustl&key=general"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "butler"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "school-link?school=butler&key=general"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "eiu"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "school-link?school=eiu&key=general"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "neiu"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "school-link?school=neiu&key=general"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "jmu"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "school-link?school=jmu&key=general"
+        }
+    },
+    {
+        "Condition": {
+            "KeyPrefixEquals": "vassar"
+        },
+        "Redirect": {
+            "HostName": "clear30.org",
+            "Protocol": "https",
+            "ReplaceKeyWith": "school-link?school=vassar&key=general"
+        }
+    }
+]

@@ -1,0 +1,73 @@
+-- Seed: library.sms_downsell
+-- Source: 2025_10_14_sms_downsell.csv
+
+TRUNCATE library.sms_downsell CASCADE;
+
+INSERT INTO library.sms_downsell (id, day_offset, message, created_at, type, min_offset, active) VALUES (1, 0, '🙋‍♀️ Hey _CLIENTNAME_, we put together a freeeeee pack of cravings meditations to help you ride out urges. 
+
+📲Grab them here: clear30.org/redir/?des=craving
+
+This week we’ll send you more free tools: 
+📝 Journal prompts
+📌 Reset posters
+🤝 Support guides
+
+So you’ll always have tools by your side 🥳', '2025-10-02 17:22:34.424508+00', 'craving_meditations', 0, FALSE) ON CONFLICT (id) DO NOTHING;
+INSERT INTO library.sms_downsell (id, day_offset, message, created_at, type, min_offset, active) VALUES (2, 1, '🧘Here’s a free 30-day pack of quick journal prompts: clear30.org/redir/?des=journal
+
+They’re simple questions designed to help you reflect, notice patterns, and make your weed break feel more intentional.
+
+Try a prompt a day or just whenever you feel like checking in. More free tools coming your way soon 🥳', '2025-10-02 17:22:56.872039+00', 'journal_prompts', 0, FALSE) ON CONFLICT (id) DO NOTHING;
+INSERT INTO library.sms_downsell (id, day_offset, message, created_at, type, min_offset, active) VALUES (3, 2, '🌱 When you’re trying to make changes, talking to a professional can give you the support to actually make it happen.
+
+We partnered with BetterHelp so you can try therapy at 20% off: clear30.org/redir/?des=therapy
+
+If you’re curious, check it out. If not, no pressure - you’ll still get all the free tools we send 🤞', '2025-10-02 17:23:19.827943+00', 'betterhelp', 0, FALSE) ON CONFLICT (id) DO NOTHING;
+INSERT INTO library.sms_downsell (id, day_offset, message, created_at, type, min_offset, active) VALUES (4, 3, '🎁 We spent two weeks building the Weed Break Support Kit.
+
+It’s a complete toolkit with our best strategies, roadmaps, and a printable calendar to plan your break.
+
+It’s like getting the Clear30 structure in one place, without joining the program. Keep it on your phone or print it out.
+
+🔗 Unlock it here: clear30.org/redir/?des=suppkt', '2025-10-02 17:23:56.115428+00', 'support_kit', 0, FALSE) ON CONFLICT (id) DO NOTHING;
+INSERT INTO library.sms_downsell (id, day_offset, message, created_at, type, min_offset, active) VALUES (5, 4, '😤 Our mission is to make Clear30 available to everyone.
+
+If cost or commitment has been a barrier, here’s 33% off to help you get started: clear30://offer?placement=33off
+
+Don’t have the app? Reinstall from the App Store, then tap the link 📲
+
+Either way we’ll keep sending free tools to support your journey :)', '2025-10-02 17:24:26.410079+00', 'discount_33', 0, FALSE) ON CONFLICT (id) DO NOTHING;
+INSERT INTO library.sms_downsell (id, day_offset, message, created_at, type, min_offset, active) VALUES (6, 0, '💬 You were ready to grow… and then we asked for a subscription.
+
+That probably stung, but we asked for a reason.
+
+We want to help millions of people reset with Clear30.
+
+Those subscriptions make that possible.
+
+But still, we get it.
+You wanted support, not a paywall.
+
+So we want to make it up to you.
+
+We put together a free suite of tools you’ll get this week:
+🧘 Cravings meditations
+📓 A 30-day journal
+🤝 Support guides
+
+We hope they help.
+
+If you don’t want any more texts, just reply stop 🫡💚', '2025-10-10 17:00:00+00', 'intro_2', 0, TRUE) ON CONFLICT (id) DO NOTHING;
+INSERT INTO library.sms_downsell (id, day_offset, message, created_at, type, min_offset, active) VALUES (7, 0, '🙋‍♀️ When cravings hit, use these free meditations to reset and stay grounded 👉 clear30.org/redir/?des=craving', '2025-10-10 17:00:00+00', 'craving_meditations_2', 3, TRUE) ON CONFLICT (id) DO NOTHING;
+INSERT INTO library.sms_downsell (id, day_offset, message, created_at, type, min_offset, active) VALUES (8, 1, '🧘 Free 30-day journal prompts to help you stay mindful on your break 💚
+Start here: clear30.org/redir/?des=journal', '2025-10-10 17:00:00+00', 'journal_prompts_2', 0, TRUE) ON CONFLICT (id) DO NOTHING;
+INSERT INTO library.sms_downsell (id, day_offset, message, created_at, type, min_offset, active) VALUES (9, 2, '🌱 We partnered with BetterHelp to give you 20% off therapy.
+Having someone to talk to can make growth feel easier: clear30.org/redir/?des=therapy', '2025-10-10 17:00:00+00', 'betterhelp_2', 0, TRUE) ON CONFLICT (id) DO NOTHING;
+INSERT INTO library.sms_downsell (id, day_offset, message, created_at, type, min_offset, active) VALUES (10, 3, '🎁 The Weed Break Support Kit is live — strategies, roadmaps, and a break planner in one place.
+🔗 Get it here: clear30.org/redir/?des=suppkt', '2025-10-10 17:00:00+00', 'support_kit_2', 0, TRUE) ON CONFLICT (id) DO NOTHING;
+INSERT INTO library.sms_downsell (id, day_offset, message, created_at, type, min_offset, active) VALUES (11, 4, '😤 Our mission is to make Clear30 accessible to everyone.
+
+If cost’s been a barrier, here’s 33% off to get started: clear30://offer?placement=33off
+No app? Reinstall from the App Store, then tap the link 📲
+
+We’ll keep sending free tools to support you either way 💚', '2025-10-10 17:00:00+00', 'discount_33_2', 0, TRUE) ON CONFLICT (id) DO NOTHING;

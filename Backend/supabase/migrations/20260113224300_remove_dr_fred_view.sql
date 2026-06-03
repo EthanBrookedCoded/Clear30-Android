@@ -1,0 +1,1 @@
+drop view if exists "views"."dr_fred_conversations";

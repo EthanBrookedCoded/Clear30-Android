@@ -1,0 +1,1996 @@
+{
+  "translations": {
+    "https://clear30.io/49a80qa": "preparation",
+    "https://clear30.io/45P8EGu": "tapering",
+    "https://clear30.io/45NhDIh": "withdrawal",
+    "https://clear30.io/3Q8L2H2": "cravings",
+    "https://clear30.io/406inal": "triggers",
+    "https://clear30.io/407bFRm": "sleep",
+    "https://clear30.io/47m6TSz": "exercise",
+    "https://clear30.io/3Sejinc": "social",
+    "https://clear30.io/475ee8E": "distractions",
+    "https://clear30.io/3Fvzfh7": "mental",
+    "https://clear30.io/46ZLcaA": "boredom",
+    "https://clear30.io/3FucM3V": "persistence",
+    "https://clear30.io/4602hAt": "professionalhelp",
+    "https://clear30.io/46UigAO": "mindfulness",
+    "https://clear30.io/3Mbw9CE": "acceptance",
+    "https://clear30.io/3Met1pv": "busyness",
+    "https://clear30.io/45MXCBs": "brain",
+    "https://clear30.io/475anbY": "feedback",
+    "https://clear30.io/46LMh6i": "positivity",
+    "https://clear30.io/408aYam": "motivation",
+    "https://clear30.io/3QtaQPE": "shortlongterm",
+    "https://clear30.io/46I0Rvz": "curiosity",
+    "https://clear30.io/47m8Yhl": "slowchange",
+    "https://clear30.io/40aDQ1N": "reward",
+    "https://clear30.io/3QtYl6a": "fadingaffect",
+    "https://clear30.io/45Nk79z": "finalpage",
+    "https://clear30.io/3FvjlmT": "writing",
+    "https://clear30.io/3MbIkiQ": "intention",
+    "https://clear30.io/3Qs8rEG": "supplements",
+    "https://clear30.io/3sedMpM": "friends",
+    "https://clear30.io/3UkLuFs": "content",
+    "https://clear30.io/3TTFIJm": "potency",
+    "https://clear30.io/3UkJ6P7": "under21",
+    "https://clear30.io/49zM46N": "delta8",
+    "https://clear30.io/3TVDoBM": "routeofadmin",
+    "https://claire.clear30.org": "claire"
+  },
+  "blank": {
+    "title": "",
+    "quote": "",
+    "prompts": {},
+    "sections": [
+      {
+        "type": "text",
+        "header": "",
+        "paragraphs": [
+
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "",
+        "link": ""
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          
+        }
+      }
+    ]
+  },
+  "preparation": {
+    "title": "Setting the Stage",
+    "quote": "Before anything else, preparation is the key to success - AGB",
+    "prompts": {},
+    "sections": [
+      {
+        "type": "text",
+        "header": "Setting the Stage",
+        "paragraphs": [
+          "Preparation sets the stage for a successful Clear30. You will be getting individual messages and full pages about many of these topics during your Clear30, but it is also helpful to think about a few of them immediately. Listen to the Clear30 Preparation Meditation to get started."
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Preparation Meditation",
+        "link": "https://m.clear30.org/preparation.mp3"
+      },
+      {
+        "type": "text",
+        "header": "🚀 Reinvent Yourself for 30-Days!",
+        "paragraphs": [
+          "Truly commit to your Clear30. For 30 days, your identity is someone who doesn’t use weed. It is really fun to create a new identity for a month. Who is a person you have always admired for their intention and persistence? Channel them! When we act as if, the rest becomes so much easier."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔧 Use the Clear30 tools",
+        "paragraphs": [
+          "Spend at least 5 minutes (hopefully more) on listening to Clear30 meditations, reading the pages, using ClaireBot for questions, checking out all the resources, and responding to assessments. It works!"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🌟 Intention setting",
+        "paragraphs": [
+          "Setting your goal and intentions for the day is proven to be effective. Doing this in the mornings will help you center your day around your goals; doing this in the evenings can help keep your mind on the future and the benefits of this break. Use Clear30 daily meditations to help you get (and stay) intentional."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🤝 Get support",
+        "paragraphs": [
+          "We will keep saying it. Get support. It doesn't matter what kind. There are three kinds of support that you can mix and match:",
+          "👥 Group Clear30. The first is doing Clear30 with friends. You would be surprised that some of your friends who smoke will do Clear30 with you if you ask. It will not only be helpful for you but also for them. It creates a very cool bonding experience if you are lucky enough to have these kinds of friendships.",
+          "🙋 Solo Clear30 with non-user support. Research has revealed the importance of supportive people—whether they use substances or not—to bounce things off of and to do things with. While not everyone has these relationships, if you have people who are willing to help you, let them know you are trying to make a change and would love their support in chatting or doing things that don’t involve weed over the next 30 days.",
+          "💻 Solo Clear30 with online support. Covid-19 made it clear that online support is really powerful and effective. Regardless of whether you have in-person support, use online support because it is there 24-7."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "💡 Do what works for you!",
+        "paragraphs": [
+          "We will be sending lots of information over the next 30 days. Keep it simple. There is no way to follow every recommendation. It is meant to give you a menu to choose from. If you start to get overwhelmed, take a step back and focus on what is working for you and always ask others for feedback if you are unsure"
+        ]
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "Weedless Guide to Preparation": "https://www.weedless.org/guide/",
+          "UVM: T-Break Preparation (and Guide): Definitely Check it out": "https://www.uvm.edu/health/day-0-preparation",
+          "Mcwell: Self help guide for 30 day T-break": "https://mcwell.nd.edu/your-well-being/physical-well-being/drugs/marijuana-or-cannabis-sativa/quitting-marijuana-a-30-day-self-help-guide/",
+          "Addiction Mindset: T-Breaks": "https://www.youtube.com/watch?v=Zg8mYYwbA1I",
+          "The Problem With Weed...": "https://www.youtube.com/watch?v=NqtYZJSGeEY",
+          "Taking a break is hard! Any suggestions?":"https://www.reddit.com/r/canadients/comments/5yylas/taking_a_break_is_hard_any_suggestions/"
+        }
+      }
+    ]
+  },
+  "tapering": {
+    "title": "Tapering",
+    "quote": "It does not matter how slowly you go as long as you do not stop - Confucius",
+    "prompts": {
+      "🌟 Tapering Plan": "ClaireBot, based on how much I use and my triggers, can you help me with a taper plan? Ask me about the potency and other things that affect my taper",
+      "🔄 Taper watchouts": "What are some things I need to watchout for based on what you know about me when I taper?"
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "Tapering",
+        "paragraphs": [
+          "Tapering can be an effective way to reduce withdrawal symptoms, especially when you use weed almost every day and/or you use high potency weed. During a taper, you should act like you are fully doing your Clear30. Own it! We will send you messages just like those not doing a taper."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "IMPORTANT NOTE:",
+        "paragraphs": [
+          "Clear30 does not endorse the use of cannabis in states or countries where it is illegal or for people under 21 in all states and countries. Please comply with all state and country regulations and laws. If you decide to taper, consult with a professional. Clear30 is not medical advice but information and education. Below is an EXAMPLE of a tapering protocol. Below are several other resources for tapering available on the web."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "IMPORTANT NOTE:",
+        "paragraphs": [
+          ""
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Tapering Protocols for Cannabis Use",
+        "paragraphs": [
+          "There isn't a one-size-fits-all approach for tapering cannabis use, as there's no gold standard. Here is an example of a tapering plan:",
+          "🗓️ Day 1: 80% of usual use",
+          "🗓️ Day 2: 80% of use",
+          "🗓️ Day 3: 50% of use",
+          "🗓️ Day 4: 50% of use",
+          "🗓️ Day 5: 30% of use",
+          "🗓️ Day 6: 20% of use",
+          "🗓️ Day 7: 20% of use",
+          "🗓️ Day 8: 10% of use",
+          "🗓️ Day 9: Decide whether you can stop safely / seek additional help"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "👂 Your Body",
+        "paragraphs": [
+          "Listening to your body is crucial during this process, as the taper may feel too intense or not intense enough. Remember, withdrawal symptoms will still occur, but they'll likely be less intense."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🌿 Cannabidiol (CBD) Tapering",
+        "paragraphs": [
+          "Some people opt to use CBD to help with tapering. Some research suggests that it can reduce withdrawal symptoms in some people. If you decide to use CBD, try ingesting it differently from how you use THC (e.g., in tea ☕). Tomorrow and the next day, we'll send you more information on managing withdrawal."
+        ]
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "Taper Thread 1": "https://www.reddit.com/r/Petioles/comments/ckzdze/taper_your_usage_instead_of_cold_turkey/",
+          "Taper Thread 2": "https://www.reddit.com/r/Petioles/comments/147y37v/am_i_doing_this_right_tapering_and_i_feel_awfil/",
+          "Quora: Ways to Taper": "https://www.quora.com/What-is-a-good-way-to-taper-down-heavy-cannabis-use-while-minimizing-withdrawal-symptoms",
+          "Weedless: Taper Guide": "https://www.weedless.org/insights/how-i-tapered-to-quit-a-heavy-concentrate-habit/",
+          "Anyone any success tapering off weed rather than cold turkey? What do you think from your experience is the better method?":"https://www.reddit.com/r/leaves/comments/vasge5/anyone_any_success_tapering_off_weed_rather_than/",
+          "What’s the best way to slowly taper off?":"https://www.reddit.com/r/Petioles/comments/s93cje/whats_the_best_way_to_slowly_taper_off/",
+          "Experience with weaning off vs. cold turkey?":"https://www.reddit.com/r/leaves/comments/pyo1cf/experience_with_weaning_off_vs_cold_turkey/"
+        }
+      }
+    ]
+  },
+  "withdrawal": {
+    "title": "Dealing With Withdrawal",
+    "quote": "Behind every beautiful thing, there's some kind of pain - Bob Dylan",
+    "prompts": {},
+    "sections": [
+      {
+        "type": "text",
+        "header": "Dealing With Withdrawal",
+        "paragraphs": [
+          "Withdrawal may be worse if you use weed regularly with minimal time between breaks use higher potency weed.",
+          "✏️ But remember, it's okay to feel these things. Accept that they will happen but make sure to seek professional help if they are bad. There is help out there."
+        ]
+      },
+      {
+        "type": "image",
+        "header": "",
+        "link": "https://m.clear30.org/journey_graph.png"
+      },
+      {
+        "type": "text",
+        "header": "🌿What Happens When You Break?",
+        "paragraphs": [
+          "⏸️ When you decide to hit pause on cannabis, your body's first reaction might be, \"Hey, where's the THC?\" It's like going to your favorite coffee shop only to find they're out of coffee! Your endocannabinoid system, which controls memory, mood, movement, appetite, and sleep, is left wondering where its familiar ingredient has gone. This sudden change can throw your system off.",
+          "💭 Everyone's withdrawals are unique. You might notice changes that mirror the effects of your high. Loved those munchies? You might now experience decreased appetite. Did cannabis make you feel chill? Irritability could sneak in. Plus, there might be new experiences, like vivid dreams that can feel like you've jumped into a sci-fi movie - that's because cannabis suppresses REM sleep, and when you stop, the dreams come back in HD."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Without cannabis, you may come face to face with:",
+        "paragraphs": [
+          "Stomach pain 🤢",
+          "Irritability and anxiety 😡",
+          "Decreased appetite or nausea 🍽️",
+          "Fevers, sweating, or chills 😰",
+          "Headaches 🤯",
+          "Restlessness 😣",
+          "Sleep problems, including those sci-fi dreams 🛌",
+          "Cravings 🍃",
+          "A sense of melancholy 😔",
+          "If this feels like too much to handle, consider a gradual farewell to THC, a sort of \"see you later\" approach. Check out our brief taper page.",
+          "✏️ Withdrawal might have a psychological side too. If cannabis was your sleep companion, you might worry about restless nights. If it was your shield from boredom or anxiety, you might feel exposed. But remember, it's okay to feel these things. Accept they will happen. They are temporary.",
+          "And hey, it's not all bad! Many people begin to experience benefits like improved motivation, increased energy, and sharper focus within a week of breaking. 🌞💪🧠"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "How long will this last?",
+        "paragraphs": [
+          "🎢 The first week is like the steep climb on a rollercoaster, especially starting at day 2. Some symptoms, like brain fog, ultra vivid dreams, and stomach issues, might stick around for your whole Clear30. Remember, THC likes to hide in your fat cells and can take 3-4 weeks to leave the building.",
+          "We're here with tips and tricks to make this break a little less bumpy."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Making Withdrawal a Smoother Ride: Your Go-to Guide 🎢💡",
+        "paragraphs": [
+          "Here are some handy tips to turn those choppy waves into a more manageable tide during Clear30. BIG NOTE: Keep it simple. This is an overview for you to pick and choose a couple. We will go over each of these in detail during your Clear30.",
+          "1️⃣ Acceptance: Understanding and accepting that discomfort is part of the journey can help you navigate this new path with intention. It's not about running from discomfort but learning to dance in the rain. However, if the storm gets too wild, don't hesitate to seek medical help.",
+          "2️⃣ Self-Care: This isn't the time to run a marathon or plan a house move. Keep your first week gentle and stress-free. Give yourself the green light to dodge demanding tasks, especially if they trigger cravings.",
+          "3️⃣ Exercise: Your new best friend to combat withdrawal symptoms like sleep issues and irritability. A good workout can reset your nervous system, trigger those happy endorphins, and help revitalize your endocannabinoid system.",
+          "4️⃣ Hydrate: Think of water as your detox ally, helping to flush out THC and support your body's natural cleansing processes. Plus, staying hydrated can also ease stomach issues and brain fog. 💧🍵",
+          "5️⃣ Distraction: When withdrawal takes center stage, divert your attention with fun activities. The more engaged you are, the less time you'll have to dwell on your symptoms. 🎨🚴‍♂️",
+          "6️⃣ Mindfulness: It's like a compass guiding you towards intention and away from your symptoms. Consider trying a few of our recommended meditations. 🧭🧘‍♀️",
+          "7️⃣ Supplements: Some, like NAC, magnesium, CBD, and B-complex, have shown promise in easing cravings and withdrawal symptoms. Always consult with a healthcare provider before starting any supplement regimen. 💊👩‍⚕️ ",
+          "🌿 Taper: If you didn't choose doing a taper during your assessment but think you may need it, check out our taper guide for some support https://clear30.io/45P8EGu 🌿 ",
+          "8️⃣ Support: Lean on friends, join online support groups, or seek professional help. Social support can actually dial down the intensity of withdrawal. 👥💬"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "Actively do things to reduce withdrawal symptoms, ideally before they start."
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Withdrawal Meditation",
+        "link": "https://m.clear30.org/withdrawal.mp3"
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "Withdrawal": "https://www.youtube.com/watch?v=7u_cm5b1s7Y",
+          "Manage Withdrawal": "https://www.youtube.com/watch?v=J-1neoDfLzo",
+          "Managing Cannabis Withdrawals": "https://www.reddit.com/r/AskReddit/comments/ovrqxx/how_long_do_cannabis_withdrawals_last_anxiety/",
+          "Managing Cannabis Withdrawals 2": "https://www.reddit.com/r/leaves/comments/1hmj0u/my_personal_guide_for_withdrawal_symptoms/",
+          "Weedless: Withdrawal Timeline": "https://www.weedless.org/withdrawal/timeline/",
+          "Healthline: What to expect from withdrawal": "https://www.healthline.com/health-news/marijuana-withdrawal-symptoms-are-real-for-regular-users#What-the-study-revealed",
+          "Harvard Medical School: Managing withdrawal": "https://www.health.harvard.edu/blog/if-cannabis-becomes-a-problem-how-to-manage-withdrawal-2020052619922",
+          "How long do cannabis withdrawals last (anxiety, night sweats, nausea) and how do you keep your tolerance low enough to not experience this?":"https://www.reddit.com/r/AskReddit/comments/ovrqxx/how_long_do_cannabis_withdrawals_last_anxiety/",
+          "My Personal Guide for Withdrawal Symptoms":"https://www.reddit.com/r/leaves/comments/1hmj0u/my_personal_guide_for_withdrawal_symptoms/"
+        }
+      }
+    ]
+  },
+  "cravings": {
+    "title": "Understanding Cravings",
+    "quote": "Cravings are fleeting, regret is enduring",
+    "prompts": {
+      "🌀 Beat Cravings: Quick Techniques 🛡️": "ClaireBot, struggling with cravings. Based on my profile share techniques or activities to distract and resist the urge.",
+      "🔍 Understand Triggers 🔑": "ClaireBot, let's dive into my cravings based on my profile. Help me uncover and understand them a bit, including why they arise"
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "Understanding Cravings",
+        "paragraphs": [
+          "Cravings are your brain's way of asking for the THC it's used to when you are triggered by certain things, from specific times of day, to people, to boredom, to needing to cope with something. The stronger the cravings when you don't want to use, the more important it is to fight them becaue it means they are beginning to steal your intention"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Strategies for Cravings",
+        "paragraphs": [
+          "Effectively managing cravings often involves a variety of strategies. Here are some proven methods:",
+          "✅ Acceptance: Simply accepting you will have cravings and allowing them to happen gives you power over them. They will happen. Over and over again. They will lessen over time. Most importantly, a craving does not mean you have to use.",
+          "🌊 Urge Surfing / Meditations: A great way to accept a craving and let it pass is by 'urge surfing.' Close your eyes and watch the urge float down a river or get carried on a wave and disappear. Check out today's meditation!",
+          "🏋🏿 Exercise: Good for your physical health and also serves as a mental distraction.",
+          "🔄 Altering Your Environment: Changing your surroundings can help you avoid triggers.",
+          "👀 Distractions: Engage in activities that shift your focus away from cravings.",
+          "📚 Being Prepared: Knowing what triggers you and avoiding it if you can (like certain people) is probably the best way to reduce cravings over time."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "Cravings do not equal action. Each time you let one pass, you get stronger and there are proven strategies to overcome them!"
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Cravings Meditation",
+        "link": "https://m.clear30.org/cravings.mp3"
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "Fighting the urge to smoke": "https://www.reddit.com/r/eldertrees/comments/i6jfqp/a_potpositive_guide_on_how_to_fight_the_urge_to",
+          "Weed cravings timeline": "https://www.reddit.com/r/recovery/comments/z4arvf/when_do_weed_cravings_stop_or_at_least_let_up/",
+          "Guided meditation to curb cravings": "https://www.youtube.com/watch?v=1B5YeONdRTk&t=151s",
+          "A Pot-Positive Guide on How to Fight the Urge to Get High All the Time":"https://www.reddit.com/r/eldertrees/comments/i6jfqp/a_potpositive_guide_on_how_to_fight_the_urge_to/",
+          "when do weed cravings stop or at least let up?":"https://www.reddit.com/r/recovery/comments/z4arvf/when_do_weed_cravings_stop_or_at_least_let_up/"
+        }
+      }
+    ]
+  },
+  "triggers": {
+    "title": "Managing Triggers",
+    "quote": "If you stay in the barbershop long enough, you are going to get a haircut",
+    "prompts": {
+      "🌟 Trigger preparation": "ClaireBot, based on my triggers, what can I do to avoid or manage them"
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "Managing Triggers",
+        "paragraphs": [
+          "Triggers are thoughts, behaviors, places, or even people that can cause you to experience cravings, even outside of our awareness! Our brains seek consistency. So when we walk by a dispensary or hangout with a weed friend, your brain automatically says, “okay, time to get high.”",
+          "While triggers may feel hard to manage, know that there are ways to shape your world so you are faced with fewer triggers - which results in less use."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "💭 Personal Triggers: Recognize",
+        "paragraphs": [
+          "Triggers can come in various forms. It could be a group of friends who enjoy lighting up, a stressful situation, a regular haunt, or even strong emotions like stress and anxiety if cannabis was your go-to coping mechanism. During the assessment, we asked you about a few. Now we are diving a little deeper. What are some other triggers you may not have thought about?",
+          "Environmental: Like specific locations or items associated with cannabis or cannabis-related media.",
+          "Behavioral: Like unhealthy sleeping or eating habits.",
+          "Social: Like being around friends who use or conflict with others.",
+          "Emotional: Like anger or boredom.",
+          "Cognitive: Like negative beliefs about yourself."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Personal Triggers: Overcome",
+        "paragraphs": [
+          "Overcoming triggers is about the interaction between time from last use, avoiding triggers, and creating new worlds. Now that you have been doing Clear30 for a couple of days, you may have identified others. Here are some tips:",
+          "🔎 Monitor Triggers: Use each encounter with a trigger as a learning moment rather than a setback. Reflect on the situations that spark cravings and name your triggers, taking away their power to push you off course. Take note of them.",
+          "🎭 Plan Your Strategy: Once you know all your triggers, devise a plan to avoid or cope with them. Change your routines, avoid cannabis-prone settings, and let your cannabis-using friends know about your goals to help you.",
+          "📝🗒️ Avoid - Prepare - Avoid: Pretty much the easiest way to avoid triggers is to plan ahead. Anything you can do over your Clear30 to create your environment for health will make it way easier.",
+          "🌳🚀 New Activities and Connections: Invest time in exploring new activities that interest you. 🎯 Both new routines and new or different people. 🚀 This not only helps you avoid triggers but also provides fresh experiences and habits not linked with using."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "Create a world where you can live free of triggers whenever possible, and when you can't avoid them. prepare through meditation, craving reduction, and supportive friends"
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Triggers Meditation",
+        "link": "https://m.clear30.org/triggers.mp3"
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "How to stop smoking weed everyday": "https://www.reddit.com/r/IWantToLearn/comments/7lh5ib/iwtl_how_to_stop_smoking_weed_everyday/",
+          "Anecdote, resisting the reward of weed": "https://www.reddit.com/r/trees/comments/83o5qw/i_havent_smoked_in_5_months_but_i_am_really/",
+          "Gateway Foundation: Common Relapse Triggers and How to Avoid Them": "https://www.gatewayfoundation.org/addiction-blog/triggers-in-addiction-recovery/",
+          "Kingsway: Coping Skills to Deal With Addiction Triggers": "https://kingswayrecovery.com/dealing-with-addiction-triggers/",
+          "Experience Recovery: Identifying addiction triggers": "https://www.experiencerecovery.com/blog/identifying-addiction-triggers/",
+          "DrugRehab: Relapse Trigger Sources": "https://www.drugrehab.com/recovery/triggers/"
+        }
+      }
+    ]
+  },
+  "sleep": {
+    "title": "Cannabis and Sleep 😴",
+    "quote": "Better to a have some sleepless nights to improve life than sleeping through life - FJM",
+    "prompts": {
+      "🌙 Sleep Check: Analyze & Improve 🛌": "Clairebot, I use it as a sleep aid. Ask about my sleep patterns and disruptions so we can figure out a plan",
+      "🔬 Sleep Science: Discover Break Benefits 💤": "Clairebot, explain benefits of a cannabis break on sleep. I want science on how it improves sleep quality and cycles. Share studies and findings.",
+      "💡 Sleep Strategy: Beat Insomnia with Routine 🌟": "Clairebot, create a sleep strategy for Clear30. Guide me through a routine to combat insomnia, including meditation and exercise, for better sleep."
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "Cannabis and Sleep 😴",
+        "paragraphs": [
+          "🛌 Studies have shown that weed can reduce the time it takes to fall asleep and increase the length of deep sleep, especially in the short-term. Deep sleep is associated with physical rejuvination. Sounds great, right? But there's a catch.",
+          "It also disrupts your REM sleep both in the short and long-term. This is the stage of sleep where you dream and consolidate memory. Disrupting your REM sleep can make you have trouble making decisions during waking hours. 🌞",
+          "Long-term or heavy cannabis use can lead to sleep disorders, such as sleep apnea and delayed sleep phase disorder. It can also mess with your body's natural circadian rhythms, leading to difficulty sleeping at normal times. 🕰️"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "The Benefits of a Cannabis Break on Sleep 🛌",
+        "paragraphs": [
+          "🌿 Studies show breaks from weed eventually led to faster sleep onset and better sleep quality, reduced depressive symptoms, and help restore the body's natural sleep cycle.",
+          "So, taking a break from cannabis may offer you greater advantages in the long-term. The best part is that unlike some of the longer-term negative effects on your brain from weed, you should reset your sleep cycle by the end of Clear30 if you use other techniques to help you instead of weed"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Tips for Better Sleep During a Cannabis Break 📝",
+        "paragraphs": [
+          "You will likely have insomnia when breaking if you use weed at night. Here are some ways you can help get better sleep when you are taking a break:",
+          "Do a body scan meditation when you get in bed. Here is one of our favorites.",
+          "Set alarms to get up and go to bed at the same time each day even if you can't. ⏰",
+          "Listen to something else calming. It can be a show you know backwards and forwards, ASMR videos, binural beats, or whatever works for you. 🏞️ ",
+          "Exercise, exercise, exercise. Really, exercise. 🏋️‍♀️",
+          "Do something involving hot water: a bath, shower, washing your face, or having a cup of herbal tea. 🛀🚿🍵",
+          "Use a blue-light filter on your screen or invest in a pair of blue-light-blocking glasses. (Blue light is a stimulant that may make it harder to fall asleep.) 🖥️👓"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "Accept you will have trouble sleeping for the first week or two while shifting your routines to make it easier."
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Cannabis and Sleep Meditation",
+        "link": "https://m.clear30.org/sleep.mp3"
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "Sleeping on a T-break": "https://www.reddit.com/r/trees/comments/r5jze3/how_do_people_sleep_on_a_tolerance_break/",
+          "Question on T-break sleeping": "https://www.reddit.com/r/trees/comments/r5jze3/how_do_people_sleep_on_a_tolerance_break/",
+          "How Cannabis Use Can Disrupt Your Sleep - Healthline": "https://www.healthline.com/health-news/how-cannabis-use-can-disrupt-your-sleep",
+          "How Does Cannabis Affect Sleep And Dreaming? - Benzinga": "https://www.benzinga.com/markets/cannabis/22/08/28296768/lfly-how-does-cannabis-affect-sleep-and-dreaming",
+          "Insomnia hacks": "https://www.youtube.com/watch?v=DXB9tqn4LAg",
+          "T-Break Sleep Question": "https://www.reddit.com/r/Petioles/comments/g5zo3a/tbreak_sleep_question/"
+        }
+      }
+    ]
+  },
+  "exercise": {
+    "title": "Exercise: The Wonderdrug",
+    "quote": "If people knew how good even a little exercise was for mental health, I'd be out of business - Therapist",
+    "prompts": {
+      "🚴‍♂️ Build Your Anti-Craving Fitness Plan": "Guide me to craft an exercise routine to fight cravings during CLEAR30. Need activities for 30 min daily engagement.",
+      "👥 Social Workouts: Find Your Fit": "Seeking group motivation. ClaireBot, based on what you know about me, suggest fun group exercises for CLEAR30 like sports, classes, or outdoors for fitness and socializing."
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "Exercise: The Wonderdrug",
+        "paragraphs": [
+          "Ever wondered why exercise is known as a wonderdrug? 🤔 Part of it has to do with the endocannabinoid system and dopamine. Like weed, exercise activates these systems providing a natural release of neurotransmitters.",
+          "✅ A study conducted at the University of Colorado Boulder found that exercise can reduce cravings, lessen anxiety, and improve concentration. Other studies highlight that it can significantly benefit sleep, including deep sleep like you get when you use cannabis. 🛌🌙"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Work it",
+        "paragraphs": [
+          "So what's the catch? Exercise takes work. It takes effort. There is no magic pill that makes you want to exercise. Some people have used weed to reduce the boredom of exercise. If this is you, you already have a routine! You just need to push through some of the psychological barriers from not having weed as your companion. For those without a routine, we have a couple of suggestions for your Clear30. 💡😊"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Your Plan",
+        "paragraphs": [
+          "There are countless programs available to help you exercise 🏃‍♀️. The bottom line is, don't be a perfectionist! Make sure to move your body daily in a way that feels good and works up a sweat 💦."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🏋️‍♂️Discover an exercise you won't resist",
+        "paragraphs": [
+          "Consider watching your favorite show while on a treadmill, enrolling in a local gym, taking a brisk run while listening to your preferred podcast, becoming a gym rat, or dancing along with a YouTube tutorial. It doesn't matter. JUST MOVE to something you like."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Other Humans",
+        "paragraphs": [
+          "The only other thing that we recommend, if possible, is to try to move with a friend or a group of people. It keeps you accountable, and it keeps you motivated when you don't want to put in the effort."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "Exercise for at least 30 minutes a day. It doesn't matter what you do as long as you move and sweat. It is the closest thing to a cure-all for withdrawal management and optimal physical and mental health."
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Exercise Motivation Meditation",
+        "link": "https://m.clear30.org/exercise.mp3"
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "Exercise for quitting": "https://www.reddit.com/r/leaves/comments/4mc6m1/if_youre_trying_to_quit_exercise_really_helps/",
+          "Replacing weed with exercise": "https://www.reddit.com/r/IWantToLearn/comments/hjukcj/iwtl_how_to_replace_smoking_weed_with_exercise/",
+          "Go work out": "https://www.reddit.com/r/leaves/comments/pvhdm6/go_work_out/",
+          "Exercise and cravings": "https://www.youtube.com/watch?v=StM10jzbt1k&t=217s",
+          "Vanderbilt University: Exercise can curb marijuana use and cravings": "https://news.vanderbilt.edu/2011/03/04/exercise-can-curb-marijuana-use-and-cravings/",
+          "The New York Times: Can Marijuana Make You a Better Athlete?": "https://www.nytimes.com/2021/07/11/well/move/marijuana-olympics-ban.html"
+        }
+      }
+    ]
+  },
+  "social": {
+    "title": "Finding Positive Social Support",
+    "quote": "Each new person represents a world in us, a world possibly not born until we reach out -  AN",
+    "prompts": {
+      "🌟 Find Your Tribe: Tailored Support Strategies": "Help me find a support circle, ClaireBot. Suggest ways to cultivate supportive relationships during CLEAR30 based on my interests and routines.",
+      "🔄 Discover Support Groups": "Can you guide me, ClaireBot, to online communities or local groups for cannabis breaks? Need insights on activities, engagement, and participation.",
+      "🌉 The Art of Asking": "Guide me, ClaireBot, in the art of seeking help. Help me reflect on my needs and practice asking for support to strengthen bonds during CLEAR30.",
+      "📖 Storytime: The Power of Social Support ": "Share an analogy or story about social support, ClaireBot. Help me visualize the power of community and the strength of unity during CLEAR30."
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "Finding Positive Social Support",
+        "paragraphs": [
+          "✨ There is no secret sauce. The bottom line is that connections with others who want you to suceed will help you achieve your goals. Get over the hump of asking, and you will be shocked at the outcome.",
+          "👥 Identify at least one person you can lean on. Share your Clear30 plan with them and let them know how they can help you. There are always people available who do not use - more than you think, too.",
+          "🤝🧑‍🤝‍🧑 Join a group with people who share similar goals - whether what we have suggested in your feedback (and below) or one you find yourself. Engaging with people who understand your journey can make a big difference.",
+          "Note: we are working on having peer support during Clear30. If you are interested in volunteering, please email us at support@clear30.org"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "Find someone, anyone, ideally multiple people, that you can connect with when you need support."
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Positive Social Support Meditation",
+        "link": "https://m.clear30.org/social.mp3"
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "Discussions about reduction, moderation, and responsible consumption of cannabis - 1.": "https://www.reddit.com/r/Petioles/",
+          "Discussions about reduction, moderation, and responsible consumption of cannabis - 2.": "https://www.reddit.com/r/leaves/",
+          "An online hub for members of Marijuana Anonymous.": "https://www.reddit.com/r/MarijuanaAnonymous/",
+          "Don't throw your “weed friends” away !":"https://www.reddit.com/r/leaves/comments/xbh3pw/dont_throw_your_weed_friends_away/",
+          "How do you guys deal with being the only one in a group of people that doesn't do drugs?":"https://www.reddit.com/r/socialskills/comments/2r7p4l/how_do_you_guys_deal_with_being_the_only_one_in_a/",
+          "I want to quit weed, but all of my friends smoke":"https://www.reddit.com/r/leaves/comments/fg08fp/i_want_to_quit_weed_but_all_of_my_friends_smoke/"
+        }
+      }
+    ]
+  },
+  "distractions": {
+    "title": "💭 Distraction: A Powerful Tool for Cravings",
+    "quote": "Almost everything will work again if you unplug it for a few minutes...including you - AL",
+    "prompts": {
+      "🧠 Mental Experiment: Feel Distraction's Power": "Guide me through a mental experiment to feel how distraction beats cravings. I want to experience this science in action!",
+      "🗺️ Craft Your Distraction Map: Choose Your Adventure": "Help me create a distraction roadmap. I'll input craving scenarios and pair them with strategies, like a 'Choose Your Adventure' to dodge cravings."
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "💭 Distraction: A Powerful Tool for Cravings",
+        "paragraphs": [
+          "Ever wondered why distraction helps with cravings? Let's break it down:",
+          "1️⃣ Limited Cognitive Resources: Our brain, despite its might, has its limits. When you're distracted, it helps your brain stay areas– like attention and working memory - leave less room for craving-centric thoughts. This makes cravings less intense, more manageable. 🧠💡",
+          "2️⃣ Habituation: This is the fancy term for 'familiarity breeds contempt'. When we repeatedly expose ourselves to a craving, our response can dull over time. Distractions help us engage in this exposure without giving in, reducing the craving's intensity. So, we are learning that a craving does not equal using. That we have power! 🔄⏳",
+          "3️⃣ Slowing down your thoughts: Brain-imaging studies suggest that distractions can dial down the activity in brain regions associated with cravings, such as the ventral striatum and the orbitofrontal cortex. This means distractions can help control our brain's response to craving triggers by lessening their power. 🧠🔬"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🧠 Activities that can get you distracted",
+        "paragraphs": [
+          "We previously talked about 🏄‍♂️ urge surfing which is a very powerful tool. However, the only goal is to not use during Clear30, so do anything you like or can that will distract you when you have a craving.",
+          "🌟 Whether Wordle or your favorite Youtube channel, doing something else when you have a craving is powerful. Below are some fun sites that can help you find a quick distraction to get your mind off a negative thought!"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "Have a distraction readily available (eg bookmark, homescreen, contact)."
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Distraction Meditation",
+        "link": "https://m.clear30.org/distractions.mp3"
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "🧩 Mind - Games and Puzzles": "https://www.mind.org.uk/need-urgent-help/how-can-i-distract-myself/games-and-puzzles/",
+          "🛠️ Coping tools and exercises": "https://safespace.vibrant.org/en/seeking-help/",
+          "🧩 Puzzle Practice": "https://www.jigsawplanet.com/?rc=play&pid=01fa0dabb06a",
+          "Advice for distractions while taking a break from weed": "https://www.reddit.com/r/trees/comments/6xufrb/any_advice_how_to_distract_yourself_when_making_a/",
+          "The trick to a T-break is just distractions": "https://www.reddit.com/r/trees/comments/yh9g70/the_trick_to_a_tbreak_is_just_distraction/"
+        }
+      }
+    ]
+  },
+  "mental": {
+    "title": "Cannabis and Mental Health",
+    "quote": "It is impossible to get out of a problem by using the same kind of thinking that it took to get into it - AE",
+    "prompts": {
+      "💡 Emotion Insight: Your Mental Health Check-in": "ClaireBot, let's do a mental health check-in. Ask about my feelings and cannabis's impact on mood and mental health."
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "Cannabis and Mental Health: Short-Term Effects",
+        "paragraphs": [
+          "Flower cannabis has been shown to help reduce stress right after you smoke primarily due to certain key compounds, including cannabinoids (THC and CBD), terpenes, and flavonoids that are found in naturally occurring cannabis flower (the latter often stripped out in edibles and vapes so know what is in your weed - it matters). 🌼",
+          "🌿Studies have found that right after you use cannabis (with THC), people who enjoy it have reduced symptoms of stress, depression, pain, and anxiety and increased feelings of pleasure and creativity by stimulating the endocannabinoid system while also  providing a distracting and new psychological experience. These effects are one of the reasons people use, even when they don’t want to. It feels good in the moment, distracts you, can motivate you to do boring things, and releases feel good neurotransmitters. ",
+          "Don't forget that this has been studies with 2mg-10mg cannabis, not Dabs or other high potency products.",
+          "😟There are also negative effects immediately after you use in some people such as anxiety, rumination, stagnation, and paranoia, especially the higher the potency. In some people it happens right away when they start using so they don't continue. In others, it was positive at first, then these negative feelings slowly started to creep in over time after using. If you are using regularly and beginning to have these immediate negative mental health symptoms after you use, we highly recommend stopping altogether because there seems to be little upside for you other than escape from emotions or boredom."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Cannabis and Mental Health: Long-term Effects",
+        "paragraphs": [
+          "We at Clear30 like to be neutral and make sure the decision is about you. 🤗 In this instance, the research is clear. The effects of regular cannabis use on mental health over the long-term are negative.",
+          "📚 The risks to mental health over the long-term are really centered around two things. Regular use and high THC content (more than 10%). The most vulnerable group is people under 25 who use regularly and high concentration THC with serious effects if you are under 18 when your brain is developing. It actually makes your brain develop differently (in a bad way). One of the reasons we started Clear30 is to help people reset their brains, people can see how weed is affecting their mental health, especially young people.",
+          "🚨 Regular use has been shown to increase the risk of developing anxiety, depression, psychosis, schizophrenia, or paranoia. This especially rings true for young people, biological males, or those using high-potency cannabis.",
+          "The craziest part is if you started to use regularly for several years while your brain is developing, you are more likely to experience depression later in life, even if you stop.",
+          "Interestingly, the research on older people suggests that the negative effects of weed may be mostly while you are smoking and if you stop, they can be reversed. Bottom line is the negative long-term effects are mostly centered around how weed affects your brain.",
+          "So, what does all this mean? Hands down, three factors are contributing to the rise in mental health issues in cannabis use:",
+          "The potency of THC (which is often stripped of CBD and other things) is 4-20 times greater than 30 years ago. So if you smoked one joint today, it is like smoking 10-20 30 years ago. This is not even taking into account Dabs and products that are like 75% THC.",
+          "If you use regularly (+5x a week) you are more likely to have worse mental health outcomes than those who do not use regularly.",
+          "If you start regular use at a younger age when your brain is developing, it leads to both short and long-term issues with mental health, sometimes even after stopping if you used for long-periods."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "What to Expect During Clear30",
+        "paragraphs": [
+          "Taking a break from cannabis allows your body's endocannabinoid system to reset, potentially leading to improved mental clarity.",
+          "🤔 It may suck, too. You will likely have increased irritability and other issues - potentially for a while. Like we have mentioned, you may LIKELY experience an increase in depression for the first couple of weeks too. It is very common when your system is resetting.",
+          "It also may uncover things you have been self-medicating, which means getting mental health support will help a lot!",
+          "During Clear30, accept that you may feel down or irritable. Don't wait for it to happen. Start doing things that can improve your mental health, like exercise, reaching out to your support system, and getting professional help. Shake things up. That is what this is all about."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "The Worst Part",
+        "paragraphs": [
+          "One of the problems with regular use is it begins to affect our emotional processing, social cognition, and convergent thinking. This may be perceived as positive in the short-term but over time, it has negative effects on our mental health.",
+          "The worst part is we don't realize it. We start to blame other things. How can it be weed if it makes me feel good in the moment? We start to become anxious and paranoid and don't trust others. This is the hardest part because it is exactly the time we have to get feedback from those around us, and trust it!",
+          "If weed is making you feel a little more disconnected from others and you are getting caught in your own thoughts, take it seriously. The newest research shows that regular use over 10mg weed causes psychosis, depression, and suidical ideation and attemtps. This shit is real. This is why a break is so important. Give yourself a pat on the back for taking a step back."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "Dive deep into how cannabis may be affecting your mental health over time. Ask yourself and those around you if it helps you be a content, trusting, purposeful, and connected person."
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Mental Health and Cannabis Meditation",
+        "link": "https://m.clear30.org/mental.mp3"
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "Scientific American: Is Cannabis Good or Bad for Mental Health?": "https://blogs.scientificamerican.com/observations/is-cannabis-good-or-bad-for-mental-health/",
+          "UNSW: Does cannabis cause mental illness?": "https://ndarc.med.unsw.edu.au/blog/does-cannabis-cause-mental-illness",
+          "RC Psych: Cannabis and mental health for children and young people": "https://www.rcpsych.ac.uk/mental-health/parents-and-young-people/young-people/cannabis-and-mental-health-information-for-young-people",
+          "Psychiatrists of Ireland - The Effects of Cannabis on Mental Health": "https://www.irishpsychiatry.ie/external-affairs-policy/public-information/effects-of-cannabis-on-mental-health/the-effects-of-cannabis-on-mental-health/#1595948510871-626ab2a4-02a5",
+          "Weedless: Marijuana Use and Mental Health": "https://www.weedless.org/dependence/mental-health/",
+          "Graham Hancock Quits Marijuana": "https://www.youtube.com/watch?v=8ZplWWVUyH8&",
+          "Neuroscientist Explains how weed effects your brain": "https://www.youtube.com/watch?v=bMvOqntD0Yg",
+          "Disordered Thinking and Cannabis": "https://pubmed.ncbi.nlm.nih.gov/30902669/"
+        }
+      }
+    ]
+  },
+  "boredom": {
+    "title": "💡 Understanding Boredom Post-Cannabis",
+    "quote": "I've got a great ambition to die of exhaustion rather than boredom - TC",
+    "prompts": {
+      "🧬 Dopamine & Boredom:": "Explain the science of boredom after quitting cannabis. How does it relate to dopamine? Help me manage these feelings.",
+      "🌈 Joy in Everyday Moments": "Guide me through strategies to combat boredom. How to find joy in everyday moments and connect meaningfully with others?",
+      "🚀 Explore New Horizons": "Help brainstorm activities and hobbies to explore beyond boredom. Create a go-to list for when I need inspiration."
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "💡 Understanding Boredom Post-Cannabis",
+        "paragraphs": [
+          "The Dopamine Dip",
+          "As you now know, when you stop using, your brain produces less dopamine and other neurotransmitters (which may be a result of lower anandamide but that's for a later time!). Dopamine is behind feelings of motivation, along with others. A break results in a dopamine dip that could leave you feeling bored, indifferent, and unmotivated because your brain has gotten used to an outside source of it 📉.",
+          "Associated Activities & Hobbies",
+          "🚬 You might associate certain activities or hobbies with being high or you get high to feel less bored doing certain activities. During Clear30, these activities might temporarily lose their charm, adding to feelings of boredom. The other thing is that you may not know what to do without weed. It was your activity, now you have to fill that void.",
+          "🌟 Situational vs Existential Boredom",
+          "It's one thing to be bored washing dishes or using weed to make an activity more interesting, but you may also use weed because you don't know what you want to do with your life or don't know how to get started. These are different. Existential boredom requires us to think about how cannabis is helping us avoid our larger goals in life. While it may be okay in the short-term, this can be a dangerous path over time."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🎯 How to Navigate Boredom during Clear30?",
+        "paragraphs": [
+          "Cannabis is clingy, making boredom and cravings tough to deal with when you break.",
+          "1️⃣ Discover new activities",
+          "We are not going to recommend anything new. We have already talked about exercise, activities, and hobbies. The key here is NEW activities. The nice thing about new activities is they can be taking a new route while walking somewhere or asking someone you see everyday more about themselves. Newness relieves boredom and increases dopamine.",
+          "2️⃣ Embrace the Everyday with Awe",
+          "Sometimes discovering new activities means you have to embrace the boring as interesting. Our meditation focuses on the sensation of washing the dishes. Embrace the everyday with some awe. Life is weird - in a good way.",
+          "3️⃣ Connect with Others",
+          "No more to be said about connection, although we definitely will. Hanging with new people, even if it makes you anxious, relieves boredom.\nKeep going! Keep exploring! Keep learning!"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "Plan to do at least one activity a day that expands your world to boost dopamine and increase your worldview."
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Dealing with Boredom Meditation",
+        "link": "https://m.clear30.org/boredom.mp3"
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "Extremely bored in the evening without weed":"https://www.reddit.com/r/leaves/comments/ygi3nz/extremely_bored_in_the_evening_without_weed/",
+          "Biggest trigger. What is boredom and why is it turned off with marijuana?":"https://www.reddit.com/r/leaves/comments/tdkwie/biggest_trigger_what_is_boredom_and_why_is_it/",
+          "Bored without weed":"https://www.reddit.com/r/Petioles/comments/v7k1ae/bored_without_weed/"
+        }
+      }
+    ]
+  },
+  "persistence": {
+    "title": "Commitment",
+    "quote": "Perseverance is not a long race; it is many short races one after the other - WE",
+    "prompts": {
+      "🌟 The Power of Persistence": "Remind me of persistence's power and how this break leads to achievements. Need encouragement to overcome doubts.",
+      "🔍 How do I reinvent myself": "How do I reinvent my identity to be the person I want to be? Help me figure it out.",
+      "💪 Mental Strength": "Based on what you know about me, how to I built mental strength and resilience?"
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "Commitment",
+        "paragraphs": [
+          "💪 Persistence is about the commitment to the long-term, even when it sucks now. Committment is about dedication to the endgame, not the immediate reward.",
+          "🏋️‍♀️ Below are some strategies to help you stay committed to your personal goals, no matter what they are!"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Visualize Success 🏆",
+        "paragraphs": [
+          "Studies have shown that visualizing successful outcomes can help strengthen your resolve and keep you motivated. Picture yourself resisting a craving successfully. Picture yourself as a badass in social situations without weed. This trick helps your mind see this outcome as not only possible but probable!"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Change Your identity",
+        "paragraphs": [
+          "As we noted in the preparation guide, if you change your identity and fake it until you make it by acting like the person you want to be, you will become that person over time.😊"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Share Your Plan 🗣️",
+        "paragraphs": [
+          "Share your Clear30 plan with someone you trust and admire. Explain your triggers, your strategies, and ask them to support you in your journey. The key is don't just share that you are just doing Clear30. If you just share that you are breaking, it could actually backfire. However, if you share what you are doing or plan to do, it significantly boosts your chances of sticking to your goals. If you have not already, share your detailed plan with someone."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "📈 Growth Mindset",
+        "paragraphs": [
+          "You are not good or bad. You are not smart or dumb. Your effort is good or bad. People who believe they can grow and people who believe stress helps them grow are happier and more successful. There is no trophy for an outcome, the only trophy is for your effort."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Reward Your Progress 🎁",
+        "paragraphs": [
+          "Give yourself credit for each day you stick to your Clear30 plan. Small rewards can act as positive reinforcement, motivating you to stay persistent and committed. Don't reward the outcome, just that you authentically are trying."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "💪💯 Give maximum effort (and rest when you need)",
+        "paragraphs": [
+          "Are you giving it your all? Really giving it your all? We love these speeches from Eric Thomas - they don't sugarcoat anything."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "Give maximum effort today, even when it feels really hard. You are worth it."
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Commitment and Persistence Meditation",
+        "link": "https://m.clear30.org/persistence.mp3"
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "Guided Meditation, manifesting success": "https://www.youtube.com/watch?v=APvLO3uXLnE",
+          "Eric Thomas motivational video": "https://www.youtube.com/watch?v=yFm1qZdjQ_I",
+          "I Relapsed Quitting Weed!": "https://www.youtube.com/watch?v=KFAwb0py9ro",
+          "What keeps you guys motivated to stay on your T-break/stay sober?":"https://www.reddit.com/r/Petioles/comments/8p5apl/what_keeps_you_guys_motivated_to_stay_on_your/"
+        }
+      }
+    ]
+  },
+  "professionalhelp": {
+    "title": "Discovering a World of Support",
+    "quote": "Asking for help does not mean that we are weak or incompetent. It usually indicates an advanced level of honesty and intelligence - AWS",
+    "prompts": {
+      "🤝 Professional Support: Exploring Benefits": "I'm having some trouble, how could professional help benefit my journey?",
+      "🔍 Find Help: Resources for Everyone": "Discuss professional help options for getting help insured and uninsured. Where to start?",
+      "🛋️ Therapy Expectations": "What can I expect from therapy to help me manage weed and mental health?"
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "📝 Some Notes",
+        "paragraphs": [
+          "All of the links for these sites are on the bottom of the page.",
+          "Some of the sites and recommendations are for people who want to entirely stop. The reason we included them and sent them to everyone is because they have great information on the “first month”. Ignore what you don't like and embrace what you do."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Resources Overview",
+        "paragraphs": [
+          "Connect with like-minded individuals online and engage in insightful discussions about cannabis moderation and detoxification.",
+          "Links to some reddit communities below.",
+          "",
+          "Digital Support: There are lots digital remote treatments and apps if you want to completely stop. Just type in addiction recovery apps and tons will pop-up.",
+          "✅ One group we recommend is recovery dharma. In groups, they don't ask about your goals - whether for a t-break or stopping or for cannabis or trouble controlling food intake. They heavily focus on craving and using wise mind and meditation to overcome desires that move us away from our intentions.",
+          "",
+          "Other T-break guides: Check out Weedless and UVM T-Break resources below to help you on your journey. We will be sending more as Clear30 unfolds!.",
+          "",
+          "Podcasts and Videos: The best overall video series on stopping or reducing cannabis use is Addiction Mindset (check it, and others out below).",
+          "",
+          "Helplines and Crisis Text Lines: Immediate help is available if you're in crisis. Don't hesitate to reach out to these national helplines.",
+          "National Mental Health Support Helpline: Call 988",
+          "Crisis Text Line: Text 741741.",
+          "",
+          "Treatment Finders (for substance use treatment: SAMHSA Treatment Locator: https://findtreatment.gov/",
+          "Shatterproof Atlas (Provides information on evidence based treatment):https://treatmentatlas.org/",
+          "Safe Locator (Provides information on treatment, recovery housing, and family support groups): https://www.safeproject.us/locator/",
+          "",
+          "Digital Telehealth Cannabis Treatments (More coming soon): Affect Therapeutics (Cannabis Specific Support): https://www.affecttherapeutics.com/",
+          "Charlie Health: https://www.charliehealth.com/",
+          "Life Beyond Cannabis (6-Week Abstinence Program): https://r20.com/lifebeyondcannabis/"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "There is support available. Go down the rabbithole and find ones you like, even if just for your Clear30."
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Finding Support Meditation",
+        "link": "https://m.clear30.org/professionalhelp.mp3"
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "r/Petioles": "https://www.reddit.com/r/Petioles/",
+          "r/leaves": "https://www.reddit.com/r/leaves/",
+          "r/marijuanaanonymous": "https://www.reddit.com/r/MarijuanaAnonymous/",
+          "Recovery dharma": "https://recoverydharma.org/",
+          "Recovery dharma youtube": "https://www.youtube.com/channel/UCgUZVKJJ_gqPMfSO2wj",
+          "Weedless.org": "https://www.weedless.org/",
+          "UVM: On tolerance breaks": "https://www.uvm.edu/health/t-break-take-cannabis-tolerance-break",
+          "Mcwell: Self help guide for 30 day T-break": "https://mcwell.nd.edu/your-well-being/physical-well-being/drugs/marijuana-or-cannabis-sativa/quitting-marijuana-a-30-day-self-help-guide/",
+          "Addiction Mindset": "https://www.youtube.com/@AddictionMindset",
+          "Addiction mindset: reducing cannabis use": "https://www.youtube.com/@AddictionMindset/playlists",
+          "Dr. K talks weed": "https://www.youtube.com/watch?v=WdM8r6R3FfM&t=1437s",
+          "Spotify: Quitting marijuana podcast": "https://open.spotify.com/show/4iW8efuX6D4iW6Z2wwf1kE/"
+        }
+      }
+    ]
+  },
+  "mindfulness": {
+    "title": "Savoring & Mindfulness",
+    "quote": "Mindfulness is about being fully awake in our lives. It is about perceiving the exquisite vividness of each moment - JKZ",
+    "prompts": {
+      "🧘‍♂️ Riding the Crave": "Explain 'riding the crave' with mindfulness to manage cravings. How can I practice it?",
+      "📅 Daily Mindfulness: Integrating Techniques": "How can I integrate mindfulness into daily life to manage cravings and temptations? Suggest brief daily practices."
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "Savoring & Mindfulness",
+        "paragraphs": [
+          "Take a moment to breathe and imagine enhancing your joyful life experiences while embracing the present moment fully. This is where savoring and mindfulness come into play. Practicing mindfulness for even 10 minutes a day can change your outlook on life after just two weeks."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Unveiling Savoring & Mindfulness 🎭",
+        "paragraphs": [
+          "🙂 Focusing on positive experiences and embracing the moment are two skills that can reduce cannabis craving, but also make you more engaged in life.",
+          "👉 Savoring is attending, appreciating, and enhancing the joyful experiences intentionally. It is life when we savor something like a good meal. We enjoy it in the moment. You can savor anything.",
+          "🧘‍♂️ Mindfulness is about being fully present in the moment, acknowledging your thoughts, emotions, and sensations without judgment."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Mindfulness Makes you More Intentional",
+        "paragraphs": [
+          "👨‍💼👩‍💼 Mindfulness makes you more intentional. That's why elite athletes and leaders do it consistently. For Clear30, it also creates distance between you and your cravings as we discussed earlier.",
+          "🚶‍♂️ Mindfulness also makes you more connected to your body. It is called introspection. Being aware of your body can significantly reduce cravings. One of the most powerful ways is to learn to recognize early signs of hunger, thirst, or fatigue. It is often called HALT. Hungry, Angry, Lonely, Tired. If you are having cravings or feeling down in any way, check to see if any of these ring true."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "The Science behind Mindfulness & Cravings 🧪",
+        "paragraphs": [
+          "100s of studies provide evidence for the effectiveness of mindfulness and savoring in improving your wellbeing.",
+          "A review of 30 studies showed that mindfulness meditation could reduce the intensity and frequency of cravings.",
+          "Extensive mindfulness meditation experience is linked with increased thickness in brain regions involved in reducing craving and addiction."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "✨ Adopting mindfulness and savoring life is a journey, not a destination. Give yourself 10 minutes a day. It can be on the toilet! It can be lying in bed! For assistance aside from our meditations, we highly recommend apps like Insight Meditation Timer or the UCLA Mindfulness Center (links below). Both have lots of free mindfulness meditations. Meditation makes you a more interesting person. Try it out."
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Mindfulness & Savoring Meditation",
+        "link": "https://m.clear30.org/mindfulness.mp3"
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "UCLA Mindfulness App": "https://www.uclahealth.org/programs/marc/free-guided-meditations/guided-meditations",
+          "Insight Meditation": "https://insighttimer.com/",
+          "Marijuana and Meditation": "https://youtu.be/MtZmR6oK9tg",
+          "Experiences on using meditation to stop smoking": "https://www.reddit.com/r/Meditation/comments/rplucw/have_you_experience_with_using_meditation_to_stop/",
+          "Mindfulness and Weed": "https://www.reddit.com/r/Mindfulness/comments/azit4w/mindfulness_and_weed/",
+          "Dr. Alok Kanojia Speaks About Marijuana and Meditation":"https://www.youtube.com/watch?v=MtZmR6oK9tg"
+        }
+      }
+    ]
+  },
+  "acceptance": {
+    "title": "What is Acceptance?",
+    "quote": "When you accept yourself, the whole world accepts you - TL",
+    "prompts": {
+      "🌿 Acceptance as Growth: Embracing the Now": "Help me see how accepting my situation can lead to growth?",
+      "❤️ Self-Love: Beyond Self-Judgment": "How can I practice self-love and release judgment, focusing on strengths and areas for improvement?",
+      "🔍 Control & Acceptance: Navigating Life": "Let's identify life aspects I can control and those I can't. Guide me in this reflection."
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "What is Acceptance?",
+        "paragraphs": [
+          "Acceptance is a powerful state of mind that involves:",
+          "Acknowledging we are in the present moment and we can’t change our past",
+          "Freeing ourselves from our limitations, past regrets or unrealistic future expectations.",
+          "Embracing our journey towards self-improvement by accepting ourselves unconditionally.",
+          "Acceptance is a form of self-love that acknowledges our flaws and beauty equally. Once we accept, we open the door to moving forward. 😌"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "✅ Accepting who you are in the moment, rather than fighting it with frustration, sets us free. Allow yourself to let go of any regrets and frustration that is occupying your mind and keeps you stuck.\" 😊",
+          "👉This simple exercise of accepting your limitations and not trying to either suppress them or distract yourself from them has been shown to be a stepping stone to better mental health. Really, the research is powerful. So as you do your Clear30, accept you for everything you are. The good and the less good. Only then, can you work on what you want to change.",
+          "You are fucking beautiful, all of you. Own it"
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Acceptance Meditation",
+        "link": "https://m.clear30.org/acceptance.mp3"
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "Being your best self": "https://www.psychologytoday.com/us/blog/being-your-best-self/202203/the-healing-power-radical-acceptance",
+          "Acceptance Motivation": "https://www.youtube.com/watch?v=-lc3EDum9sc",
+          "The paradox of control": "https://www.youtube.com/watch?v=koo59KK43YA",
+          "Self-Love brings freedom": "https://www.youtube.com/watch?v=vj0JDwQLof4",
+          "Forbes: What is radical acceptance?": "https://www.forbes.com/health/mind/what-is-radical-acceptance/"
+        }
+      }
+    ]
+  },
+  "busyness": {
+    "title": "Staying Busy",
+    "quote": "Cravings don't like busy, engaged people because busy, engaged people don't think about cravings",
+    "prompts": {
+      "🆕 Explore Hobbies: Beat Autopilot": "Suggest engaging hobbies to distract from cravings and foster positive habits. Looking for new activities.",
+      "📅 Plan Engaging Activities: Find Your Passion": "Help create a plan for a busy schedule with meaningful activities to discover what I truly enjoy.",
+      "🤔 Evaluate Hobbies: Reinvent & Reflect": "Guide me in evaluating new hobbies' impact on my thoughts about use and self-reinvention process."
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "Staying Busy",
+        "paragraphs": [
+          "\"The best way to get rid of old habits is to swap them for new ones.\" This quote is more relevant than ever when breaking from a habit like weed. It might seem challenging – after all, smoking may have been a long-standing pastime. But hunting down fresh, intriguing activities that mirror your values and priorities is hard. The outcome? You'll shatter the chains of old habits and discover a more satisfying life. Listen below for more."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "What's the plan?",
+        "paragraphs": [
+          "🏋️‍♂️ Work out or meditate, binge a new series, listen to an engaging podcast, or fine-tune a hobby. Now's the perfect opportunity to embark on something new. Staying busy is avoiding unstructured time. We don't need to say anything else. Just do it."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "Schedule next day activities each night so you have some structure to start your day. Follow it for 30-days."
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Staying Busy Meditation",
+        "link": "https://m.clear30.org/busyness.mp3"
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "Healthshots: The dangers of idle living": "https://www.healthshots.com/mind/mental-health/do-you-find-yourself-sitting-idle-often-heres-how-it-can-wreck-your-mental-health/",
+          "Things to do instead of smoking weed": "https://www.reddit.com/r/leaves/comments/jdy7b5/things_to_do_instead_of_smoking_weed/",
+          "Things to do instead of smoking weed, part 2": "https://www.reddit.com/r/leaves/comments/djhjw5/a_list_of_things_to_do_instead_of_smoking_weed/",
+          "Business and Happiness": "https://www.theatlantic.com/family/archive/2019/02/free-time-life-satisfaction/583171/"
+        }
+      }
+    ]
+  },
+  "brain": {
+    "title": "🧠 Understanding Cannabis and Its Effects on the Brain",
+    "quote": "Our brains are forgiving, up until a point. Then they throw us out without us even knowing",
+    "prompts": {
+      "🔬 THC Science: Brain & Body Effects": "Explore THC's interaction with the endocannabinoid system and its short-term effects on brain and body.",
+      "🧠 Long-term Cannabis Insights: Mental Impact": "Help me understand the long-term effects of weed on cognition and mental health, and improvements from abstaining.",
+      "📈 Track Cognitive Boost: Clear30 Progress": "Discuss signs of cognitive function and well-being improvement to monitor during Clear30.",
+      "🧠 Enhance Brain Health: Recovery Strategies": "Suggest strategies to support brain health and cognitive function during this break for recovery and long-term health."
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "🧠 Understanding Cannabis and Its Effects on the Brain",
+        "paragraphs": [
+          "How weed affects the brain depends on various factors including how often and how much (potency) you use, and the age at which you use. The active component of cannabis, delta-9-tetrahydrocannabinol (THC), binds to cannabinoid receptors in the brain, interacting with the endocannabinoid system responsible for regulating appetite, mood, and pain sensation. Because it touches so many brain systems, it has many cascading effects in the short-term and long-term."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🌿 Short-term Effects of Cannabis on the Brain",
+        "paragraphs": [
+          "Cannabis use results in a range of short-term effects that vary depending on the dosage, method of consumption, and individual factors. Some of these effects include:",
+          "Euphoria 🎉: THC stimulates the release of dopamine among other neurotransmitters, leading to feelings of happiness, relaxation, and euphoria.",
+          "Divergent Thinking 🌀: Weed can help you think differently about things and ideas",
+          "Impaired Memory and Concentration 🌫️: The interaction of THC with the hippocampus (the brain region responsible for memory) can lead to impaired short-term memory and difficulty concentrating.",
+          "Distorted Perception 🌀: Altered perceptions of time, space, and sensory input may occur leading to perceiving things differently, especially social interactions."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🍁 Long-term Effects of Cannabis on the Brain",
+        "paragraphs": [
+          "Long-term and regular use of cannabis (like many substances) tends not to be your brain's best friend. In fact it is bad. Some of the long-term effects include:",
+          "Decreased Cognitive Function 🧩: Long-term cannabis use can lead to diminished cognitive functions, affecting memory, attention, and decision-making capabilities.",
+          "Addiction 🔄: Many regular users may develop a dependency on weed by changing the reward pathway in the brain to crave it. This is what Clear30 is really trying to help you avoid.",
+          "Mental Health Concerns 😰: Regular cannabis use is linked to increased risks of anxiety, depression, suicide, and psychosis.",
+          "Brain Structure Changes 🧠: Studies suggest that regular cannabis use can decrease grey matter volume in the hippocampus and prefrontal cortex, especially if you start young."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "💪 Does the Brain Recover from Regular Cannabis Use over Time if You Stop?",
+        "paragraphs": [
+          "The brain has the remarkable ability to recover from the effects of regular cannabis use if you stop or greatly reduce both the concentration of THC and the number of days you use. Research suggests that cognitive function can significantly improve several weeks after stopping cannabis use. Structural changes in the brain caused by long-term use can be reversed after stopping use, but it might take several months for the brain to return to its normal state. However, the younger you start to use regularly, the less likely these will fully bounce back to normal. Bottom line is that you are doing your brain a favor by doing Clear30!"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "Read read read about cannabis and brain development as much as possible. Be an informed consumer."
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Cannabis and the Brain Meditation",
+        "link": "https://m.clear30.org/brain.mp3"
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "Has weed permanently fucked my brain? I feel like I've ruined my entire adult life. Severe cognitive decline and social anxiety.":"https://www.reddit.com/r/REDDITORSINRECOVERY/comments/qakxp4/has_weed_permanently_fucked_my_brain_i_feel_like/",
+          "Does weed cause brain damage in the long run? Can it be reversed?":"https://www.reddit.com/r/leaves/comments/ukcbnh/does_weed_cause_brain_damage_in_the_long_run_can/",
+          "Huberman: Cannabis and the brain?":"https://www.youtube.com/watch?v=UCbqfBAhmPY",
+          "Cannabis and the Brain": "https://nida.nih.gov/publications/research-reports/marijuana/what-are-marijuanas-long-term-effects-brain/",
+          "Brain Development and Cannabis": "https://www.liebertpub.com/doi/abs/10.1089/can.2022.0183/"
+        }
+      }
+    ]
+  },
+  "feedback": {
+    "title": "💡 The Importance of Feedback",
+    "quote": "Feedback is the breakfast of champions - KB",
+    "prompts": {
+      "🗣 Uncover What Friends Really Think": "How should I ask friends for honest feedback on my cannabis use and its impact and get honest feedback?",
+      "🔍 Managing different opinions": "People disagree whether my use is a problem, how do I manage different feedback?",
+      "🌐 How do I engage people that I disagree with": "What's the best way to engage friends with varying opinions on my cannabis use for a well-rounded view?"
+      
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "💡 The Importance of Feedback",
+        "paragraphs": [
+          "Feedback from others can serve as a mirror, reflecting aspects of our behavior that we might not be aware of. When we seek feedback about our cannabis use and our lives more generally, we open ourselves up to a broader perspective so we can reveal something new about us."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "💬 Ask and You Shall Receive",
+        "paragraphs": [
+          "The key to receiving meaningful feedback is asking a diverse group of people you trust the the right questions. Here's a three-step guide to gather different perspectives:",
+          "The Nodding Heads: These are people you believe will think your cannabis use is not an issue.",
+          "The Concerned Voices: These are individuals who, you suspect, might believe you're using too much.",
+          "The Wildcards: These are the people who know you, but you have no idea what they think about your cannabis use. Their feedback can often offer the most surprising insights, precisely because they're less predictable."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔍 How to Ask?",
+        "paragraphs": [
+          "How has two parts. First is the communication method. If you feel really uncomfortable, you can text someone or make a phone call. This adds some distance it make it more comfortable. In-person is great too so you can really see peoples reactions and spend time with the interaction. Either way, both can work - the key is to do it. How to pose your question is just as crucial as who you ask. Regardless of the communication method, first, make sure to tell people you are looking for honest feedback about your use, and you are aware it may be difficult for them, but you are asking so you can grow. Then, a simple, straightforward question often does the trick. For example, 'Do you think weed makes me better, worse, or both, and why?' This question invites honest, open-ended responses without leading the person to a particular answer."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "⚖️ Weighing the Feedback",
+        "paragraphs": [
+          "Once you have collected feedback, the next step is to process it:",
+          "🔍 Identify Common Themes: Do certain observations recur? These could indicate key areas to focus on.",
+          "Consider Different Perspectives: Remember, each person brings their own bias to their feedback. Take all opinions into account but trust your judgment on what truly applies to you.",
+          "🚩 Use Feedback as a Guide, Not Gospel: Ultimately, you decide what feedback to accept and act on. It's a tool to help you gain insight, not a definitive judgment of your behavior.",
+          "🌱 Grow and Learn: Use the feedback to build a better you and grow both on your own and with the people who help you. You will be surprised at how many people open up about themselves during this process."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "Be courageous. Ask at least one person (hopefully more) today about whether they think cannabis is helping, hurting, or making no difference in your life."
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Feedback from Others Meditation",
+        "link": "https://m.clear30.org/feedback.mp3"
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "How to stop taking criticism in the workplace": "https://www.reddit.com/r/LifeProTips/comments/12c93b3/lpt_request_how_to_stop_taking_criticismfeedback/",
+          "Giving negative feedback": "https://www.reddit.com/r/LifeProTips/comments/9e4oc9/lpt_when_giving_negative_feedback_take_a_small/",
+          "Accepting negative feedback": "https://www.reddit.com/r/TheGirlSurvivalGuide/comments/g3zw3q/how_to_get_better_at_accepting_negative_feedback/",
+          "Asking for feedback": "https://www.forbes.com/sites/forbescoachescouncil/2023/07/17/how-to-ask-for-feedback-for-self-improvement/?sh=77a65f84127c/"
+        }
+      }
+    ]
+  },
+  "positivity": {
+    "title": "Positive Focus: Your Tool in Difficult Times🌞",
+    "quote": "You are the average of the five people you spend the most time with - JR",
+    "prompts": {
+      "🗣 Become a more positive person": "How do I become a more positive person when lots of things are shitty?",
+      "🔍 Radical positivity": "How do I practie radical positivity and why is it good for me?"
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "Positive Focus: Your Tool in Difficult Times🌞",
+        "paragraphs": [
+          "Positivity is contagious. When you are positive, life is better. You will be a better person all around if you surround yourself with positive and supportive people. Their energy can influence your mood, habits, and overall well-being, creating a conducive environment for change."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Becoming a Positive Person",
+        "paragraphs": [
+          "🌟 Faking it until you make it: You very well may be the shining star of positivity in all you do. If not, pretend by making everything you experience today positive. Whether a lesson or savoring experience, nearly EVERYTHING has a silver lining. Shift and challenge your negative thoughts and turn them into a positive. It works.",
+          "👍 Check Your Circle and Focus on Positivity: Take a moment to consider the five people you spend the most time with. Are they positive and supportive? Embrace the ones who are by spending more time with them or seek out some new people if needed."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "The Power of Positivity and Its Scientific Backing 📚",
+        "paragraphs": [
+          "Studies have demonstrated the mental health benefits of engaging with positive individuals. Those with uplifting relationships tend to:",
+          "✨ Boost Self-esteem: Interactions with positive people can reinforce one's self-worth and confidence.",
+          "🙂 Break Isolation: Engaging with positive peers can combat feelings of loneliness, a common struggle during disruptive times like a Clear30 break.",
+          "🚀 Advance Goals: A supportive network improves goal achievement - no matter what it is."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "Pretend you are the most positive person in the world today and share part of your day with the most positive person you know."
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Positive Focus Meditation",
+        "link": "https://m.clear30.org/positivity.mp3"
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "How to be a positive thinker": "https://www.verywellmind.com/accentuate-the-positive-positive-thinking-and-happiness-2224115/",
+          "How To Start Thinking Only Positive Thoughts": "https://www.reddit.com/r/selfhelp/comments/elya94/how_to_start_thinking_only_positive_thoughts/",
+          "How to have a positive mindset": "https://www.reddit.com/r/IWantToLearn/comments/o708e4/iwtl_how_to_have_a_more_positive_mindset/",
+          "Positive thinking for self improvement": "https://www.reddit.com/r/selfimprovement/comments/bj2qo4/can_small_positive_habits_and_positive_thinking/"
+        }
+      }
+    ]
+  },
+  "motivation": {
+    "title": "🔄 Short Term Dopamine Increase",
+    "quote": "I am most motivated to do clean my room when I should be doing something else",
+    "prompts": {
+      "🔄 Unraveling Motivation": "Let's explore how weed affects my motivation. Ask me about the good and bad in how it affects me when I am using?",
+      "🧠 Dopamine Detox": "Help me identify ways to be motivated on a weed break without weed."
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "🔄 Short Term Dopamine Increase",
+        "paragraphs": [
+          "Cannabis can raise dopamine and other neurotransmitter levels, leading to feelings of increased motivation and reduced boredom sensitivity in some people. This spike can also make some content with just hanging out, leading to lower drive with other things but they are invested in what they are doing in the moment. 😌"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "😕 Long Term Dopamine Decrease",
+        "paragraphs": [
+          "Regular and heavy cannabis use might lower dopamine and other neurotransmitter levels over time. This drop could lead to feelings of indifference, lowering overall motivation in some, both when you are using and not using."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🌿 Cannabis and the Prefrontal Cortex",
+        "paragraphs": [
+          "Research also shows a link between heavy and long-term cannabis use and changes in the prefrontal cortex, a part of the brain involved in decision-making and motivation. These changes could affect your ability to make decisions, adding another layer to how cannabis affects motivation, especially around complex decisions and long-term goal directed behavior."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🎭 Studies are Conflicting, so Awareness is Key",
+        "paragraphs": [
+          "Despite what the brain studies and studies of long-term users show about decreased motivation, reveiews suggest that cannabis users don't feel less motivated than non-users both during use and if they are not long-term users. Like almost anything we do, it highlights the need for personal exploration and awareness in understanding how cannabis might affect your motivation. This is why you are doing Clear30!"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🎲 Different Factors: The Role They Play",
+        "paragraphs": [
+          "How cannabis affects motivation can change a lot depending on factors like:",
+          "How often you use and the potency (yes, it keeps coming up) 📅",
+          "How long you have been using",
+          "Other substance use (more is worse)💊",
+          "Existing physical and mental health conditions💭😓",
+          "In short, the relationship between cannabis and motivation is complex and can depend on many factors. That is why it is up to you and your loved ones to figure out.",
+          "🚨 If you are feeling stuck or having trouble making important decisions in your life, definitely consider the role of weed. If you are not, phew! Either way, keep an eye on it because it can be subtle."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "Take a step back and see how weed is affecting your motivation and drive towards becoming the person you want to be."
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Weed and Motivation Meditation",
+        "link": "https://m.clear30.org/motivation.mp3"
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "Cannabis and Motivation 1": "https://link.springer.com/article/10.1007/s40473-023-00268-1/",
+          "Cannabis and Motivation 2": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6062456/",
+          "Cannabis and Motivation 3": "https://pubmed.ncbi.nlm.nih.gov/26842658//",
+          "Low motivation during break": "https://www.reddit.com/r/leaves/comments/1ggdoy/22_days_big_void_lack_of_motivation_apathy/",
+          "Stopping for 3 months": "https://www.reddit.com/r/leaves/comments/19dy9f/stopped_smoking_weed_for_3_months_nowlost/",
+          "How marijuana saps motivation": "https://www.reddit.com/r/OhioMarijuana/comments/pxizfo/marijuana_can_unquestionably_destroy_motivation/"
+        }
+      }
+    ]
+  },
+  "shortlongterm": {
+    "title": "🧠 Our brains are hardwired for immediate pleasure",
+    "quote": "I still haven't figured out how to make processed sugar good for me even though I try everyday",
+    "prompts": {
+      "🔮 Future Path": "Guide me in exploring long-term effects of resisting vs. giving into weed temptations when I don't want to use.",
+      "💪 Long-term thinker": "How do I become a long-term thinker without becoming boring: explore with me based on what you know about me?"
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "🧠 Our brains are hardwired for immediate pleasure",
+        "paragraphs": [
+          "That is especially true for people who use substances, even though they are trying not to use. 💯 Hundreds of studies support that it is harder for regular users of substances to resist temptation in general than people who use occasionally or not at all. Essentially, your brain tricks you to remember the good things about use and minimize the bad in the moment (more on that tomorrow). You essentially have a built-in lying machine to feed your craving monster. So what does that mean?",
+          "👉 You have to work extra hard to overcome temptation when it comes to things that reward you in the short-term but may have longer-term negative consequences. Here are some questions to ask yourself and tips to get you in a long-term mindset. 👈"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "💡 Understand the Nature of Desire",
+        "paragraphs": [
+          "Is your desire to use to change the moment despite you wanting to break or not use in that moment?"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🎯 Understand the Outcome",
+        "paragraphs": [
+          "It is okay to be a short-term chooser sometimes - in fact it is recommended - but not when you are on Clear30 or when your choices affect your long-term wellbeing. How is your choice today going to affect how you feel tomorrow?"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🏆 Understand Successful People",
+        "paragraphs": [
+          "The most successful and happy people do not do things that only benefit the short-term. They work hard. They also play hard, but not when it affects their self-esteem or long-term goals. Find your balance."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔄 Understand the Cycle of Temptation",
+        "paragraphs": [
+          "Recognize that temptation starts with a trigger that tricks your mind into thinking it is okay, and ends with disregarding long-term goals."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔮 Keep the Big Picture in Mind",
+        "paragraphs": [
+          "Regularly reminding ourselves of our long-term goals can help us resist short-term temptations."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "\"You have to do something that sucks every day... That's how you overcome. That's how you get better.\" - David Goggins"
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Long-Term Success Meditation",
+        "link": "https://m.clear30.org/shortlongterm.mp3"
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "Becoming a Long-term chooser":"https://medium.com/thrive-global/choose-long-term-growth-over-short-term-pleasure-930ea2141ac6/",
+          "Short-term choosing associated with pooer life outcomes":"https://www.sciencedirect.com/science/article/abs/pii/S0306460319311104#:~:text=Delay%20discounting%20(DD)%20is%20a,mental%20disorders%20such%20as%20depression/",
+          "Struggling with delaying gratification": "https://www.reddit.com/r/productivity/comments/nvd4u0/tips_for_those_who_suck_at_delaying_gratification/",
+          "Delaying gratification is the key to a happy life": "https://www.reddit.com/r/getdisciplined/comments/gs12al/advice_master_delayed_gratification_is_the_secret/",
+          "How to focus on long term rewards": "https://www.reddit.com/r/PsychologicalTricks/comments/ej0ldy/pt_how_do_i_focus_on_long_term_rewards_rather/",
+          "The power of long term thinking and how to get it": "https://www.reddit.com/r/getdisciplined/comments/d2qkbf/advice_your_lack_of_consistency_comes_from_your/",
+          "Become a long-term thinker": "https://www.youtube.com/watch?v=x0izoGt9BK8"
+        }
+      }
+    ]
+  },
+  "curiosity": {
+    "title": "Curiosity Meditation",
+    "quote": "",
+    "prompts": {
+      "🔥 Ignite Your Curiosity": "Suggest ways to cultivate curiosity and explore new interests during my break and after.",
+      "🌍 Become an Explorer": "What practical steps or activities can help me adopt an explorer's mindset and see the world with fresh eyes?"
+    },
+    "sections": [
+      {
+        "type": "audio",
+        "header": "Curiosity Meditation",
+        "link": "https://clear30.io/46I0Rvz"
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "How to be a more curious person, who is always seeking to learn more?":"https://www.reddit.com/r/getdisciplined/comments/t13hfn/need_advice_how_to_be_a_more_curious_person_who/",
+          "IWTL How to train myself to want mental stimulation as I’m not a very curious person?":"https://www.reddit.com/r/IWantToLearn/comments/yc8jgj/iwtl_how_to_train_myself_to_want_mental/"
+        }
+      }
+    ]
+  },
+  "slowchange": {
+    "title": "Appreciate the Journey",
+    "quote": "The journey is the reward - SJ",
+    "prompts": {
+      "🔍 Spot the Subtle Shifts": "Help me reflect on the subtle yet significant shifts in my behavior, mindset, or daily life since starting Clear30.",
+      "🔄 Reframe Your Perspective": "How to I create small habits that lead to lasting change without getting impatient?"
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "Appreciate the Journey",
+        "paragraphs": [
+          "🙂 Change is about the journey. One way to start is to appreciate small changes like becoming more proactive, clear minded, gaining a deeper understanding of your feelings and motivations, or learning to adapt to discomfort without a substance. It is also possible that there can be negative small changes that you are beginning to notice like realizing things about yourself that you do not like. That's okay. It is growth.",
+          "📈 These small changes, both positive and negative, lay the foundation for growth and change.",
+          "Progress doesn't always look like dramatic leaps forward; sometimes, it's the gradual, subtle shifts that make the most significant impact in the long run.",
+          "👉 Appreciate Your Journey: The Clear30 journey isn't just about the end goal; it's about appreciating the process of change and embracing a growth mindset and the little things that begin to creep in along the way! ✅"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "Write down (or respond to the message), any little changes for the better you have noticed while doing Clear30."
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Process of Change Meditation",
+        "link": "https://m.clear30.org/slowchange.mp3"
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "Slow progress is better than no progress": "https://www.reddit.com/r/selfimprovement/comments/mtwksm/slow_progress_is_better_than_no_progress/",
+          "Accepting slow progress": "https://www.reddit.com/r/getdisciplined/comments/c46waw/advice_3_ways_to_be_more_accepting_of_slow/",
+          "Self Improvement when you feel like you're getting worse": "https://www.reddit.com/r/selfimprovement/comments/rgztkm/why_is_it_that_since_ive_started_trying_to/"
+        }
+      }
+    ]
+  },
+  "reward": {
+    "title": "Rewarding Ourselves",
+    "quote": "Its okay to give yourself a gift when you have done the work",
+    "prompts": {
+      "🎉 Plan Your Joyful Reward: Healthy Celebrations": "Suggest healthy, joyful ways to reward myself for sticking with Clear30 without old habits.",
+      "✨ Celebrate Your Dedication: Honor Your Effort": "How can I appreciate and celebrate my dedication to bettering myself during Clear30 today?"
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "Rewarding Ourselves",
+        "paragraphs": [
+          "As we navigate the journey of transformation in ourlives, it's important to pause and acknowledge the progress we've made. Rewarding ourselves not only affirms the effort we've put in but also reinforces the behavior we're trying to cultivate."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "The Importance of Self-Recognition 🏅",
+        "paragraphs": [
+          "Rewards could be something you can touch, like a new electronic toy or book, or something you feel, like pride, or something you do, like a show or massage. Rewards are not about a thing, but recognition that you should appreciate yourself. That you are willing to thank yourself for positive action.",
+          "If you are actually reading this, it means you put in effort and that should be rewarded. Each step you've taken, each message you've read, and each day you've committed to Clear30 is a testament to your effort. Don't shy away from celebrating your work - you deserve it!"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "Take some time today reward yourself for making an effort to grow and disrupt your life."
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Rewarding Ourselves Meditation",
+        "link": "https://m.clear30.org/reward.mp3"
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "How to reward yourself without food or shopping": "https://www.reddit.com/r/DecidingToBeBetter/comments/v9c615/how_to_reward_yourself_without_food_or_shopping/",
+          "How do you reward yourself?": "https://www.reddit.com/r/getdisciplined/comments/2yoc28/question_how_do_you_reward_yourself/",
+          "Six steps to self love": "https://www.reddit.com/r/getdisciplined/comments/2rjg9t/method_six_steps_to_selflove/",
+          "Power of Reward brief science video": "https://www.youtube.com/watch?v=IGjO20EbRKk/",
+          "Power of Reward brief science video 2": "https://www.paulaimmo.com/2022/04/04/the-power-of-reward/"
+        }
+      }
+    ]
+  },
+  "fadingaffect": {
+    "title": "What is FAB?",
+    "quote": "Our memories are the worst liars, they change with our current motivations",
+    "prompts": {
+      "🔗 Reaffirm Your Commitments": "Help me review my reasons for starting Clear30 and reinforce my commitment.",
+      "💡 Keep Your 'Why' Alive": "What strategies can keep my 'why' fresh and focused on long-term goals?"
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "What is FAB?",
+        "paragraphs": [
+          "💭 The Fading Affect Bias (FAB) is a process where the emotions associated with unpleasant memories fade faster than those linked to positive events. This can cause people to trick themselves into forgetting why they want to make changes or avoid the negative consequences in the future.",
+          "🤔 FAB is one of those things that is important to our evolutionary survival. If we remembered all the negative things about childbirth, for example, people might not have kids. But like many of our evolutionary biases, such as the drive to sugar and fat, they can cause trouble.",
+          "🤔 What's interesting is that it's not that you think cannabis will make you feel better than it actually does. You just forget the bad parts of your experience."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "So how do you avoid the FAB trap?",
+        "paragraphs": [
+          "🧠 Understand FAB: Knowledge is power. Understanding that FAB is real can help you recognize when it's affecting your perception and decision-making.",
+          "🔍 Write or better yet, record yourself when you have negative consequences from anything, including weed, and listen to it later. That is the real you.",
+          "Below is a presentation from our founder, Fred Muench, talking about this process and the importance of recording yourself to stay honest with the real you and maintain motivation.",
+          "🔹 FAB bias doesn't affect everyone. It is usually on overdrive in people who have trouble controlling behaviors that have a short-term reward, but we want to change. If you feel like this is you, definitely be aware of this mind trick that can keep you stuck in your patterns.🔹",
+          "Remember, the fading affect bias might not affect everyone, but many of us experience its effects. Understanding it can lead us to a path of self-awareness and intentional living.🌟"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "Stay connected to the moments when you the consequences are real. Write or better yet, record yourself, when you have negative consequences from anything, including weed, and listen to it later."
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Fading Affect Bias Meditation",
+        "link": "https://m.clear30.org/fadingaffect.mp3 "
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "Dr. Fred's Presentation": "https://www.youtube.com/watch?v=QVUrMXJ3wZ8",
+          "100 Days Without Marijuana. Here is What I Learned": "https://www.youtube.com/watch?v=nXnr1eWP_uQ",
+          "Lack of Consistency Comes from......":"https://www.reddit.com/r/getdisciplined/comments/d2qkbf/advice_your_lack_of_consistency_comes_from_your/"
+        }
+      }
+    ]
+  },
+  "finalpage": {
+    "title": "Congratulations on Completing Your Clear30!",
+    "quote": "You are fucking beautiful! Own it everyday.",
+    "prompts": {
+      "🎉 Conversation about the future": "Can we have a conversation about my future relationship with weed based on what you know about me? Can you help me come up with a plan?"
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "Congratulations on Completing Your Clear30!",
+        "paragraphs": [
+          "Yes, Yes, YES! You should be incredibly proud that you have completed your Clear30. You don't know us, the founders of Clear30, but be assured, we are proud of everyone who makes it to this point. The reasons is that most of us here, including the founder, struggled with controlling weed and other substances.",
+          "You could have texted stop at any time. You could not be reading this message. But you are, so be proud. On day 32, you will receive a brief survey in the app to help us be better. You will be entered into a drawing for one of four $50 Amazon gift cards.  If you want to do it now, please complete it here 🔗https://clear30.typeform.com/30day.  We really appreciate your feedback!"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Charting Your Future Path",
+        "paragraphs": [
+          "🌟 The journey of personal growth is a continuous one. So, as you step into the future, take along the lessons you've learned, the resilience you've shown, and the self-appreciation you've cultivated. Here's to your continued journey towards self-improvement and personal growth! 🌟",
+          "Whatever lessons you learned are a stepping stone for your continued growth and well-being no matter your goals.",
+          "We recommend continuinhg to evaluate your life using a simiular framework as CLear30. Take a step back at least once a year from the things you are doing regularly to give yourself time to reflect, reset and renew. Ask yourself and the world around you how you can be better. Following this path leads to contentment."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Books on living intentionally",
+        "paragraphs": [
+          "Oxenreider, T. (2014). Notes from a Blue Bike: The Art of Living Intentionally in a Chaotic World. Thomas Nelson.",
+          "Clear, J. (2018). Atomic Habits: An Easy & Proven Way to Build Good Habits & Break Bad Ones. Avery.",
+          "Duhigg, C. (2012). The Power of Habit: Why We Do What We Do in Life and Business. Random House.",
+          "Fogg, B.J. (2019). Tiny Habits: The Small Changes That Change Everything. Houghton Mifflin Harcourt.",
+          "Heath, C., & Heath, D. (2010). Switch: How to Change Things When Change Is Hard. Broadway Books."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Some books on quitting or moderating (not much on moderation - maybe we should write one!)",
+        "paragraphs": [
+          "Copeland, J. (2015). Quit Cannabis: An Expert Guide to Coping with Cravings and Withdrawal, Unscrambling Your Brain and Kicking the Habit for Good. CreateSpace Independent Publishing Platform.",
+          "Frank, N. (2020). Microdosing Cannabis: A Comprehensive Step-by-Step Guide to Enjoying Marijuana Responsibly. Rockridge Press.",
+          "Marijuana Anonymous: Quitting Weed: The Complete Guide. Retrieved July 26, 2023 from Lembke, A. (2021). Dopamine Nation: Finding Balance in the Age of Indulgence. Dutton."
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Completion Meditation!",
+        "link": "https://m.clear30.org/finalpage.mp3"
+      }
+    ]
+  },
+  "writing": {
+    "title": "Writing Meditation",
+    "quote": "",
+    "prompts": {
+      "🤔 Reflecting on Use: Cannabis Then & Now": "ClaireBot, help me articulate my current reasons for using cannabis and how they've changed since I started."
+    },
+    "sections": [
+      {
+        "type": "audio",
+        "header": "Writing Meditation",
+        "link": ""
+      }
+    ]
+  },
+  "intention": {
+    "title": "Intention Setting Meditation",
+    "quote": "",
+    "prompts": {
+      "🌱 Uncover Your True Self: Identity Beyond Cannabis": "Help me explore and redefine my identity without cannabis. How to uncover my true self in this new life chapter?",
+      "🛡 Face Change with Courage: Overcoming Fear": "Assist me in confronting fears of change. Need strategies to navigate uncertainties and embrace my journey with confidence.",
+      "💪 Transform Discomfort into Growth: Embrace the Challenge": "Let's discuss moments of discomfort and find strategies to transform it into growth. How to embrace and grow from discomfort?"
+    },
+    "sections": [
+      {
+        "type": "audio",
+        "header": "Intention Setting Meditation",
+        "link": ""
+      }
+    ]
+  },
+  "supplements": {
+    "title": "Supplements to Reduce Cravings",
+    "quote": "There are supplements and foods that can help; do your research",
+    "prompts": {},
+    "sections": [
+      {
+        "type": "text",
+        "header": "IMPORTANT",
+        "paragraphs": [
+          "Consult a medical professional before taking any supplements or medications. This information is compiled from the web and clinical studies. Clear30 is not a replacement for medical advice."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Supplements to Reduce Cravings",
+        "paragraphs": [
+          "Coping with cravings can be easier with the right nutritional support. Certain supplements may help your body adjust to the absence of THC and reduce withdrawal symptoms like cravings and irritability."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "N-Acetylcysteine (NAC)",
+        "paragraphs": [
+          "This dietary supplement has shown promise in reducing cannabis cravings and usage. It works by restoring the body's level of neurotransmitters like serotonin and dopamine, which can help ease feelings of anxiety and stress. Some research supports that it can curb other types of cravings beyond weed too. 🧪"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Cannabidiol (CBD)",
+        "paragraphs": [
+          "Some people choose to use CBD to reduce withdrawal. There is literature suggesting this may be an effective strategy. If you choose to use CBD for your taper, we suggest ingesting differently than how you use THC (e.g. in tea)."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Magnesium",
+        "paragraphs": [
+          "This essential mineral plays a part in many biochemical reactions in your body. It can help boost serotonin levels in the brain, which might be useful in managing cravings and sleep. 💊"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Vitamin B-complex and Vitamin C",
+        "paragraphs": [
+          "These vitamins can help reduce anxiety and stress. The B-complex vitamins are especially good at helping your body use carbohydrates effectively, which can reduce cravings. Vitamin C, aside from its immune-supporting role, can also help curb your urges. 🍊🥦"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Omega-3 Fatty Acids",
+        "paragraphs": [
+          "These can aid healthy brain function, helping to reduce stress and anxiety, which in turn could help manage cravings. 🐟🥜"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "💡 Conclusion",
+        "paragraphs": [
+          "Remember, your body's working hard to adjust to a new normal. While these supplements can provide support, always consult with a healthcare provider before starting any supplement, including anything on this page. 💡👩‍⚕️"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "Talk to your doctor to see if supplements are right for you. They can work well in reducing cravings."
+        ]
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "Supplements to help with reducing acute withdrawal syndrome (marijuana specifically)?":"https://www.reddit.com/r/Supplements/comments/su8127/supplements_to_help_with_reducing_acute/",
+          "Supplement to wean self off of marijuana?":"https://www.reddit.com/r/Biohackers/comments/y9ae6p/supplement_to_wean_self_off_of_marijuana/",
+          "Supplements Proven to Help You Overcome Addiction and Withdrawal":"https://www.reddit.com/r/selfimprovement/comments/rgztkm/why_is_it_that_since_ive_started_trying_to/",
+          "Supplement N-acetylcysteine May Help With Drug Craving":"https://www.bu.edu/aodhealth/2018/02/21/supplement-n-acetylcysteine-may-help-with-drug-craving/",
+          "Herbs & Supplements That Help Weed Withdrawals":"https://medium.com/@steve_76718/8-herbs-supplements-that-help-weed-withdrawals-9a6fabeda865/"
+        }
+      }
+    ]
+  },
+  "friends": {
+    "title": "Managing Your World When Your Friends Use",
+    "quote": "The most beautiful discovery true friends make is that they can grow separately without growing apart -  EF",
+    "prompts": {
+      "🔮 Talking to friends who use": "Guide me in managing my friends who smoke when I am breaking."
+    },
+    "sections": [
+      {
+        "type": "text",
+        "header": "Managing Your World When Your Friends Use",
+        "paragraphs": [
+          "Clear30 can be especially hard when you're surrounded by friends who continue to use, even if you use other social support. Most people struggle with pressure to use because they want to - not because anyone is forcing them. That is why it is up to you to stay committed."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🔑 Key Takeaway Action",
+        "paragraphs": [
+          "Set boundaries with yourself and be clear with your friends who use. They will support you. Its only 30 days!"
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Navigating the Environment 🏞️",
+        "paragraphs": [
+          "The first step towards success involves creating a social environment where you feel safe and in control. In practice, this means avoiding friend triggers. Here are five things you can do."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "Have the Conversation with Friends who Use",
+        "paragraphs": [
+          "Informing your friends about your decision is a vital step, and it might be easier than you think. Here's a way to go about it:",
+          "🤝 Be Honest: Clearly communicate why you've decided to take a break. Honesty will help them understand your decision better.",
+          "👍 Be Positive: Share the benefits you anticipate from this break and how it aligns with your personal growth.",
+          "🗣️🚫 Don't badmouth weed or their choices. This is about you and only you.",
+          "🙏 Request Support: Ask for their support during this period. They can help by respecting your decision, providing distraction when needed, and even joining you in positive activities."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "👥 Identify When to Hang Out with Weed Friends",
+        "paragraphs": [
+          "Unless you want to avoid certain friends, one way to reduce triggers is to hang out with friends who use only when they are not using. If they are true friends, they will support you and work with you. You would be surprised at your positive influence on them, actually."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🚫 Find Safe Environments",
+        "paragraphs": [
+          "Pick environments you can hang out that do not involve weed. That could be your place more often, or a neutral place like a cafe."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🕵️‍♂️ Identify Non-Weed Friends",
+        "paragraphs": [
+          "There are always people available who do not use. More than you think too. Identify some non-weed friends to hang out with and make a plan to hang with them a couple of times. They don't have to be your new best friends. It is about opening up your world."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "📱Join online groups",
+        "paragraphs": [
+          "Okay, we keep repeating this but there is a reason. If you are really feeling triggered everywhere you go, go to online groups as discussed earlier."
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "Social Support Meditation",
+        "link": "https://m.clear30.org/friends.mp3"
+      },
+      {
+        "type": "resources",
+        "header": "Resources",
+        "resources": {
+          "Don't throw away your “weed friends”!": "https://www.reddit.com/r/leaves/comments/xbh3pw/dont_throw_your_weed_friends_away/",
+          "Dealing with being the only one in a friend group who doesn't smoke": "https://www.reddit.com/r/socialskills/comments/2r7p4l/how_do_you_guys_deal_with_being_the_only_one_in_a/",
+          "Quitting while all your friends smoke": "https://www.reddit.com/r/leaves/comments/fg08fp/i_want_to_quit_weed_but_all_of_my_friends_smoke/"
+        }
+      }
+    ]
+  },
+  "content": {
+    "title": "Content Page",
+    "quote": "",
+    "prompts": {},
+    "sections": [
+      {
+        "type": "text",
+        "header": "Content",
+        "paragraphs": [
+          "Placeholder for the content page"
+        ]
+      }
+    ]
+  },
+  "potency": {
+    "title": "Potency Page",
+    "quote": "",
+    "prompts": {},
+    "sections": [
+      {
+        "type": "text",
+        "header": "Potency",
+        "paragraphs": [
+          "Placeholder for the Potency page"
+        ]
+      }
+    ]
+  },
+  "under21": {
+    "title": "under21 Page",
+    "quote": "",
+    "prompts": {},
+    "sections": [
+      {
+        "type": "text",
+        "header": "under21",
+        "paragraphs": [
+          "Placeholder for the under21 page"
+        ]
+      }
+    ]
+  },
+  "delta8": {
+    "title": "delta8 Page",
+    "quote": "",
+    "prompts": {},
+    "sections": [
+      {
+        "type": "text",
+        "header": "delta8",
+        "paragraphs": [
+          "Placeholder for the delta8 page"
+        ]
+      }
+    ]
+  },
+  "Routeofadmin": {
+    "title": "Routeofadmin Page",
+    "quote": "",
+    "prompts": {},
+    "sections": [
+      {
+        "type": "text",
+        "header": "Routeofadmin",
+        "paragraphs": [
+          "Placeholder for the Routeofadmin page"
+        ]
+      }
+    ]
+  },
+  "claire": {
+    "title": "Claire",
+    "quote": "Welcome to Claire, our AI assistant",
+    "prompts": {
+        "🌿 Ease Withdrawal: Your Action Plan 🌟": "Clairebot, based on my profile, guide me in crafting a detailed action plan with daily routines, activities, and habits to ease withdrawal symptoms in Clear30.",
+        "👥 Environment Curation: Find Your Place & People 🌎": "Help me manage environmental triggers and identifying and minimizing settings that lead to cravings based on my profile?",
+        "🎨 New Free Time? Discover New Habits 🏃": "Can you guide me in either finding a habit worth building or putting into practice a habit I've committed to?"
+    },
+    "sections": []
+  },
+  "getready": {
+    "title": "Preparing for Clear30",
+    "quote": "",
+    "prompts": {},
+    "sections": [
+      {
+        "type": "text",
+        "header": "Preparing for Clear30",
+        "paragraphs": [
+          "As you think about when you want to start your Clear30, it is helpful to set the stage for a successful break. Below are some suggestions that can help you optimize your experience."
+        ]
+      },
+      {
+        "type": "audio",
+        "header": "",
+        "link": "https://m.clear30.org/preparation.mp3"
+      },
+      {
+        "type": "image",
+        "link": "https://m.clear30.org/preparation.png"
+      },
+      {
+        "type": "text",
+        "header": "Tips for a Successful Clear30",
+        "paragraphs": [
+          "📅 Pick a date: Picking a date to start Clear30 helps you mentally prepare yourself for Clear30. It gives you time to mentally prepare while you are still using. Whatever your date, don’t get caught up in delaying, delaying, delaying; there is never a perfect time, and a break takes work no matter when you do it. Here are a few things that can help once you pick a date to start–you can even choose to begin today! On the other hand, don’t worry if you signed up and realize you’d prefer to start in a few days. Getting Clear30 break messages can be really helpful during the preparation phase, too.",
+          "❓ Consider a taper: If you use cannabis more than 5 days a week, tapering off rather than going “cold turkey” can be an effective way to reduce withdrawal symptoms. Tapering can be a part of your 30 days, or you can do it before you start counting.",
+          "🚫 Get rid of your supply: Get rid of your papers, bongs, and anything related to substance use before you do Clear30. Other than giving your body a break, you will be giving your mind a break, too; having substance use paraphernalia may make this period more challenging. Ask a friend to store more expensive items; consider throwing out those that are not. Free your mind from temptation. Free your mind to do other, more healthful things.",
+          "🔍 Identify your “mega trigger”: You will do lots of identifying triggers during Clear30, but if there is one specific trigger — perhaps going to bed, waking up, watching TV, or hanging out with a specific person or people — it is good to have an idea of how you will plan to cope with cravings during those times.✨",
+          "🎯 Alternate activities: Start to think about other things you can do to create a fun and interesting Clear30. What are things you have always wanted to do but haven’t had the time for or just were stuck on? What is something new you can do?",
+          "💪🏽 Intention setting: Setting your goal and intentions for the day is a win. Doing this in the mornings will help you center your day around your goals; doing this in the evenings can help keep your mind on the future and the benefits of this break. Use Clear30 daily meditations to help you get (and stay) intentional.",
+          "🤗 Get support: There are three kinds of support that you can mix and match:",
+          "🚀 Commit!: Regardless of what tools you use or recommendations you follow, <i>truly commit</i> to Clear30 when you start. For the next 30 days, your identity is someone who doesn't use weed. It kind of doesn't matter how you do it - just own and live Clear30. It is really fun to create a new identity for a month. Act as if and the rest becomes so much easier."
+        ]
+      },
+      {
+        "type": "text",
+        "header": "🤗 Get support",
+        "paragraphs": [
+          "There are three kinds of support that you can mix and match:",
+          "<b>👥 Group Clear30</b>. The first is doing Clear30 with friends. You would be surprised that some of your friends who smoke will do Clear30 with you if you ask. It will not only be helpful for you but also for them. It creates a very cool bonding experience if you are lucky enough to have these kinds of friendships.",
+          "<b>🙋 Solo Clear30 with non-user support</b>. Research has revealed the importance of supportive people—whether they use substances or not—to bounce things off of and to do things with. While not everyone has these relationships, if you have people who are willing to help you, let them know you are trying to make a change and would love their support in chatting or doing things that don’t involve weed over the next 30 days.",
+          "<b>💻 Solo Clear30 with online support</b>. Covid-19 made it clear that online support is really powerful and effective. Regardless of whether you have in-person support, use online support because it is there 24-7 and can be super targeted."
+        ]
+      }
+    ]
+  }
+}

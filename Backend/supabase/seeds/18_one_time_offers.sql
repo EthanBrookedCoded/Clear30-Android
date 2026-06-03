@@ -1,0 +1,18 @@
+-- Seed: payment.one_time_offers
+-- Source: 2025_06_03_oto.csv
+-- OTO placement config — shown after paywall in app
+
+TRUNCATE payment.one_time_offers CASCADE;
+
+INSERT INTO payment.one_time_offers (id, paywall_id, oto_placement, enabled) VALUES
+  (1, 'calorie-tracking-template-7b37-2025-04-28', 'one_time_offer', false),
+  (2, 'cal-ai-clone-main-cheaper-products-d2a2-2025-05-07', 'oto_30_20', true),
+  (3, 'calai---10m-40y-5a98-2025-05-09', 'oto_40_30', true),
+  (4, 'calai---15m-50y-d7ed-2025-05-09', 'oto_50_40', true),
+  (5, 'calai---10m-30y-fc48-2025-05-09', 'oto_30_20', true),
+  (6, 'calai---15m-40y-9f5b-2025-05-09', 'oto_40_30', true),
+  (7, 'calai-new-features---10m-30y-bcff-2025-05-29', 'oto_30_20', true),
+  (8, 'calai-v2-c30-notification-toggle---10m-30y-fa22-2025-05-31', 'oto_30_20', true),
+  (9, 'calai-v2-c30-real-notification-toggle---10m-30y-116d-2025-05-31', 'oto_30_20', true),
+  (10, 'calai-v2-c30---5w-30y-d5b4-2025-06-02', 'oto_30_20', true)
+ON CONFLICT (id) DO NOTHING;

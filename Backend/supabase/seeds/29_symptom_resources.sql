@@ -1,0 +1,3 @@
+-- Seed: symptoms.symptom_resources
+-- SKIPPED: Symptoms data comes from library cache / one-offs edge function.
+-- Do not seed this table locally per Thatcher's instructions.

@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Clear30</string>
+    <string name="default_notification_channel_id">clear30_default</string>
+</resources>

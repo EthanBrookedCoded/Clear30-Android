@@ -1,0 +1,158 @@
+package org.clear30.data.model
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+/**
+ * Assessment-question engine data layer — ported from ProgramAssessment.swift.
+ *
+ * `AssessmentQuestionType` (a Swift enum-with-associated-values + custom Codable
+ * using a `type` discriminator) maps to a kotlinx sealed class — kotlinx uses
+ * the same `type` discriminator by default, and @SerialName + matching property
+ * names reproduce the iOS JSON shape. `AssessmentInfoData.customView` (a SwiftUI
+ * `AnyView`) is dropped; the equivalent custom slides are built in the views
+ * segment.
+ */
+
+@Serializable
+sealed class AssessmentQuestionType {
+    @Serializable @SerialName("multipleChoice")
+    data object MultipleChoice : AssessmentQuestionType()
+
+    @Serializable @SerialName("sectionedMultipleChoice")
+    data class SectionedMultipleChoice(val sectionTitles: List<MultipleChoiceSection>) : AssessmentQuestionType()
+
+    @Serializable @SerialName("imageChoice")
+    data class ImageChoiceType(val imageChoices: List<ImageChoice>) : AssessmentQuestionType()
+
+    @Serializable @SerialName("slider")
+    data class Slider(val valueLabel: String) : AssessmentQuestionType()
+
+    @Serializable @SerialName("sliderWithCustom")
+    data class SliderWithCustom(val valueLabel: String) : AssessmentQuestionType()
+
+    @Serializable @SerialName("spectrum")
+    data class Spectrum(val left: String, val middle: String, val right: String, val showDots: Boolean = true) : AssessmentQuestionType()
+
+    @Serializable @SerialName("multiSpectrum")
+    data class MultiSpectrum(
+        val left: String, val leftEmoji: String,
+        val middle: String, val middleEmoji: String,
+        val right: String, val rightEmoji: String,
+    ) : AssessmentQuestionType()
+
+    @Serializable @SerialName("number")
+    data class Number(val dayQuestionType: AssessmentDaysType) : AssessmentQuestionType()
+
+    @Serializable @SerialName("input")
+    data class Input(val multiLine: Boolean, val placeholder: String, val optional: Boolean) : AssessmentQuestionType()
+
+    @Serializable @SerialName("datePicker")
+    data class DatePicker(val cancelOption: String? = null) : AssessmentQuestionType()
+
+    /**
+     * Fallback for unknown server-side type discriminators. Routed to via the
+     * polymorphic default deserializer registered on [org.clear30.data.LocalStore.json] /
+     * [org.clear30.data.supabase.SupabaseController.decoder], so that adding a new
+     * question type on the backend (e.g. an A/B test) cannot break the entire
+     * assessment payload on older clients.
+     */
+    @Serializable @SerialName("__unknown__")
+    data object Unknown : AssessmentQuestionType()
+}
+
+@Serializable
+sealed class AssessmentDaysType {
+    @Serializable @SerialName("lastSmoked") data object LastSmoked : AssessmentDaysType()
+    @Serializable @SerialName("lastSmokedAndStartSoon") data class LastSmokedAndStartSoon(val startSoonMax: Int) : AssessmentDaysType()
+    @Serializable @SerialName("startSoon") data object StartSoon : AssessmentDaysType()
+    @Serializable @SerialName("daysUsing") data object DaysUsing : AssessmentDaysType()
+}
+
+@Serializable
+data class MultipleChoiceSection(
+    val title: String,
+    val range: SectionRange,
+) {
+    /** Swift `ClosedRange<Int>` -> explicit bounds (server-defined). */
+    @Serializable
+    data class SectionRange(val lowerBound: Int, val upperBound: Int) {
+        val intRange: IntRange get() = lowerBound..upperBound
+    }
+}
+
+@Serializable
+data class ImageChoice(
+    val imageName: String,
+    val isSystemImage: Boolean,
+)
+
+/** Stable IDs for affirmation/info slides — value class for forward-compat. */
+@JvmInline
+@Serializable
+value class AssessmentInfoDataID(val raw: String) {
+    companion object {
+        val features = AssessmentInfoDataID("features")
+        val expectations = AssessmentInfoDataID("expectations")
+        val socialProof = AssessmentInfoDataID("social_proof")
+        val credibility = AssessmentInfoDataID("credibility")
+        val checkIn = AssessmentInfoDataID("check_in")
+        val nameContext = AssessmentInfoDataID("name_context")
+        val halftime = AssessmentInfoDataID("halftime")
+        val greeting = AssessmentInfoDataID("greeting")
+        val breakReasonAffirmation = AssessmentInfoDataID("break_reason_affirmation")
+        val goalsAffirmation = AssessmentInfoDataID("goals_affirmation")
+        val currentUseSummary = AssessmentInfoDataID("current_use_summary")
+        val clear30Recommendation = AssessmentInfoDataID("clear30_recommendation")
+        val whereYouAre = AssessmentInfoDataID("where_you_are")
+        val whereYouGoing = AssessmentInfoDataID("where_you_going")
+        // (additional ids added as referenced by onboarding slides)
+    }
+}
+
+/**
+ * AssessmentInfoData — affirmation/info slide config (customView omitted; that
+ * was a SwiftUI AnyView, rebuilt as composables in the views segment).
+ */
+@Serializable
+data class AssessmentInfoData(
+    val id: AssessmentInfoDataID? = null,
+    val title: String,
+    val subtitle: String,
+    val body: String,
+    val imageName: String? = null,
+    val systemImageName: String? = null,
+    val systemImageSize: Float = 125f,
+    val systemImageRotation: Float = 0f,
+    val primaryButtonText: String = "Next",
+    val primaryButtonIcon: String = "arrow.right",
+    val secondaryButtonText: String? = null,
+    val overrideBackgroundGradient: Boolean? = null,
+)
+
+/** ProgramAssessmentQuestion — ported 1:1 (ProgramAssessment.swift). */
+@Serializable
+data class ProgramAssessmentQuestion(
+    val questionNumber: Int,
+    val type: AssessmentQuestionType,
+    val strippedPrompt: String,
+    val prompt1: String,
+    val prompt2: String,
+    val options: List<String>,
+    val displayedOptions: List<String>? = null,
+    val imageNames: List<String>? = null,
+    val badges: List<String>? = null,
+    val subtexts: List<String>? = null,
+    val affirmations: List<AssessmentInfoData>? = emptyList(),
+    val autoAddAffirmation: Boolean? = true,
+    val min: Int = 1,
+    val max: Int = 1,
+    val shuffled: Boolean? = false,
+)
+
+/** ProgramAssessmentResponse — a question + the chosen option indices. */
+@Serializable
+data class ProgramAssessmentResponse(
+    val question: ProgramAssessmentQuestion,
+    val responses: List<Int>,
+)

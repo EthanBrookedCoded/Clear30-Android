@@ -1,0 +1,44 @@
+{
+  "name": "@clear30/shared",
+  "version": "1.0.0",
+  "description": "Shared utilities, components, and styling for Clear30 web apps",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "style": "src/styles/globals.css",
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc && cp -r src/assets dist/",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "clear30",
+    "shared",
+    "components",
+    "utilities"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.0.0",
+    "framer-motion": "^12.23.12",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "react-feather": "^2.0.10",
+    "react-helmet": "^6.1.0",
+    "react-markdown": "^9.0.1",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "@types/react-helmet": "^6.1.11",
+    "autoprefixer": "^10.0.0",
+    "postcss": "^8.0.0",
+    "tailwindcss": "^3.0.0",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  }
+}

@@ -1,0 +1,105 @@
+package org.clear30.data.supabase
+
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Columns
+import kotlinx.datetime.Instant
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.Serializable
+import org.clear30.BuildConfig
+import org.clear30.data.model.ToggleSettings
+import org.clear30.data.supabase.SupabaseController.toError
+
+/**
+ * SupabaseController domain methods — ported from SupabaseFunctions.swift.
+ *
+ * iOS used Task + completion callbacks; these are `suspend` and return the
+ * typed error (or null). Most are thin wrappers over [updateUser] (patch the
+ * caller's row in `public.users`) or the generic RPC helpers.
+ */
+
+private val authUserId: String?
+    get() = SupabaseController.client.auth.currentUserOrNull()?.id
+
+/** Update columns on the current user's `users` row (Swift `updateUser`). */
+suspend fun SupabaseController.updateUser(updates: JsonObject): SupabaseFunctionError? {
+    val authId = authUserId ?: return SupabaseFunctionError(message = "No auth session")
+    return runCatching {
+        client.postgrest.from("users").update(updates) {
+            filter { eq("auth_id", authId) }
+        }
+    }.fold({ null }, { it.toError() })
+}
+
+private fun cols(vararg pairs: Pair<String, JsonElement>) = JsonObject(pairs.toMap())
+
+suspend fun SupabaseController.signOut(): SupabaseFunctionError? =
+    runCatching { client.auth.signOut() }.fold({ null }, { it.toError() })
+
+/** Current user's `users.id` (Swift `getUserID`). */
+suspend fun SupabaseController.getUserID(): String? {
+    @Serializable data class Row(val id: String)
+    val authId = authUserId ?: return null
+    return runCatching {
+        client.postgrest.from("users")
+            .select(Columns.list("id")) { filter { eq("auth_id", authId) } }
+            .decodeSingle<Row>().id
+    }.getOrNull()
+}
+
+suspend fun SupabaseController.getUserAuthID(): String? =
+    getUserID() ?: authUserId?.lowercase()
+
+// User setters
+
+suspend fun SupabaseController.updateFCMToken(fcmToken: String): SupabaseFunctionError? =
+    updateUser(cols(SupabaseUserProps.FCM_TOKEN to JsonPrimitive(fcmToken)))
+
+suspend fun SupabaseController.updateSMSSettings(smsSettings: ToggleSettings): SupabaseFunctionError? =
+    updateUser(cols(SupabaseUserProps.SMS_SETTINGS to decoder.encodeToJsonElement(ToggleSettings.serializer(), smsSettings)))
+
+suspend fun SupabaseController.updateNotificationSettings(settings: ToggleSettings): SupabaseFunctionError? =
+    updateUser(cols(SupabaseUserProps.NOTIFICATION_SETTINGS to decoder.encodeToJsonElement(ToggleSettings.serializer(), settings)))
+
+suspend fun SupabaseController.updateYourWhy(yourWhy: String): SupabaseFunctionError? =
+    updateUser(cols(SupabaseUserProps.YOUR_WHY to JsonPrimitive(yourWhy)))
+
+suspend fun SupabaseController.updateUserMetadata(timezone: String, appVersion: String): SupabaseFunctionError? =
+    updateUser(cols(
+        SupabaseUserProps.TIMEZONE to JsonPrimitive(timezone),
+        SupabaseUserProps.APP_VERSION to JsonPrimitive(appVersion),
+    ))
+
+// Notifications / Pop-ins
+
+suspend fun SupabaseController.schedulePopInRequest(date: Instant): SupabaseFunctionError? =
+    callFunction(SupabaseFunction.schedulePopInRequest, mapOf("scheduled_for" to date.toString()))
+
+suspend fun SupabaseController.clearPopInRequest(): SupabaseFunctionError? =
+    callFunction(SupabaseFunction.clearPopInRequest)
+
+/** Account deletion (Swift `deleteAccount`). Fires the `delete_user` RPC. */
+suspend fun SupabaseController.deleteAccount(): SupabaseFunctionError? =
+    callFunction(SupabaseFunction.deleteAccount)
+
+// SMS (DEBUG short-circuits like the iOS #if DEBUG paths)
+
+@Serializable
+private data class ScheduleSMSParams(val message: String, val offset_minutes: Int)
+
+suspend fun SupabaseController.scheduleSMS(message: String, offset: Int): SupabaseFunctionError? {
+    if (BuildConfig.DEBUG) { println("💬 schedule SMS (+$offset min): ${message.lineSequence().first()}"); return null }
+    return callFunction(SupabaseFunction.scheduleSms, mapOf("sms_data" to ScheduleSMSParams(message, offset)))
+}
+
+suspend fun SupabaseController.clearSMS(): SupabaseFunctionError? {
+    if (BuildConfig.DEBUG) { println("🆑 Clearing all SMS"); return null }
+    return callFunction(SupabaseFunction.clearSms)
+}
+
+suspend fun SupabaseController.clearSMS(message: String): SupabaseFunctionError? {
+    if (BuildConfig.DEBUG) { println("🚮 Unscheduling: ${message.lineSequence().first()}"); return null }
+    return callFunction(SupabaseFunction.clearSms, mapOf("message" to message))
+}

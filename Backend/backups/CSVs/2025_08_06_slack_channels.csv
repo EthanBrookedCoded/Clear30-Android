@@ -1,0 +1,4 @@
+channel_type,webhook_url,channel_name,description,is_active,created_at
+community,https://hooks.slack.com/services/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,x_community_reports,Community reported posts.,true,2025-08-06 23:43:03.409916+00
+feedback,https://hooks.slack.com/services/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,x_feedback,Feedback channel,true,2025-08-06 23:31:16.124411+00
+fred,https://hooks.slack.com/services/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,x_fred_message,,true,2025-08-06 23:49:33.060896+00
