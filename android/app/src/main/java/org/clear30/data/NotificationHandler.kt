@@ -10,7 +10,9 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.atDate
+import kotlinx.datetime.plus
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import org.clear30.Clear30Application
@@ -131,7 +133,7 @@ object NotificationHandler {
         val targetToday = LocalTime(hour, 0).atDate(now.date)
         val nextTarget: LocalDateTime =
             if (targetToday > now) targetToday
-            else LocalTime(hour, 0).atDate(now.date.plus(1, kotlinx.datetime.DateTimeUnit.DAY))
+            else LocalTime(hour, 0).atDate(now.date.plus(DatePeriod(days = 1)))
         val initialDelayMs = nextTarget.toInstant(tz).toEpochMilliseconds() - System.currentTimeMillis()
 
         val req = PeriodicWorkRequestBuilder<NotificationPostWorker>(24, TimeUnit.HOURS)
@@ -151,6 +153,32 @@ object NotificationHandler {
         wm().cancelAllWorkByTag(NotificationPostWorker.TAG_CHECK_IN)
     }
 
+    // MARK: - Achievement notifications
+
+    /**
+     * Post an immediate "you just earned X" notification. Fired by
+     * [org.clear30.data.AchievementEngine] when the user crosses an achievement
+     * threshold from a check-in. The notification routes through the
+     * `achievement` channel so users can silence it independently from the
+     * other categories. Short-circuits when notifications (or this category)
+     * are muted in [UserInfo.notificationSettings].
+     */
+    fun postAchievementEarned(userInfo: UserInfo, achievementKey: String, achievementName: String) {
+        val settings = userInfo.notificationSettings ?: return
+        if (!settings.typeEnabled(ToggleSettingsOption.ACHIEVEMENT)) return
+
+        val req = androidx.work.OneTimeWorkRequestBuilder<NotificationPostWorker>()
+            .addTag(NotificationPostWorker.TAG_ACHIEVEMENT)
+            .setInputData(workDataOf(
+                NotificationPostWorker.KEY_CHANNEL to Clear30Application.CHANNEL_ACHIEVEMENT,
+                NotificationPostWorker.KEY_TITLE to "Achievement earned 🏆",
+                NotificationPostWorker.KEY_BODY to achievementName,
+                NotificationPostWorker.KEY_NOTIF_ID to (NOTIF_ID_ACHIEVEMENT + achievementKey.hashCode()),
+            ))
+            .build()
+        wm().enqueue(req)
+    }
+
     // MARK: - Bulk
 
     /** iOS `UNUserNotificationCenter.removeAllPendingNotificationRequests()`. */
@@ -164,4 +192,5 @@ object NotificationHandler {
     // Stable id buckets so we can reuse the notification slot on update.
     private const val NOTIF_ID_BASE_ABANDONED = 10_000
     private const val NOTIF_ID_CHECK_IN = 20_000
+    private const val NOTIF_ID_ACHIEVEMENT = 30_000
 }

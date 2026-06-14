@@ -32,7 +32,7 @@ import org.clear30.util.now
 class AssessmentViewModel(
     private val userInfo: UserInfo,
     private val onboardingSetup: OnboardingSetup,
-    private val experimentController: ExperimentController,
+    val experimentController: ExperimentController,
     private val scope: CoroutineScope,
     private val completion: () -> Unit,
 ) {
@@ -62,7 +62,7 @@ class AssessmentViewModel(
     init { addInitialSlides() }
 
     private fun addInitialSlides() {
-        // TODO(port): AssessmentSlides3/2.addInitialSlides — the full question script.
+        AssessmentSlides3.addInitialSlides(this)
     }
 
     fun handleSlideCompletion(
@@ -73,7 +73,7 @@ class AssessmentViewModel(
     ) {
         hasLeftFirstSlide = true
 
-        // TODO(port): AssessmentSlides3/2.addNextSlides (branching follow-ups)
+        AssessmentSlides3.addNextSlides(slide, index, this, chosePrimaryOption)
 
         // Completion logging
         when (val s = slide.slide) {

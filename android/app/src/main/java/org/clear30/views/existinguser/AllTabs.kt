@@ -16,7 +16,6 @@ import org.clear30.data.LogEventType
 import org.clear30.data.Logger
 import org.clear30.data.model.Program
 import org.clear30.data.model.UserInfo
-import org.clear30.views.components.Heading1
 import org.clear30.views.existinguser.community.CommunityTab
 import org.clear30.views.existinguser.groups.GroupsTab
 import org.clear30.views.existinguser.profile.ProfileTab
@@ -28,9 +27,9 @@ import org.clear30.views.existinguser.today.TodayTab
  * [CustomTabBar] and switches the content per selected tab, logging the
  * corresponding opened-tab analytics event.
  *
- * Each tab's content (Today/Community/Groups/Profile/Support) is a placeholder
- * to be replaced by the real tab screens; navigation stack, sheets, toasts, and
- * badge handlers from the iOS view model are layered in as those land.
+ * Each tab hosts its real screen (Today/Community/Groups/Profile/Support); the
+ * navigation stack, sheets, toasts, and badge handlers from the iOS view model
+ * are layered in as those land.
  */
 @Composable
 fun AllTabs(
@@ -81,7 +80,7 @@ fun AllTabs(
                 CustomTabBarItem.COMMUNITY -> CommunityTab(userInfo)
                 CustomTabBarItem.GROUPS -> GroupsTab(userInfo)
                 CustomTabBarItem.PROFILE -> ProfileTab(userInfo, program, journalEntries, onSignOut)
-                CustomTabBarItem.SUPPORT -> SupportTab(program, userInfo)
+                CustomTabBarItem.SUPPORT -> SupportTab(program, userInfo, journalEntries)
             }
         }
     }
@@ -96,9 +95,3 @@ private val CustomTabBarItem.openedEvent: LogEventType
         CustomTabBarItem.COMMUNITY -> LogEventType.openedCommunity
         CustomTabBarItem.GROUPS -> LogEventType.openedCommunity
     }
-
-@Composable
-private fun TabPlaceholder(name: String) {
-    // TODO(tabs): real TodayTab / CommunityTab / GroupTab / ProfileTab / SupportTab
-    Heading1(name)
-}

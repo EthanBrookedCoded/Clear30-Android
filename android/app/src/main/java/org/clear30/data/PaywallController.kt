@@ -41,21 +41,21 @@ object PaywallController {
     }
 
     fun signIn(userInfo: UserInfo, userProperties: Map<String, Any> = emptyMap()) {
-        Purchases.sharedInstance.logIn(userInfo.userID, onError = { }, onSuccess = { _, _ ->
-            Purchases.sharedInstance.apply {
-                setDisplayName(userInfo.name)
-                when (userInfo.signUpType) {
-                    org.clear30.data.model.SignUpType.PHONE -> setPhoneNumber(userInfo.signUpID)
-                    else -> if (userInfo.signUpID.contains("@")) setEmail(userInfo.signUpID)
-                }
-                // Amplitude / AppStack attribution -> see AttributionHandler
-            }
-            // TODO(port): Helium login (Helium Android SDK)
-        })
+        // TODO(port): the RevenueCat Android SDK's logIn / attribute API surface
+        // differs from the iOS SDK I ported against — concrete calls vary by
+        // SDK version (Purchases.sharedInstance.logInWith(...) vs
+        // logIn(appUserID, LogInCallback), and attribute setters were folded
+        // into setAttributes(map)). Wire these against the version Studio
+        // resolves once the paywall views land — see TODO.md section 1.
+        // For now, no-op so the rest of the app compiles + runs.
+        @Suppress("UNUSED_VARIABLE") val u = userInfo
+        @Suppress("UNUSED_VARIABLE") val p = userProperties
     }
 
     fun signOut(context: Context? = null) {
-        Purchases.sharedInstance.logOut()
+        // TODO(port): Purchases.sharedInstance.logOut takes a ReceiveCustomerInfoCallback
+        // in the Android SDK (Java SAM not auto-derivable from a no-arg call). Wire
+        // it once the paywall is reconciled — for now skip so sign-out doesn't crash.
         // Strip Stripe-managed-sub shortcut (iOS removed this on sign-out so
         // the next account doesn't inherit the old user's billing entry).
         context?.let { ShortcutHandler.removeQuickAction(it, ShortcutHandler.ID_MANAGE_SUB_STRIPE) }

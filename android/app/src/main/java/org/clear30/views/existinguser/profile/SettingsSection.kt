@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.weight
 import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -18,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.launch
 import kotlinx.datetime.atDate
+import kotlinx.datetime.plus
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import org.clear30.data.Clear30Store
@@ -29,6 +29,7 @@ import org.clear30.data.model.ToggleSettingsOptionType
 import org.clear30.data.model.UserInfo
 import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.clearPopInRequest
+import org.clear30.data.supabase.deleteAccount
 import org.clear30.data.supabase.schedulePopInRequest
 import org.clear30.data.supabase.updateNotificationSettings
 import org.clear30.data.supabase.updateSMSSettings
@@ -227,6 +228,11 @@ private fun nextNineAm(): kotlinx.datetime.Instant {
     val now = kotlinx.datetime.Clock.System.now().toLocalDateTime(tz)
     val targetToday = kotlinx.datetime.LocalTime(9, 0).atDate(now.date)
     val target = if (targetToday > now) targetToday
-        else kotlinx.datetime.LocalTime(9, 0).atDate(now.date.plus(1, kotlinx.datetime.DateTimeUnit.DAY))
+        else kotlinx.datetime.LocalTime(9, 0).atDate(
+            // LocalDate + DatePeriod is the resolvable overload in 0.6.x; the
+            // (Int, DateTimeUnit) form needs an explicit import that isn't on
+            // every kotlinx-datetime version, so prefer the period form.
+            now.date.plus(kotlinx.datetime.DatePeriod(days = 1))
+        )
     return target.toInstant(tz)
 }

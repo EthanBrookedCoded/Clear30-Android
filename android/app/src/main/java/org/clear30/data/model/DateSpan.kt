@@ -3,6 +3,7 @@ package org.clear30.data.model
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.plus
 import kotlinx.datetime.until
 import kotlinx.serialization.Serializable
 

@@ -78,5 +78,6 @@ class NotificationPostWorker(
         const val TAG_CONTENT = "tag_content"
         const val TAG_CHECK_IN = "tag_check_in"
         const val TAG_POP_IN = "tag_pop_in"
+        const val TAG_ACHIEVEMENT = "tag_achievement"
     }
 }

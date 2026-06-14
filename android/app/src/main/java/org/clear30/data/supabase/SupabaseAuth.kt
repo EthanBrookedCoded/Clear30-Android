@@ -3,7 +3,7 @@ package org.clear30.data.supabase
 import io.github.jan.supabase.auth.OtpType
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.OTP
-import org.clear30.data.supabase.SupabaseController.toError
+import org.clear30.data.supabase.SupabaseController.SupabaseFunctionError
 
 /**
  * Supabase Auth (phone/email OTP) — ported from the auth methods in

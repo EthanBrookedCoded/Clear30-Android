@@ -49,7 +49,7 @@ class JournalEntries(
 ) {
     /** Entries on [date], ascending by time. */
     fun entries(forDate: Instant): List<JournalEntry> =
-        entries.filter { it.date.isSameDay(date) }.sortedBy { it.date }
+        entries.filter { it.date.isSameDay(forDate) }.sortedBy { it.date }
 
     companion object {
         const val STORE_KEY = "journal_entries"

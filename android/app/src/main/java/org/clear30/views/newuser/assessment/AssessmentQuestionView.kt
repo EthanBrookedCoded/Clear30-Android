@@ -21,7 +21,7 @@ import kotlinx.datetime.Instant
 import org.clear30.data.model.AssessmentQuestionType
 import org.clear30.data.model.ProgramAssessmentQuestion
 import org.clear30.views.components.DefaultButton
-import org.clear30.views.components.Heading2
+import org.clear30.views.components.Heading2Markdown
 import org.clear30.views.components.SmallText
 import org.clear30.views.components.Clear30Card
 import org.clear30.views.theme.Clear30Colors
@@ -105,7 +105,7 @@ private fun UnknownQuestionFallback(onNext: () -> Unit) {
 fun QuestionCard(prompt1: String, prompt2: String, choiceMin: Int = 1, choiceMax: Int? = null, modifier: Modifier = Modifier) {
     Column(modifier.fillMaxWidth(), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
         if (prompt1.isNotBlank()) SmallText(prompt1, color = Clear30Colors.text.copy(alpha = 0.5f), modifier = Modifier.padding(bottom = 4.dp))
-        Heading2(prompt2)
+        Heading2Markdown(prompt2)
         if (choiceMax != null && choiceMax > 1) {
             SmallText("Choose $choiceMin–$choiceMax", color = Clear30Colors.text.copy(alpha = 0.5f), modifier = Modifier.padding(top = 4.dp))
         }

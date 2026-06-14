@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.rememberCoroutineScope
@@ -13,7 +14,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import org.clear30.views.components.Heading1
 import org.clear30.views.newuser.AllNewUser
 import org.clear30.views.existinguser.AllTabs
 import org.clear30.views.theme.Clear30Colors
@@ -27,8 +27,8 @@ import org.clear30.views.theme.Clear30Gradients
  *   NewUser      -> onboarding (AllNewUser / slideshows) — onboarding segment
  *   ExistingUser -> main tabs (AllTabs) — tabs segment
  *
- * The onboarding/tab destinations are placeholders until those view segments
- * land; the load + routing wiring is real.
+ * Routing, foreground sync, deep-link dispatch, and the global overlay layer are
+ * all live; per-screen depth grows batch by batch.
  */
 @Composable
 fun AppRoot(viewModel: AppRootViewModel = viewModel()) {
@@ -92,7 +92,7 @@ fun AppRoot(viewModel: AppRootViewModel = viewModel()) {
     Box(Modifier.fillMaxSize().background(Clear30Colors.background)) {
         Crossfade(targetState = state, label = "appRoot") { s ->
             when (s) {
-                is AppRootState.Loading -> SplashScreen()
+                is AppRootState.Loading -> org.clear30.views.newuser.SplashScreen()
                 is AppRootState.NewUser -> AllNewUser(
                     userInfo = s.userInfo,
                     program = viewModel.program,
@@ -101,12 +101,18 @@ fun AppRoot(viewModel: AppRootViewModel = viewModel()) {
                     scope = scope,
                     onCompletedOnboarding = { viewModel.onboardingCompleted(s.userInfo) },
                 )
-                is AppRootState.ExistingUser -> AllTabs(
-                    userInfo = s.userInfo,
-                    program = viewModel.program,
-                    journalEntries = viewModel.journalEntries,
-                    onSignOut = viewModel::signOut,
-                )
+                is AppRootState.ExistingUser -> {
+                    // Main app — light backgrounds, so flip status bar icons
+                    // back to dark (they were white during the onboarding
+                    // gradient screens).
+                    org.clear30.views.components.StatusBarStyle(forceLightIcons = false)
+                    AllTabs(
+                        userInfo = s.userInfo,
+                        program = viewModel.program,
+                        journalEntries = viewModel.journalEntries,
+                        onSignOut = viewModel::signOut,
+                    )
+                }
             }
         }
         // Single-source overlay layer above the routed content: master alert
@@ -117,13 +123,3 @@ fun AppRoot(viewModel: AppRootViewModel = viewModel()) {
     }
 }
 
-/** Branded splash — full SplashScreen.swift port lands in the views segment. */
-@Composable
-private fun SplashScreen() {
-    Box(
-        Modifier.fillMaxSize().background(Clear30Gradients.clear30),
-        contentAlignment = Alignment.Center,
-    ) {
-        Heading1("Clear30", color = Clear30Colors.background)
-    }
-}

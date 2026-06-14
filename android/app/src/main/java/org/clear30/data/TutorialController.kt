@@ -64,7 +64,7 @@ object TutorialController {
             // step distinctly so all four enqueue in order.
             PopupManager.request(
                 PopupManager.Payload.TutorialStep(
-                    screen = "$screen (${index + 1}/${steps.size})",
+                    screen = "${screen.replaceFirstChar { it.uppercase() }} (${index + 1}/${steps.size})",
                     captionKey = step.captionKey,
                 ),
             )

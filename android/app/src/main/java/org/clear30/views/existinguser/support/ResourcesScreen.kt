@@ -10,16 +10,21 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import org.clear30.data.model.Program
 import org.clear30.data.model.ProgramResource
 import org.clear30.views.components.Clear30Card
@@ -67,15 +72,34 @@ internal fun ResourcesScreen(program: Program, kind: ResourceKind, onBack: () ->
     val brandGradient = if (kind == ResourceKind.REDDIT) Clear30Gradients.reddit else Clear30Gradients.youtube
     val iconName = if (kind == ResourceKind.REDDIT) "person.3" else "play.fill"
 
+    var search by remember { mutableStateOf("") }
+    val visible = remember(resources, search) {
+        if (search.isBlank()) resources
+        else resources.filter { it.title.contains(search, ignoreCase = true) || it.url.contains(search, ignoreCase = true) }
+    }
+
     Column(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
             IconButton("chevron.backward", onClick = onBack)
             Heading2(kind.title)
         }
 
-        if (resources.isEmpty()) {
+        if (resources.isNotEmpty()) {
+            OutlinedTextField(
+                value = search,
+                onValueChange = { search = it },
+                placeholder = { Text("Search ${kind.title.lowercase()}") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(top = Dimens.cardSpacing),
+            )
+        }
+
+        if (visible.isEmpty()) {
             Clear30Card(modifier = Modifier.fillMaxWidth().padding(top = Dimens.cardSpacing)) {
-                SmallText(kind.emptyMsg, color = Clear30Colors.text.copy(alpha = 0.5f))
+                SmallText(
+                    if (search.isBlank()) kind.emptyMsg else "No matches for \"$search\".",
+                    color = Clear30Colors.text.copy(alpha = 0.5f),
+                )
             }
             return@Column
         }
@@ -84,7 +108,7 @@ internal fun ResourcesScreen(program: Program, kind: ResourceKind, onBack: () ->
             Modifier.fillMaxSize().padding(top = Dimens.cardSpacing),
             verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
         ) {
-            items(resources, key = { it.url }) { res ->
+            items(visible, key = { it.url }) { res ->
                 Clear30Card(
                     modifier = Modifier.fillMaxWidth().clickable {
                         // System intent — resolves to the official app if installed, browser otherwise.

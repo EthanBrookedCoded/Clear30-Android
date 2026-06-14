@@ -5,6 +5,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddCircle
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.CalendarMonth
@@ -15,6 +16,8 @@ import androidx.compose.material.icons.rounded.Circle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.Eco
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material.icons.rounded.Groups
@@ -29,6 +32,9 @@ import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Videocam
+import androidx.compose.material.icons.rounded.WbSunny
+import androidx.compose.material.icons.rounded.WbTwilight
+import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -64,5 +70,12 @@ fun sfSymbol(name: String): ImageVector = when (name) {
     "pause.fill", "pause" -> Icons.Rounded.Pause
     "video.fill", "video" -> Icons.Rounded.Videocam
     "square.and.arrow.up" -> Icons.Rounded.Share
+    "envelope.fill", "envelope" -> Icons.Rounded.Email
+    "pencil.and.outline", "pencil", "square.and.pencil", "pencil.line" -> Icons.Rounded.Edit
+    "sparkles", "wand.and.stars" -> Icons.Rounded.AutoAwesome
+    // Time-of-day icons for the Today tab (sunrise→noon→sunset→moon).
+    "sunrise", "sunrise.fill", "sunset", "sunset.fill", "sun.horizon", "sun.horizon.fill" -> Icons.Rounded.WbTwilight
+    "sun.max", "sun.max.fill", "sun.min", "sun.min.fill" -> Icons.Rounded.WbSunny
+    "moon", "moon.fill", "moonrise", "moonrise.fill", "moon.zzz", "moon.zzz.fill", "moon.stars", "moon.stars.fill" -> Icons.Rounded.DarkMode
     else -> Icons.Rounded.Circle
 }

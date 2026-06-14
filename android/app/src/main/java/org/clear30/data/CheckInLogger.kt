@@ -1,6 +1,7 @@
 package org.clear30.data
 
 import kotlinx.coroutines.CoroutineScope
+import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Instant
 import org.clear30.data.model.CheckInDefaults
@@ -133,8 +134,12 @@ class CheckInLogger(
             Clear30Store.save(program)
 
             // 2. Refresh the home-screen widget (iOS WidgetCenter.reloadAllTimelines).
+            //    updateAll is an extension on GlanceAppWidget — needs the import
+            //    above; the FQN-only form Kotlin couldn't resolve and failed the
+            //    runCatching type inference.
             runCatching {
-                org.clear30.widget.StatsWidget().updateAll(org.clear30.Clear30Application.instance)
+                org.clear30.widget.StatsWidget()
+                    .updateAll(org.clear30.Clear30Application.instance)
             }
 
             // 3. Push the affected columns up to Supabase. Each write is

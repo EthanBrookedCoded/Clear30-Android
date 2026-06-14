@@ -1,13 +1,15 @@
 package org.clear30.views.existinguser.groups
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -24,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import org.clear30.data.GroupController
@@ -63,6 +66,15 @@ fun GroupsTab(userInfo: UserInfo) {
 
     LaunchedEffect(Unit) { controller.refresh() }
 
+    // Tap-to-detail for a member — full-bleed; system back returns to roster.
+    var memberDetail by remember { mutableStateOf<org.clear30.data.model.Clear30GroupMember?>(null) }
+    memberDetail?.let { m ->
+        val g = group ?: return@let
+        androidx.activity.compose.BackHandler { memberDetail = null }
+        MemberDetailScreen(m, g, userInfo, onBack = { memberDetail = null })
+        return
+    }
+
     // Deep link → auto-join with a code from clear30://group/<code>. We only
     // fire when the user isn't already in a group; otherwise the link is a
     // no-op and we drop it. Errors surface through the regular `error` field.
@@ -83,7 +95,7 @@ fun GroupsTab(userInfo: UserInfo) {
     ) {
         val g = group
         if (g == null) {
-            Heading1("Groups")
+            org.clear30.views.components.Heading1("Groups")
             SmallText(
                 "Stay accountable with a small group. Create one or join with a code.",
                 color = Clear30Colors.text.copy(alpha = 0.5f),
@@ -91,9 +103,11 @@ fun GroupsTab(userInfo: UserInfo) {
             GradientActionButton("plus", Clear30Gradients.clear30, "Create a group") { showCreate = true }
             GradientActionButton("person.3", Clear30Gradients.community, "Join a group") { showJoin = true }
         } else {
-            GroupHeader(g, onLeave = { showLeaveConfirm = true })
+            GroupHeader(g, userInfo, onLeave = { showLeaveConfirm = true })
             Clear30Card(modifier = Modifier.fillMaxWidth()) { GroupCalendar(g, userInfo) }
-            g.members.sortedByDescending { it.daysCheckedIn }.forEach { MemberRow(it) }
+            // Leaderboard replaces the flat MemberRow list — podium-top-3 +
+            // ranked rows below, with tap-to-detail wired through.
+            GroupLeaderboard(g, userInfo, onMemberTap = { memberDetail = it })
 
             // Group notes — short text the user can drop for the group to see.
             // Posts via GroupController.addNote, which refreshes the group on
@@ -162,17 +176,35 @@ fun GroupsTab(userInfo: UserInfo) {
 private fun GroupNotesSection(notes: List<org.clear30.data.model.Clear30GroupNote>, onPost: (String) -> Unit) {
     var draft by remember { mutableStateOf("") }
     Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-        Heading2("Notes")
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Heading2("Notes")
+            androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+            TinyText("${notes.size} total", color = Clear30Colors.text.copy(alpha = 0.5f))
+        }
         if (notes.isEmpty()) {
-            SmallText("No notes yet — drop a quick check-in for the group.",
-                color = Clear30Colors.text.copy(alpha = 0.5f))
+            // Richer empty state — gradient card + emoji + clear next-step copy.
+            Clear30Card(modifier = Modifier.fillMaxWidth(), gradient = Clear30Gradients.community) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                ) {
+                    SmallText("💬", color = androidx.compose.ui.graphics.Color.White)
+                    SmallText("Be the first to share", color = androidx.compose.ui.graphics.Color.White)
+                    TinyText(
+                        "Notes appear here for everyone in the group.",
+                        color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.75f),
+                    )
+                }
+            }
         } else {
-            notes.sortedByDescending { it.timestamp }.forEach { note ->
+            // Paginate locally — show 5, then "Show more" expands to all.
+            var showAll by remember { mutableStateOf(false) }
+            val sorted = notes.sortedByDescending { it.timestamp }
+            val visible = if (showAll || sorted.size <= 5) sorted else sorted.take(5)
+            visible.forEach { note ->
                 Clear30Card(modifier = Modifier.fillMaxWidth()) {
                     Column {
-                        // Author label — uses the same UserDirectory cache as
-                        // CommunityTab so a group note posted by a member
-                        // shows their real name once the lookup lands.
                         val entry = remember(note.fromMemberID) {
                             org.clear30.data.UserDirectory.lookup(note.fromMemberID)
                         }
@@ -180,6 +212,16 @@ private fun GroupNotesSection(notes: List<org.clear30.data.model.Clear30GroupNot
                         SmallText(note.message)
                     }
                 }
+            }
+            if (!showAll && sorted.size > 5) {
+                TinyText(
+                    "Show ${sorted.size - 5} more",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showAll = true }
+                        .padding(vertical = 6.dp),
+                    color = Clear30Colors.green,
+                )
             }
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
@@ -194,19 +236,65 @@ private fun GroupNotesSection(notes: List<org.clear30.data.model.Clear30GroupNot
 }
 
 @Composable
-private fun GroupHeader(group: Clear30Group, onLeave: () -> Unit) {
+private fun GroupHeader(group: Clear30Group, userInfo: UserInfo, onLeave: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     Clear30Card(modifier = Modifier.fillMaxWidth(), gradient = group.gradient) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column {
-                Heading2(group.name ?: "Your Group", color = Color.White)
-                TinyText("${group.members.size} members · ${group.daysSober} days clear together", color = Color.White)
-                // Group id is the join "code" — surface it so members can invite.
-                TinyText("Code: ${group.id}", color = Color.White.copy(alpha = 0.5f))
+        Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column {
+                    Heading2(group.name ?: "Your Group", color = Color.White)
+                    TinyText("${group.members.size} members · ${group.daysSober} days clear together", color = Color.White)
+                }
+                Spacer(Modifier.weight(1f))
+                DefaultButton("Leave", gradient = Clear30Gradients.red) { onLeave() }
             }
-            Spacer(Modifier.weight(1f))
-            DefaultButton("Leave", gradient = Clear30Gradients.red) { onLeave() }
+            // Invite chip — tapping fires the system share sheet with a
+            // clear30:// deep link the recipient can tap on Android to
+            // auto-join via the GroupsTab sub-route handler.
+            InviteChip(group = group) {
+                shareGroupInvite(context, group)
+                org.clear30.data.Logger.logEvent(userInfo.loggingID, org.clear30.data.LogEventType.sharedGroupCode)
+            }
         }
     }
+}
+
+@Composable
+private fun InviteChip(group: Clear30Group, onShare: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(Color.White.copy(alpha = 0.25f), shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        androidx.compose.material3.Icon(
+            org.clear30.views.components.sfSymbol("square.and.arrow.up"),
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(18.dp),
+        )
+        Column(Modifier.weight(1f)) {
+            TinyText("Invite link", color = Color.White.copy(alpha = 0.75f))
+            SmallText("clear30.org/group/${group.id}", color = Color.White)
+        }
+        DefaultButton("Share", gradient = Clear30Gradients.button) { onShare() }
+    }
+}
+
+private fun shareGroupInvite(context: android.content.Context, group: Clear30Group) {
+    val link = "https://clear30.org/group/${group.id}"
+    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(
+            android.content.Intent.EXTRA_TEXT,
+            "Join my Clear30 group: ${group.name ?: "Group"}\n$link",
+        )
+    }
+    context.startActivity(android.content.Intent.createChooser(intent, "Invite a friend").apply {
+        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+    })
 }
 
 @Composable
@@ -269,13 +357,18 @@ private fun JoinGroupDialog(busy: Boolean, onDismiss: () -> Unit, onSubmit: (Str
 private fun LeaveGroupDialog(busy: Boolean, onDismiss: () -> Unit, onConfirm: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Leave this group?") },
-        text = { Text("You'll lose access to the group calendar, notes, and member updates. You can always join again with the code.") },
-        confirmButton = {
-            TextButton(onClick = onConfirm, enabled = !busy) {
-                Text(if (busy) "Leaving…" else "Leave")
+        title = { Text("Step away from the group?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("You'll lose access to the group's calendar, notes, and member updates.")
+                Text("Your own check-ins stay with you. You can rejoin anytime with the same code.")
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancel") } },
+        confirmButton = {
+            TextButton(onClick = onConfirm, enabled = !busy) {
+                Text(if (busy) "Leaving…" else "Yes, leave", color = Clear30Colors.red2)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text("Stay") } },
     )
 }

@@ -61,11 +61,15 @@ fun AllNewUser(
                 onComplete = vm::handleNextScreen,
                 onBack = { vm.back(NewUserScreen.Intro) },
             )
-            is NewUserScreen.Feedback -> StepPlaceholder("Your feedback", "feedback", onNext = vm::handleNextScreen)
+            is NewUserScreen.Feedback -> {
+                val nf = program.getBreak(org.clear30.util.now())?.normativeFeedback
+                if (nf != null) NormativeFeedbackView(nf, userInfo, onNext = vm::handleNextScreen)
+                else StepPlaceholder("Your feedback", "feedback", onNext = vm::handleNextScreen)
+            }
             is NewUserScreen.Notifications -> OnboardingNotificationRequest(onComplete = vm::handleNextScreen)
-            is NewUserScreen.Reviews -> StepPlaceholder("Loved by thousands", "reviews", onNext = vm::handleNextScreen)
-            is NewUserScreen.Commitment -> StepPlaceholder("Your commitment", "commitment", onNext = vm::handleNextScreen)
-            is NewUserScreen.Referral -> StepPlaceholder("Referral code", "referral", onNext = vm::handleNextScreen)
+            is NewUserScreen.Reviews -> ReviewsSlide(userInfo, onNext = vm::handleNextScreen)
+            is NewUserScreen.Commitment -> CommitmentSlide(userInfo, onNext = vm::handleNextScreen)
+            is NewUserScreen.Referral -> ReferralSlide(userInfo, onNext = vm::handleNextScreen)
             is NewUserScreen.Payment -> Paywall(popup = false) { entitlement -> vm.handlePayment(entitlement) }
         }
     }

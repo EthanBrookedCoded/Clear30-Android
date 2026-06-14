@@ -5,6 +5,7 @@ import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.serialization.Serializable
 import org.clear30.data.model.Post
+import org.clear30.data.supabase.SupabaseController.SupabaseFunctionError
 
 /**
  * Community feed fetch — ported from SupabaseCommunity.swift (getUserPosts /

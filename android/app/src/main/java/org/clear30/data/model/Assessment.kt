@@ -106,6 +106,13 @@ value class AssessmentInfoDataID(val raw: String) {
         val clear30Recommendation = AssessmentInfoDataID("clear30_recommendation")
         val whereYouAre = AssessmentInfoDataID("where_you_are")
         val whereYouGoing = AssessmentInfoDataID("where_you_going")
+        val previousBreakAffirmation = AssessmentInfoDataID("previous_break_affirmation")
+        val triggersAffirmation = AssessmentInfoDataID("triggers_affirmation")
+        val commitmentAffirmation = AssessmentInfoDataID("commitment_affirmation")
+        val modAbsAffirmation = AssessmentInfoDataID("mod_abs_affirmation")
+        val welcomeTyping = AssessmentInfoDataID("welcome_typing")
+        val clear30Context = AssessmentInfoDataID("clear30_context")
+        val lifeContext = AssessmentInfoDataID("life_context")
         // (additional ids added as referenced by onboarding slides)
     }
 }
@@ -128,6 +135,12 @@ data class AssessmentInfoData(
     val primaryButtonIcon: String = "arrow.right",
     val secondaryButtonText: String? = null,
     val overrideBackgroundGradient: Boolean? = null,
+    /** Normative percentile for the pain-point comparison chart (currentUseSummary). */
+    val painPointPercentile: Int? = null,
+    /** Chosen break-reason outcome nouns for the dream-outcome card (clear30Recommendation). */
+    val dreamOutcomeNouns: List<String>? = null,
+    /** Monthly savings (weekly spend × 4) for the dream-outcome card. */
+    val dreamOutcomeSavings: Int? = null,
 )
 
 /** ProgramAssessmentQuestion — ported 1:1 (ProgramAssessment.swift). */

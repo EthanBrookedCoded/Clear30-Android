@@ -13,6 +13,7 @@ import io.ktor.client.call.body
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.polymorphic
+import kotlinx.serialization.serializer
 import org.clear30.BuildConfig
 import org.clear30.data.model.AssessmentQuestionType
 
@@ -69,29 +70,42 @@ object SupabaseController {
         client.postgrest.rpc(function.rawValue)
     }.fold({ null }, { it.toError() })
 
-    /** rpc with params. */
+    /**
+     * rpc with params. supabase-kt 3.x's `rpc(name, parameters)` only accepts
+     * `JsonObject` (or `JsonElement`) directly — generic typed objects must be
+     * serialized first. We use the shared [decoder] (which is a [Json] instance,
+     * so it doubles as the encoder) so unknown fields tolerated on decode are
+     * also stripped on encode for forward compatibility.
+     */
     suspend inline fun <reified T : Any> callFunction(
         function: SupabaseFunction,
         params: T,
     ): SupabaseFunctionError? = runCatching {
-        client.postgrest.rpc(function.rawValue, params)
+        val paramsJson = decoder.encodeToJsonElement(decoder.serializersModule.serializer<T>(), params)
+            as kotlinx.serialization.json.JsonObject
+        client.postgrest.rpc(function.rawValue, paramsJson)
     }.fold({ null }, { it.toError() })
 
     /** rpc returning a decoded value. */
-    suspend inline fun <reified U> callFunction(
+    suspend inline fun <reified U : Any> callFunction(
         function: SupabaseFunction,
-        returnType: Class<U>,
+        @Suppress("UNUSED_PARAMETER") returnType: Class<U>,
     ): Pair<U?, SupabaseFunctionError?> = runCatching {
+        // supabase-kt's PostgrestResult.decodeAs<T> constrains T : Any, so
+        // the wrapper has to match — otherwise the call-site type can be a
+        // nullable T? which decodeAs refuses.
         client.postgrest.rpc(function.rawValue).decodeAs<U>()
     }.fold({ it to null }, { null to it.toError() })
 
     /** rpc with params returning a decoded value. */
-    suspend inline fun <reified T : Any, reified U> callFunction(
+    suspend inline fun <reified T : Any, reified U : Any> callFunction(
         function: SupabaseFunction,
         params: T,
-        returnType: Class<U>,
+        @Suppress("UNUSED_PARAMETER") returnType: Class<U>,
     ): Pair<U?, SupabaseFunctionError?> = runCatching {
-        client.postgrest.rpc(function.rawValue, params).decodeAs<U>()
+        val paramsJson = decoder.encodeToJsonElement(decoder.serializersModule.serializer<T>(), params)
+            as kotlinx.serialization.json.JsonObject
+        client.postgrest.rpc(function.rawValue, paramsJson).decodeAs<U>()
     }.fold({ it to null }, { null to it.toError() })
 
     // MARK: - Edge functions
@@ -100,15 +114,17 @@ object SupabaseController {
         function: SupabaseEdgeFunction,
         params: T,
     ): SupabaseFunctionError? = runCatching {
-        client.functions.invoke(function.rawValue, params)
+        val paramsJson = decoder.encodeToJsonElement(decoder.serializersModule.serializer<T>(), params)
+        client.functions.invoke(function.rawValue, paramsJson)
     }.fold({ null }, { it.toError() })
 
     suspend inline fun <reified T : Any, reified U> callEdgeFunction(
         function: SupabaseEdgeFunction,
         params: T,
-        returnType: Class<U>,
+        @Suppress("UNUSED_PARAMETER") returnType: Class<U>,
     ): Pair<U?, SupabaseFunctionError?> = runCatching {
-        client.functions.invoke(function.rawValue, params).body<U>()
+        val paramsJson = decoder.encodeToJsonElement(decoder.serializersModule.serializer<T>(), params)
+        client.functions.invoke(function.rawValue, paramsJson).body<U>()
     }.fold({ it to null }, { null to it.toError() })
 
     /**

@@ -37,12 +37,14 @@ private sealed interface SupportRoute {
     data object Meditations : SupportRoute
     data object Reddits : SupportRoute
     data object YouTubes : SupportRoute
+    data object Messages : SupportRoute
+    data object JournalPrompts : SupportRoute
 }
 
 private data class SupportSection(val title: String, val icon: String, val gradient: Brush, val route: SupportRoute)
 
 @Composable
-fun SupportTab(program: Program, userInfo: UserInfo) {
+fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30.data.model.JournalEntries) {
     var route by remember { mutableStateOf<SupportRoute>(SupportRoute.Hub) }
     val back = { route = SupportRoute.Hub }
 
@@ -85,6 +87,8 @@ fun SupportTab(program: Program, userInfo: UserInfo) {
         is SupportRoute.Meditations -> { MeditationsScreen(program, onBack = back); return }
         is SupportRoute.Reddits -> { ResourcesScreen(program, kind = ResourceKind.REDDIT, onBack = back); return }
         is SupportRoute.YouTubes -> { ResourcesScreen(program, kind = ResourceKind.YOUTUBE, onBack = back); return }
+        is SupportRoute.Messages -> { MessagesLibraryScreen(program, userInfo, onBack = back); return }
+        is SupportRoute.JournalPrompts -> { JournalPromptsScreen(program, journalEntries, userInfo, onBack = back); return }
         is SupportRoute.Hub -> Unit
     }
 
@@ -92,6 +96,8 @@ fun SupportTab(program: Program, userInfo: UserInfo) {
         SupportSection("Talk to Claire", "bolt.fill", Clear30Gradients.claire, SupportRoute.Claire),
         SupportSection("Talk to Dr. Fred", "person.fill", Clear30Gradients.clear30, SupportRoute.DrFred),
         SupportSection("Meditations", "leaf.fill", Clear30Gradients.meditation, SupportRoute.Meditations),
+        SupportSection("Messages library", "envelope.fill", Clear30Gradients.community, SupportRoute.Messages),
+        SupportSection("Journal prompts", "pencil.and.outline", Clear30Gradients.journals, SupportRoute.JournalPrompts),
         SupportSection("Reddit stories", "person.3", Clear30Gradients.reddit, SupportRoute.Reddits),
         SupportSection("YouTube", "play.fill", Clear30Gradients.youtube, SupportRoute.YouTubes),
     )
@@ -101,7 +107,7 @@ fun SupportTab(program: Program, userInfo: UserInfo) {
             .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
         verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
     ) {
-        Heading1("Support")
+        org.clear30.views.components.Heading1("Support")
         sections.forEach { s ->
             GradientActionButton(iconName = s.icon, gradient = s.gradient, title = s.title) {
                 route = s.route

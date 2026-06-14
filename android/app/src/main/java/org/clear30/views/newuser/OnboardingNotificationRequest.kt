@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import org.clear30.views.components.DefaultButton
+import org.clear30.views.components.Heading1
 import org.clear30.views.components.Heading3
 import org.clear30.views.components.SmallText
 import org.clear30.views.theme.Clear30Colors
@@ -38,16 +39,16 @@ fun OnboardingNotificationRequest(onComplete: () -> Unit) {
         Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
         verticalArrangement = Arrangement.Center,
     ) {
-        Heading3("Reach your goals with notifications.", Modifier.padding(bottom = Dimens.cardSpacing / 2))
+        Heading1("Notifications", Modifier.padding(top = 8.dp, bottom = Dimens.cardSpacing / 2))
         SmallText(
-            "Clear30 uses daily notifications to keep you on track with your goals and become the best version of yourself.",
-            color = Clear30Colors.text.copy(alpha = 0.5f),
-        )
-        SmallText(
-            "Users who enable notifications are 80% more likely to succeed.",
-            Modifier.padding(vertical = Dimens.cardSpacing),
-            color = Clear30Colors.text.copy(alpha = 0.5f),
-        )
+                "Clear30 uses daily nudges to keep you accountable. Users who enable them are 80% more likely to finish the program.",
+                color = Clear30Colors.text.copy(alpha = 0.5f),
+            )
+        Heading3(
+                "We never send marketing — just check-ins, milestones, and your daily content.",
+                Modifier.padding(vertical = Dimens.cardSpacing),
+                color = Clear30Colors.text,
+            )
         DefaultButton("Enable notifications", gradient = Clear30Gradients.clear30, modifier = Modifier.fillMaxWidth()) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 launcher.launch(Manifest.permission.POST_NOTIFICATIONS)

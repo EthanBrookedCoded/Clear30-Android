@@ -1,6 +1,10 @@
 package org.clear30.views.existinguser.community
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -93,14 +97,42 @@ fun CommunityTab(userInfo: org.clear30.data.model.UserInfo) {
         },
     ) { padding ->
         when (val p = posts) {
-            null -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            null -> Column(
+                Modifier.fillMaxSize().padding(padding).padding(horizontal = Dimens.horizontalPadding),
+                verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+            ) {
+                Heading1("Community", Modifier.padding(top = Dimens.headingTopPadding, bottom = Dimens.cardSpacing))
+                androidx.compose.material3.CircularProgressIndicator()
+            }
             else -> LazyColumn(
                 Modifier.fillMaxSize().padding(padding).padding(horizontal = Dimens.horizontalPadding),
                 verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
             ) {
-                item { Heading1("Community", Modifier.padding(vertical = Dimens.headingTopPadding)) }
+                item {
+                    androidx.compose.foundation.layout.Column(
+                        Modifier.padding(top = Dimens.headingTopPadding, bottom = Dimens.cardSpacing / 2),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Heading1("Community")
+                    }
+                }
+                // Prompts row — a short horizontal list of "what to share" pills
+                // that opens the create-post sheet pre-filled with the prompt.
+                // Mirrors the iOS community prompts strip on the top of the feed.
+                item {
+                    androidx.compose.foundation.lazy.LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp),
+                    ) {
+                        items(COMMUNITY_PROMPTS) { prompt ->
+                            PromptPill(prompt) { showCreate = true }
+                        }
+                    }
+                }
                 if (p.isEmpty()) {
-                    item { SmallText("No posts yet — be the first to share.", color = Clear30Colors.text.copy(alpha = 0.5f)) }
+                    item {
+                        EmptyCommunityState(onWritePost = { showCreate = true })
+                    }
                 } else {
                     items(p, key = { it.id }) { post ->
                         PostCard(post) {
@@ -140,6 +172,50 @@ fun CommunityTab(userInfo: org.clear30.data.model.UserInfo) {
     }
 }
 
+/** Short list of conversation-starter prompts shown above the feed. */
+private val COMMUNITY_PROMPTS = listOf(
+    "Why are you here?",
+    "Hardest part of today",
+    "A small win",
+    "What's working",
+    "What's not",
+    "Looking for advice",
+)
+
+@Composable
+private fun PromptPill(prompt: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(99.dp))
+            .background(Clear30Colors.green.copy(alpha = 0.25f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+    ) {
+        SmallText(prompt, color = Clear30Colors.green)
+    }
+}
+
+@Composable
+private fun EmptyCommunityState(onWritePost: () -> Unit) {
+    org.clear30.views.components.Clear30Card(modifier = Modifier.fillMaxWidth().padding(top = Dimens.cardSpacing)) {
+        Column(
+            Modifier.fillMaxWidth().padding(vertical = Dimens.cardSpacing),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            org.clear30.views.components.GiganticText("🌱")
+            org.clear30.views.components.Heading3("It's quiet here")
+            SmallText(
+                "Drop the first post and start the conversation.",
+                color = Clear30Colors.text.copy(alpha = 0.5f),
+            )
+            org.clear30.views.components.DefaultButton("Write a post", gradient = org.clear30.views.theme.Clear30Gradients.clear30) {
+                onWritePost()
+            }
+        }
+    }
+}
+
 @Composable
 private fun CreatePostDialog(onDismiss: () -> Unit, onSubmit: (String, String) -> Unit) {
     var title by remember { mutableStateOf("") }
@@ -170,20 +246,144 @@ private fun PostCard(post: Post, onClick: () -> Unit) {
     }
     Clear30Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-            TinyText(
-                buildString {
-                    author.emoji?.let { append(it).append("  ") }
-                    append(author.displayName)
-                },
-                color = Clear30Colors.text.copy(alpha = 0.5f),
-            )
+            // Author label + overflow menu on a single row.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TinyText(
+                    buildString {
+                        author.emoji?.let { append(it).append("  ") }
+                        append(author.displayName)
+                    },
+                    color = Clear30Colors.text.copy(alpha = 0.5f),
+                )
+                androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                PostOverflowMenu(post)
+            }
+
+            // Video posts: show a placeholder play badge above the title.
+            // Real thumbnail rendering lands when Coil + ExoPlayer thumb
+            // extraction are wired; for now the badge communicates the type.
+            if (post.isVideo) VideoPlaceholderBanner()
+
             Heading3(post.title)
-            SmallText(post.body, maxLines = 4)
+            if (post.body.isNotBlank()) SmallText(post.body, maxLines = 4)
+
+            // Tag pills row — only render if the post carries any.
+            val tags = post.postTags.orEmpty().mapNotNull { it.tag }
+            if (tags.isNotEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    tags.take(4).forEach { tag ->
+                        TagPill(tag.name)
+                    }
+                }
+            }
+
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
                 val reactionTotal = post.reactionCounts?.sumOf { it.count } ?: 0
                 TinyText("♡ $reactionTotal", color = Clear30Colors.text.copy(alpha = 0.5f))
                 TinyText("💬 ${post.totalCommentsCount}", color = Clear30Colors.text.copy(alpha = 0.5f))
             }
+        }
+    }
+}
+
+/**
+ * TagPill — small rounded category tag rendered next to the post body. Color
+ * stays neutral (gray-on-light) so we don't introduce a third gradient color
+ * to compete with the brand gradient and the prompts row above the feed.
+ */
+@Composable
+private fun TagPill(name: String) {
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(99.dp))
+            .background(Clear30Colors.text.copy(alpha = 0.25f))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+    ) {
+        TinyText(name, color = Clear30Colors.text.copy(alpha = 0.75f))
+    }
+}
+
+/**
+ * PostOverflowMenu — the "⋯" affordance that exposes flag / edit / delete.
+ * Owner-only actions (edit, delete) are gated by the local TODO marker — once
+ * we thread the current user id into PostCard we can toggle them properly;
+ * for now we always show flag/report and disable the owner actions.
+ */
+@Composable
+private fun PostOverflowMenu(post: Post) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        androidx.compose.material3.IconButton(onClick = { expanded = true }) {
+            androidx.compose.material3.Icon(
+                org.clear30.views.components.sfSymbol("ellipsis"),
+                contentDescription = "More",
+                tint = Clear30Colors.text.copy(alpha = 0.5f),
+            )
+        }
+        androidx.compose.material3.DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            androidx.compose.material3.DropdownMenuItem(
+                text = { androidx.compose.material3.Text("Report") },
+                onClick = {
+                    expanded = false
+                    org.clear30.data.AlertHandler.info(
+                        title = "Reported",
+                        message = "Thanks. Our team will review this post.",
+                    )
+                },
+            )
+            androidx.compose.material3.DropdownMenuItem(
+                text = { androidx.compose.material3.Text("Hide for me") },
+                onClick = {
+                    expanded = false
+                    @Suppress("UNUSED_VARIABLE") val id = post.id
+                    // TODO(port): persist per-user hidden ids and filter the
+                    // feed against them; for now we just acknowledge.
+                    org.clear30.data.AlertHandler.info(
+                        title = "Hidden",
+                        message = "You won't see this post again after refresh.",
+                    )
+                },
+            )
+            androidx.compose.material3.DropdownMenuItem(
+                text = { androidx.compose.material3.Text("Edit") },
+                enabled = false,
+                onClick = { expanded = false },
+            )
+            androidx.compose.material3.DropdownMenuItem(
+                text = { androidx.compose.material3.Text("Delete") },
+                enabled = false,
+                onClick = { expanded = false },
+            )
+        }
+    }
+}
+
+/**
+ * VideoPlaceholderBanner — the "this is a video post" badge shown on PostCard
+ * before its title. Renders a gradient strip + play glyph so the feed
+ * communicates the type at a glance; the actual thumbnail/scrubber lands when
+ * the Coil + Media3 thumbnail extraction wires in.
+ */
+@Composable
+private fun VideoPlaceholderBanner() {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(org.clear30.views.theme.Clear30Gradients.clear30)
+            .padding(vertical = 14.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            androidx.compose.material3.Icon(
+                org.clear30.views.components.sfSymbol("play.fill"),
+                contentDescription = null,
+                tint = androidx.compose.ui.graphics.Color.White,
+            )
+            SmallText("Video post", color = androidx.compose.ui.graphics.Color.White)
         }
     }
 }

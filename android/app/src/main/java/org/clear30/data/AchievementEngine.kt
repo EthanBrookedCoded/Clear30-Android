@@ -123,6 +123,11 @@ object AchievementEngine {
             PopupManager.request(
                 PopupManager.Payload.Confetti(message = def.name, emoji = "🏆"),
             )
+            // Post a system notification so the achievement is visible even
+            // if the user has the app backgrounded when the check-in syncs
+            // (e.g. they checked in, swiped away, and AchievementEngine
+            // finishes the achievement-evaluation network round-trip).
+            NotificationHandler.postAchievementEarned(userInfo, def.key, def.name)
         }
         Clear30Store.save(achievementData)
 

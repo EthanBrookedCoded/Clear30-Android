@@ -126,5 +126,9 @@ class ExperimentController(
 /** Decode an experiment payload into a typed object (Swift `payload.decode(to:)`). */
 inline fun <reified T> Map<String, JsonElement?>.decodeTo(): T? = runCatching {
     val obj = kotlinx.serialization.json.JsonObject(filterValues { it != null }.mapValues { it.value!! })
-    LocalStore.json.decodeFromJsonElement<T>(obj)
+    // Explicit serializer form — the reified-no-arg overload doesn't always
+    // resolve cleanly when both `kotlinx.serialization.json.decodeFromJsonElement`
+    // and Json's member version are visible (Studio's KT compiler picks the
+    // member, which takes (deserializer, element) — so we provide both).
+    LocalStore.json.decodeFromJsonElement(kotlinx.serialization.serializer<T>(), obj)
 }.getOrNull()

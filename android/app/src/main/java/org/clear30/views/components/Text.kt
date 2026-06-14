@@ -96,3 +96,54 @@ fun SmallTextHighlighted(
     }
     Text(annotated, modifier = modifier, fontFamily = Lexend, fontWeight = FontWeight.Normal, fontSize = 15.5.sp)
 }
+
+/**
+ * Converts `**bold**` / `__bold__` markdown runs into bold spans (the rest stays
+ * plain). iOS renders prompt/body strings as Markdown; this gives us the same
+ * emphasis without a full Markdown engine.
+ */
+fun markdownBold(text: String): AnnotatedString = buildAnnotatedString {
+    val regex = Regex("""(\*\*|__)(.+?)\1""")
+    var last = 0
+    for (m in regex.findAll(text)) {
+        if (m.range.first > last) append(text.substring(last, m.range.first))
+        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(m.groupValues[2]) }
+        last = m.range.last + 1
+    }
+    if (last < text.length) append(text.substring(last))
+}
+
+/** Text composable that renders `**bold**` markdown emphasis, Lexend-styled. */
+@Composable
+fun MarkdownText(
+    text: String,
+    fontSize: TextUnit,
+    weight: FontWeight = FontWeight.Normal,
+    modifier: Modifier = Modifier,
+    color: Color = Color.Unspecified,
+    maxLines: Int = Int.MAX_VALUE,
+) = Text(
+    markdownBold(text),
+    modifier = modifier,
+    color = color,
+    fontFamily = Lexend,
+    fontWeight = weight,
+    fontSize = fontSize,
+    maxLines = maxLines,
+    overflow = TextOverflow.Ellipsis,
+)
+
+/** Heading2 (25sp Medium) with `**bold**` markdown emphasis — used for question prompts. */
+@Composable
+fun Heading2Markdown(text: String, modifier: Modifier = Modifier, color: Color = Color.Unspecified) =
+    MarkdownText(text, 25.sp, FontWeight.Medium, modifier, color)
+
+/** SmallText (15.5sp) with `**bold**` markdown emphasis — used for affirmation bodies. */
+@Composable
+fun SmallTextMarkdown(text: String, modifier: Modifier = Modifier, color: Color = Color.Unspecified) =
+    MarkdownText(text, 15.5.sp, FontWeight.Normal, modifier, color)
+
+/** Heading3 (22sp Medium) with `**bold**` markdown emphasis. */
+@Composable
+fun Heading3Markdown(text: String, modifier: Modifier = Modifier, color: Color = Color.Unspecified) =
+    MarkdownText(text, 22.sp, FontWeight.Medium, modifier, color)

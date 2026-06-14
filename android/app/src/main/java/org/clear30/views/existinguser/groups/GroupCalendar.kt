@@ -50,7 +50,7 @@ fun GroupCalendar(group: Clear30Group, userInfo: UserInfo, modifier: Modifier = 
     val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
     val firstOfMonth = LocalDate(today.year, today.monthNumber, 1)
     val daysInMonth = firstOfMonth.daysInMonth()
-    val leadingBlanks = firstOfMonth.dayOfWeek.isoDayNumber % 7
+    val leadingBlanks = firstOfMonth.dayOfWeek.value % 7
 
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 4)) {
         Heading3("Group calendar")

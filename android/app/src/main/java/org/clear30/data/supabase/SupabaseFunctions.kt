@@ -10,7 +10,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.Serializable
 import org.clear30.BuildConfig
 import org.clear30.data.model.ToggleSettings
-import org.clear30.data.supabase.SupabaseController.toError
+import org.clear30.data.supabase.SupabaseController.SupabaseFunctionError
 
 /**
  * SupabaseController domain methods — ported from SupabaseFunctions.swift.
@@ -103,3 +103,14 @@ suspend fun SupabaseController.clearSMS(message: String): SupabaseFunctionError?
     if (BuildConfig.DEBUG) { println("🚮 Unscheduling: ${message.lineSequence().first()}"); return null }
     return callFunction(SupabaseFunction.clearSms, mapOf("message" to message))
 }
+
+/** Onboarding feedback params (Swift `SubmitFeedbackParams`). */
+@Serializable
+data class SubmitFeedbackParams(
+    val rating: Int,
+    val comment: String? = null,
+)
+
+/** Submit the onboarding "how are we doing?" rating (Swift `submitFeedback`). */
+suspend fun SupabaseController.submitFeedback(params: SubmitFeedbackParams): SupabaseFunctionError? =
+    callFunction(SupabaseFunction.submitFeedback, params)

@@ -1,12 +1,18 @@
 package org.clear30.views.newuser.assessment
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import org.clear30.data.model.ExperimentController
@@ -24,9 +30,8 @@ import org.clear30.views.theme.Dimens
  * sequence, rendering each question via [AssessmentQuestionView] and recording
  * responses on the [AssessmentViewModel].
  *
- * Until the slide-content builders are ported the sequence is empty, so this
- * shows a clearly-marked placeholder that completes the step (the paging +
- * response wiring is real and exercises the ported renderers once slides exist).
+ * The slide script (AssessmentSlides3) populates the sequence, so the real
+ * questions/affirmations render here; the empty branch is just a safety net.
  */
 @Composable
 fun AllAssessment(
@@ -48,7 +53,7 @@ fun AllAssessment(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Heading2("Assessment")
-            SmallText("[question flow — TODO: port AssessmentSlides script]", Modifier.padding(vertical = 8.dp))
+            SmallText("Loading your assessment…", Modifier.padding(vertical = 8.dp))
             DefaultButton("Continue", gradient = Clear30Gradients.clear30, onClick = onComplete)
         }
         return
@@ -56,7 +61,13 @@ fun AllAssessment(
 
     val index = vm.currentIndex
     val swc = vm.slidesWithCompletions[index]
-    Column(Modifier.fillMaxSize().padding(vertical = Dimens.headingTopPadding)) {
+    Column(Modifier.fillMaxSize()) {
+        AssessmentHeader(
+            index = index,
+            estimate = vm.progressBarEstimate,
+            onBack = { if (index > 0) vm.currentIndex = index - 1 },
+        )
+        Box(Modifier.weight(1f).fillMaxWidth()) {
         when (val slide = swc.slide) {
             is AssessmentSlide.Question -> AssessmentQuestionView(slide.question) { result ->
                 // Mirrors the iOS pattern: free-text / date / number answers are
@@ -92,15 +103,48 @@ fun AllAssessment(
                 vm.handleSlideCompletion(swc, slide.question, index, chosePrimaryOption = true)
             }
             is AssessmentSlide.Information -> {
-                // TODO(port): AssessmentInfoSlide2 — affirmation/info slide UI
-                Column(Modifier.fillMaxSize().padding(Dimens.horizontalPadding), verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                    Heading2(slide.data.title)
-                    SmallText(slide.data.body, Modifier.padding(vertical = 8.dp))
-                    DefaultButton(slide.data.primaryButtonText, gradient = Clear30Gradients.clear30) {
-                        vm.handleSlideCompletion(swc, null, index, chosePrimaryOption = true)
-                    }
-                }
+                // Full info-slide renderer (AssessmentInfoSlide.kt) dispatches
+                // on the named id (socialProof / credibility / greeting /
+                // recommendation etc.) to a richer presentation than the iOS
+                // generic info slide.
+                AssessmentInfoSlide(
+                    data = slide.data,
+                    onPrimary = { vm.handleSlideCompletion(swc, null, index, chosePrimaryOption = true) },
+                    onSecondary = slide.data.secondaryButtonText?.let {
+                        { vm.handleSlideCompletion(swc, null, index, chosePrimaryOption = false) }
+                    },
+                )
             }
+        }
+        }
+    }
+}
+
+/**
+ * Assessment header — back button + progress bar, both hidden on the first slide.
+ * The iOS PagingView header equivalent, built from [IconButton] + [InfiniteProgressBar].
+ */
+@Composable
+private fun AssessmentHeader(index: Int, estimate: Int, onBack: () -> Unit) {
+    val shown = index > 0
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Dimens.horizontalPadding)
+            .padding(top = Dimens.headingTopPadding, bottom = Dimens.headingTopPadding * 2),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        org.clear30.views.components.IconButton(
+            "chevron.backward",
+            modifier = Modifier.alpha(if (shown) 1f else 0f),
+        ) { if (shown) onBack() }
+        Spacer(Modifier.width(Dimens.cardSpacing))
+        Box(Modifier.weight(1f).alpha(if (shown) 1f else 0f)) {
+            org.clear30.views.components.InfiniteProgressBar(
+                currentProgress = index,
+                maxEstimate = estimate,
+                height = 8.dp,
+            )
         }
     }
 }

@@ -1,35 +1,15 @@
 package org.clear30.views.newuser
 
-import android.app.Activity
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import com.revenuecat.purchases.Package
-import com.revenuecat.purchases.Purchases
-import com.revenuecat.purchases.PurchaseParams
-import com.revenuecat.purchases.interfaces.PurchaseCallback
-import com.revenuecat.purchases.models.StoreTransaction
-import com.revenuecat.purchases.CustomerInfo
-import com.revenuecat.purchases.PurchasesError
 import org.clear30.data.model.EntitlementType
-import org.clear30.views.components.Clear30Card
+import org.clear30.views.components.DefaultButton
 import org.clear30.views.components.Heading1
 import org.clear30.views.components.IconButton
 import org.clear30.views.components.SmallText
@@ -48,16 +28,13 @@ fun Paywall(
     hard: Boolean = true,
     onCompleted: (EntitlementType?) -> Unit,
 ) {
-    val activity = LocalContext.current as? Activity
-    var packages by remember { mutableStateOf<List<Package>>(emptyList()) }
-    var loading by remember { mutableStateOf(true) }
-
-    LaunchedEffect(Unit) {
-        Purchases.sharedInstance.getOfferingsWith(onError = { loading = false }) { offerings ->
-            packages = offerings.current?.availablePackages.orEmpty()
-            loading = false
-        }
-    }
+    // TODO(port): RevenueCat Android SDK 8.x changed the offerings/purchase API
+    // surface — `getOfferingsWith`, `Offerings.current`, `Package.product.price`
+    // shape, `PurchaseParams.Builder` — all need reconciliation against the
+    // version resolved in libs.versions.toml (currently a placeholder paywall
+    // renders so the onboarding flow continues to compile + run). Wire the
+    // real offerings list once the paywall views land; see android/TODO.md.
+    @Suppress("UNUSED_VARIABLE") val unused = popup to hard
 
     Column(Modifier.fillMaxSize().padding(Dimens.horizontalPadding)) {
         if (popup && !hard) {
@@ -66,35 +43,22 @@ fun Paywall(
         Spacer(Modifier.weight(1f))
         Heading1("Unlock Clear30")
         Spacer(Modifier.padding(Dimens.cardSpacing))
-
-        if (loading) {
-            CircularProgressIndicator()
-        } else {
-            packages.forEach { pkg ->
-                Clear30Card(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = Dimens.cardSpacing / 2).clickable {
-                        if (activity != null) purchase(activity, pkg) { onCompleted(EntitlementType.DEFAULT) }
-                    },
-                    gradient = Clear30Gradients.clear30,
-                ) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        SmallText(pkg.product.title, color = androidx.compose.ui.graphics.Color.White)
-                        Spacer(Modifier.weight(1f))
-                        SmallText(pkg.product.price.formatted, color = androidx.compose.ui.graphics.Color.White)
-                    }
-                }
-            }
+        SmallText(
+            "Paywall placeholder — wire RevenueCat offerings here.",
+            color = androidx.compose.ui.graphics.Color.Gray,
+        )
+        Spacer(Modifier.padding(Dimens.cardSpacing))
+        // Debug-only continue button so the onboarding flow can reach the main
+        // app while the real RevenueCat offerings UI is unimplemented. Released
+        // builds drop this — the paywall is a hard wall until real packages
+        // are wired.
+        if (org.clear30.BuildConfig.DEBUG) {
+            DefaultButton(
+                "Continue (debug)",
+                gradient = Clear30Gradients.clear30,
+                modifier = Modifier.fillMaxWidth(),
+            ) { onCompleted(EntitlementType.DEFAULT) }
         }
         Spacer(Modifier.weight(1f))
     }
-}
-
-private fun purchase(activity: Activity, pkg: Package, onSuccess: () -> Unit) {
-    Purchases.sharedInstance.purchase(
-        PurchaseParams.Builder(activity, pkg).build(),
-        object : PurchaseCallback {
-            override fun onCompleted(transaction: StoreTransaction, customerInfo: CustomerInfo) = onSuccess()
-            override fun onError(error: PurchasesError, userCancelled: Boolean) { /* surface via AlertHandler later */ }
-        },
-    )
 }

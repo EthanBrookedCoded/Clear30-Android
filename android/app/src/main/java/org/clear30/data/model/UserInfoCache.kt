@@ -1,5 +1,8 @@
 package org.clear30.data.model
 
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.serializer
 import org.clear30.data.LocalStore
 
 /**
@@ -10,9 +13,12 @@ import org.clear30.data.LocalStore
  */
 inline fun <reified T> UserInfo.getCachedObject(key: String): T? {
     val raw = cache[key] ?: return null
-    return runCatching { LocalStore.json.decodeFromString<T>(raw) }.getOrNull()
+    // Pass the serializer explicitly so we always hit the (serializer, string)
+    // overload — the reified-without-arg form picks up `Json.decodeFromString`
+    // inconsistently depending on which kotlinx imports are visible.
+    return runCatching { LocalStore.json.decodeFromString(serializer<T>(), raw) }.getOrNull()
 }
 
 inline fun <reified T> UserInfo.setCacheObject(key: String, value: T) {
-    cache[key] = LocalStore.json.encodeToString(value)
+    cache[key] = LocalStore.json.encodeToString(serializer<T>(), value)
 }

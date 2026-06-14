@@ -9,8 +9,12 @@ sealed interface AssessmentSlide {
     data class Question(val question: ProgramAssessmentQuestion) : AssessmentSlide
 }
 
-/** Slide + its completion handler (Swift `AssessmentSlideWithCompletion`). */
+/**
+ * Slide + its completion handler (Swift `AssessmentSlideWithCompletion`).
+ * The completion runs when the user leaves the slide, receiving the view model
+ * and whether they chose the primary option — matching the iOS closure signature.
+ */
 data class AssessmentSlideWithCompletion(
     val slide: AssessmentSlide,
-    val completion: (() -> Unit)? = null,
+    val completion: ((AssessmentViewModel, Boolean) -> Unit)? = null,
 )

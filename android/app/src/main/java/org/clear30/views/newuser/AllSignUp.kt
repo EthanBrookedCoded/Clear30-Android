@@ -2,7 +2,10 @@ package org.clear30.views.newuser
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
@@ -58,14 +61,18 @@ fun AllSignUp(
     var code by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
 
+    org.clear30.views.components.StatusBarStyle(forceLightIcons = false)
     Column(
-        Modifier.fillMaxSize().padding(Dimens.horizontalPadding),
+        Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.systemBars)
+            .padding(Dimens.horizontalPadding),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         when (step) {
             SignUpStep.INTRO -> {
-                Heading1("Create your account")
+                org.clear30.views.components.Heading1("Create your account")
                 OutlinedTextField(
                     value = contact,
                     onValueChange = { contact = it; isEmail = it.contains("@") },
@@ -83,10 +90,29 @@ fun AllSignUp(
                         else { error = err.message; step = SignUpStep.INTRO }
                     }
                 }
+                // Debug bypass — skip Supabase OTP entirely so the rest of the
+                // app is reachable while secrets aren't wired. Released builds
+                // don't show this button.
+                if (org.clear30.BuildConfig.DEBUG) {
+                    DefaultButton(
+                        "Skip auth (debug)",
+                        gradient = Clear30Gradients.gray,
+                        modifier = Modifier.fillMaxWidth().padding(top = Dimens.cardSpacing),
+                    ) {
+                        scope.launch {
+                            userInfo._userID = "debug-${System.currentTimeMillis()}"
+                            userInfo.signUpID = contact.ifBlank { "debug@clear30.org" }
+                            userInfo._signUpType = if (isEmail) SignUpType.EMAIL else SignUpType.PHONE
+                            userInfo.completedOnboarding = true
+                            Clear30Store.save(userInfo)
+                            onComplete()
+                        }
+                    }
+                }
             }
 
             SignUpStep.VERIFICATION -> {
-                Heading1("Enter the code")
+                org.clear30.views.components.Heading1("Enter the code")
                 SmallText("Sent to $contact", Modifier.padding(top = 4.dp))
                 OutlinedTextField(
                     value = code,

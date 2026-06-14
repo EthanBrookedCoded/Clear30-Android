@@ -35,7 +35,11 @@ object LoadingCoordinator {
         if (next == 0) _isLoading.value = false
     }
 
-    /** Run [block] with the loading flag held; safe under cancellation/throws. */
+    /**
+     * Run [block] with the loading flag held; safe under cancellation/throws.
+     * `block` is `suspend` so call sites can await network work (the common
+     * case) without spawning an extra scope.
+     */
     suspend inline fun <T> tracked(block: () -> T): T {
         begin()
         try { return block() } finally { end() }

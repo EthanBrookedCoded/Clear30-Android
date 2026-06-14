@@ -23,9 +23,20 @@ object ProgramMessageHandler {
     suspend fun getMessages(): SupabasePackagedMessages? =
         SupabaseController.callFunction(SupabaseFunction.getMessages, SupabasePackagedMessages::class.java).first
 
-    /** Fetch + apply messages to [program], unlocking from [startDate]. */
-    suspend fun fetchAndApply(program: Program, startDate: Instant) {
-        val packaged = getMessages() ?: return
+    /**
+     * Fetch + apply messages to [program], unlocking from [startDate]. Returns
+     * the number of messages added beyond what was already cached — call sites
+     * can use this to decide whether to invalidate the UI (or fire a "new
+     * content unlocked" notification once the user is signed in).
+     *
+     * Refresh policy: we always re-call the backend regardless of the existing
+     * cache. The packaged feed is small (<100KB typical) and the server may
+     * have shipped revised copy that the user should see next time they open
+     * the message; clobbering preserves consistency across devices without
+     * forcing a manual pull-to-refresh.
+     */
+    suspend fun fetchAndApply(program: Program, startDate: Instant): Int {
+        val packaged = getMessages() ?: return 0
         val stagesById = packaged.stages.associateBy { it.id }
 
         val byDate = mutableMapOf<PlainDate, ContentInfo>()
@@ -41,8 +52,18 @@ object ProgramMessageHandler {
             }
         }
 
+        val before = program.contentInfo.values.sumOf { it.messages.size }
         program.contentInfo.putAll(byDate)
+        val after = program.contentInfo.values.sumOf { it.messages.size }
         program.latestUpdate = org.clear30.util.now()
         Clear30Store.save(program)
+        return (after - before).coerceAtLeast(0)
+    }
+
+    /** Stale check — re-fetch if our latest pull is more than [hours] old. */
+    fun isStale(program: Program, hours: Int = 12): Boolean {
+        val last = program.latestUpdate ?: return true
+        val cutoff = org.clear30.util.now().toEpochMilliseconds() - hours * 60L * 60_000L
+        return last.toEpochMilliseconds() < cutoff
     }
 }
