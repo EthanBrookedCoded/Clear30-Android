@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +19,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -61,7 +65,7 @@ fun SplashScreen() {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            BreathingWordmark()
+            BreathingIcon()
             Spacer(Modifier.height(40.dp))
             PulsingDots()
         }
@@ -69,11 +73,13 @@ fun SplashScreen() {
 }
 
 /**
- * The "Clear30" wordmark rendered with a subtle breathing scale (1.0 → 1.05 →
- * 1.0 over 2.4s). Keeps the screen feeling alive without being distracting.
+ * The Clear30 app icon (green "30" mark) in a white rounded tile, with a subtle
+ * breathing scale (1.0 → 1.04 → 1.0 over 2.4s). The white tile lets the green
+ * mark read clearly over the blue→green gradient and matches the launcher icon.
+ * Sized a touch under a typical splash logo so the proportions sit right.
  */
 @Composable
-private fun BreathingWordmark() {
+private fun BreathingIcon() {
     val transition = rememberInfiniteTransition(label = "splash.breath")
     val phase by transition.animateFloat(
         initialValue = 0f,
@@ -87,14 +93,29 @@ private fun BreathingWordmark() {
     // 0..1 phase → soft sine-ish bell curve via |sin(πx)|
     val s = kotlin.math.sin(phase * kotlin.math.PI).toFloat()
     val scale = 1.0f + 0.04f * s
-    Text(
-        text = "Clear30",
-        color = Color.White,
-        fontFamily = Lexend,
-        fontWeight = FontWeight.Bold,
-        fontSize = 56.sp,
-        modifier = Modifier.scale(scale),
-    )
+    Box(
+        Modifier
+            .scale(scale)
+            .size(104.dp)
+            .shadow(
+                elevation = 16.dp,
+                shape = RoundedCornerShape(26.dp),
+                spotColor = Color.Black.copy(alpha = 0.25f),
+                ambientColor = Color.Black.copy(alpha = 0.25f),
+            )
+            .clip(RoundedCornerShape(26.dp))
+            .background(Color.White),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            painter = painterResource(org.clear30.R.drawable.clear30_icon),
+            contentDescription = "Clear30",
+            contentScale = ContentScale.Fit,
+            // The PNG already has its own padding; a little more keeps the mark
+            // from crowding the tile edges so the proportions read right.
+            modifier = Modifier.fillMaxSize().padding(6.dp),
+        )
+    }
 }
 
 /**

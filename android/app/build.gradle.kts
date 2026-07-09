@@ -26,8 +26,30 @@ android {
         val props = org.jetbrains.kotlin.konan.properties.Properties().apply {
             val f = rootProject.file("local.properties"); if (f.exists()) f.inputStream().use { load(it) }
         }
-        buildConfigField("String", "SUPABASE_URL", "\"https://quluipmdicjsolnsopkg.supabase.co\"")
-        buildConfigField("String", "SUPABASE_ANON_KEY", "\"${props.getProperty("SUPABASE_ANON_KEY", "")}\"")
+        // Supabase env switch. Defaults to LOCAL for dev. Flip to prod by adding
+        // `SUPABASE_LOCAL=false` to local.properties (no rebuild config needed
+        // beyond a Gradle sync). See CLAUDE.md "Local vs prod Supabase".
+        val useLocalSupabase = props.getProperty("SUPABASE_LOCAL", "true").toBoolean()
+
+        // Local Supabase (supabase CLI). `10.0.2.2` is the host-machine loopback as
+        // seen from the Android EMULATOR (127.0.0.1 there = the emulator itself).
+        // On a physical device set SUPABASE_LOCAL_URL to your machine's LAN IP,
+        // e.g. http://192.168.1.50:54321 . The key is the CLI publishable key.
+        val localSupabaseUrl = props.getProperty("SUPABASE_LOCAL_URL", "http://10.0.2.2:54321")
+        // Legacy local anon JWT (role=anon) from `supabase status` — the standard
+        // CLI demo key. Preferred over the new `sb_publishable_…` key for
+        // supabase-kt 3.0.3 (Auth treats the Bearer token as a JWT).
+        val localSupabaseKey = props.getProperty(
+            "SUPABASE_LOCAL_ANON_KEY",
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",
+        )
+
+        val prodSupabaseUrl = "https://quluipmdicjsolnsopkg.supabase.co"
+        val prodSupabaseKey = props.getProperty("SUPABASE_ANON_KEY", "")
+
+        buildConfigField("boolean", "SUPABASE_LOCAL", "$useLocalSupabase")
+        buildConfigField("String", "SUPABASE_URL", "\"${if (useLocalSupabase) localSupabaseUrl else prodSupabaseUrl}\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"${if (useLocalSupabase) localSupabaseKey else prodSupabaseKey}\"")
         buildConfigField("String", "REVENUECAT_API_KEY", "\"${props.getProperty("REVENUECAT_API_KEY", "")}\"")
     }
 

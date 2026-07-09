@@ -62,8 +62,12 @@ class UserInfo(
     // Onboarding
     var completedOnboarding: Boolean? = null,
     var agreedToClaire: Boolean? = null,
+    // Claire chat thread id (claire_handle_threads) — created lazily on first chat.
+    var claireThreadID: String? = null,
     var requestedReview: Boolean? = null,
     var agreedToTerms: Boolean? = null,
+    // Feedback Monster: once the user submits feedback the monster is "full" (smiles).
+    var gaveFeedback: Boolean? = null,
 
     // Groups
     var groupID: String? = null,

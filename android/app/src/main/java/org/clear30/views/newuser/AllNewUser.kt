@@ -57,6 +57,9 @@ fun AllNewUser(
             )
             is NewUserScreen.SignUp -> AllSignUp(
                 userInfo = userInfo,
+                program = program,
+                onboardingSetup = onboardingSetup,
+                signInOnly = vm.isSignInOnly,
                 scope = scope,
                 onComplete = vm::handleNextScreen,
                 onBack = { vm.back(NewUserScreen.Intro) },
@@ -70,7 +73,7 @@ fun AllNewUser(
             is NewUserScreen.Reviews -> ReviewsSlide(userInfo, onNext = vm::handleNextScreen)
             is NewUserScreen.Commitment -> CommitmentSlide(userInfo, onNext = vm::handleNextScreen)
             is NewUserScreen.Referral -> ReferralSlide(userInfo, onNext = vm::handleNextScreen)
-            is NewUserScreen.Payment -> Paywall(popup = false) { entitlement -> vm.handlePayment(entitlement) }
+            is NewUserScreen.Payment -> Paywall(userInfo = userInfo, popup = false) { entitlement -> vm.handlePayment(entitlement) }
         }
     }
 }

@@ -113,6 +113,7 @@ value class AssessmentInfoDataID(val raw: String) {
         val welcomeTyping = AssessmentInfoDataID("welcome_typing")
         val clear30Context = AssessmentInfoDataID("clear30_context")
         val lifeContext = AssessmentInfoDataID("life_context")
+        val planPath = AssessmentInfoDataID("plan_path")
         // (additional ids added as referenced by onboarding slides)
     }
 }
@@ -141,6 +142,22 @@ data class AssessmentInfoData(
     val dreamOutcomeNouns: List<String>? = null,
     /** Monthly savings (weekly spend × 4) for the dream-outcome card. */
     val dreamOutcomeSavings: Int? = null,
+    /** Emoji/title/subtitle cards for the goals-affirmation slide (iOS AffirmationCardsView). */
+    val affirmationCards: List<AffirmationCard>? = null,
+    /** Small label above the bottom card on the goals-affirmation slide (e.g. "Where You're Headed"). */
+    val affirmationBottomLabel: String? = null,
+    /** Body text inside the bottom card on the goals-affirmation slide (the long-term goal). */
+    val affirmationBottomText: String? = null,
+    /** Pill label shown atop the plan-path card (planPath slide), e.g. "Break". */
+    val badge: String? = null,
+)
+
+/** One emoji + title + subtitle card on the goals-affirmation slide (iOS AffirmationCardsView.CardData). */
+@Serializable
+data class AffirmationCard(
+    val emoji: String,
+    val title: String,
+    val subtitle: String,
 )
 
 /** ProgramAssessmentQuestion — ported 1:1 (ProgramAssessment.swift). */
@@ -156,6 +173,9 @@ data class ProgramAssessmentQuestion(
     val imageNames: List<String>? = null,
     val badges: List<String>? = null,
     val subtexts: List<String>? = null,
+    /** Question-level footer (iOS `subtext`), e.g. the Terms-of-Use line on the age
+     *  question; supports `[label](url)` markdown links. */
+    val subtext: String = "",
     val affirmations: List<AssessmentInfoData>? = emptyList(),
     val autoAddAffirmation: Boolean? = true,
     val min: Int = 1,

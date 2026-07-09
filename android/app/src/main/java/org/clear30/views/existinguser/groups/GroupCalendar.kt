@@ -43,12 +43,17 @@ import org.clear30.views.theme.Dimens
 private val WEEKDAYS = listOf("S", "M", "T", "W", "T", "F", "S")
 
 @Composable
-fun GroupCalendar(group: Clear30Group, userInfo: UserInfo, modifier: Modifier = Modifier) {
+fun GroupCalendar(group: Clear30Group, userInfo: UserInfo, modifier: Modifier = Modifier, month: PlainDate? = null) {
     LaunchedEffect(group.id) {
         Logger.logEvent(userInfo.loggingID, LogEventType.openedGroupCalendar)
     }
     val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
-    val firstOfMonth = LocalDate(today.year, today.monthNumber, 1)
+    // The month swiper (iOS GroupMonthPicker) feeds a historical month; default
+    // to the current one.
+    val displayYear = month?.year ?: today.year
+    val displayMonth = month?.month ?: today.monthNumber
+    val isCurrentMonth = displayYear == today.year && displayMonth == today.monthNumber
+    val firstOfMonth = LocalDate(displayYear, displayMonth, 1)
     val daysInMonth = firstOfMonth.daysInMonth()
     val leadingBlanks = firstOfMonth.dayOfWeek.value % 7
 
@@ -71,8 +76,8 @@ fun GroupCalendar(group: Clear30Group, userInfo: UserInfo, modifier: Modifier = 
                     Box(Modifier.weight(1f).padding(2.dp), contentAlignment = Alignment.Center) {
                         if (cellIndex >= leadingBlanks && dayCounter <= daysInMonth) {
                             val day = dayCounter
-                            val (sober, smoked) = countForDay(group, today.year, today.monthNumber, day)
-                            AggregateCircle(day, sober, smoked, isToday = day == today.dayOfMonth)
+                            val (sober, smoked) = countForDay(group, displayYear, displayMonth, day)
+                            AggregateCircle(day, sober, smoked, isToday = isCurrentMonth && day == today.dayOfMonth)
                             dayCounter++
                         }
                     }

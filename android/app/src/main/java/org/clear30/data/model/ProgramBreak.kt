@@ -47,6 +47,29 @@ class ProgramBreak(
     fun getAssessmentResponse(strippedPrompt: String): ProgramAssessmentResponse? =
         assessmentResponses.firstOrNull { it.question.strippedPrompt == strippedPrompt }
 
+    /** Days/week of use from the assessment (iOS `getInitialWeeklyUsage`). */
+    fun getInitialWeeklyUsage(): Float? {
+        val response = getAssessmentResponse(AssessmentQuestionID.DAYS_USING.raw) ?: return null
+        val index = response.responses.firstOrNull() ?: return null
+        val optionValue = response.question.options.getOrNull(index) ?: return null
+        optionValue.toIntOrNull()?.let { return it.toFloat() }   // granular "1".."7"
+        return when (optionValue) {                              // legacy buckets
+            "About once a week or less" -> 1.0f
+            "2-3 days a week" -> 2.5f
+            "4-5 days a week" -> 4.5f
+            "6-7 days a week" -> 6.5f
+            else -> 2.0f * index.toFloat() + 0.5f
+        }
+    }
+
+    /** Weekly $ spend from the assessment (iOS `getInitialWeeklySpend`). */
+    fun getInitialWeeklySpend(): Int? {
+        val response = getAssessmentResponse(AssessmentQuestionID.MONEY_SPENT.raw) ?: return null
+        val index = response.responses.firstOrNull() ?: return null
+        val option = response.question.options.getOrNull(index) ?: return null
+        return option.filter { it.isDigit() }.toIntOrNull()      // "$50" -> 50
+    }
+
     val breakDescription: String?
         get() = when (type) {
             ProgramBreakType.CLEAR30 -> {

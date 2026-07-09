@@ -24,11 +24,20 @@ object Clear30Gradients {
     fun linear(colors: List<Color>, start: Offset = leading, end: Offset = trailing): Brush =
         Brush.linearGradient(
             colors = colors,
-            start = Offset(start.x * GRAD_SPAN, start.y * GRAD_SPAN),
-            end = Offset(end.x * GRAD_SPAN, end.y * GRAD_SPAN),
+            start = Offset(edge(start.x), edge(start.y)),
+            end = Offset(edge(end.x), edge(end.y)),
         )
 
-    private const val GRAD_SPAN = 1000f
+    /**
+     * Map a SwiftUI unit-point component (0..1) to a Compose linear-gradient offset
+     * that's RELATIVE to the drawn element: 0 → the near edge, ≥1 → the far edge
+     * (`Float.POSITIVE_INFINITY`, which Compose resolves to the element's size in
+     * that axis at draw time — the same trick `Brush.horizontalGradient` /
+     * `verticalGradient` use). This makes every gradient span its element exactly
+     * like iOS's leading→trailing, instead of being clipped to a fixed ~1000px span
+     * (which left cards looking "too blue" on anything narrower than that).
+     */
+    private fun edge(unit: Float): Float = if (unit >= 1f) Float.POSITIVE_INFINITY else 0f
 
     val clear30 = linear(listOf(Clear30Colors.blue, Clear30Colors.green), leading, trailing)
     val clear30Bright = linear(listOf(Clear30Colors.brightGreen1, Clear30Colors.brightGreen2), bottomLeading, topTrailing)
@@ -36,6 +45,7 @@ object Clear30Gradients {
     val youtube = linear(listOf(Clear30Colors.youTube1, Clear30Colors.youTube2), leading, trailing)
     val meditation = linear(listOf(Clear30Colors.meditation1, Clear30Colors.meditation2), leading, trailing)
     val symptomCard = linear(listOf(Clear30Colors.symptom1, Clear30Colors.symptom2), bottomLeading, topTrailing)
+    val slipped = linear(listOf(Clear30Colors.slipped1, Clear30Colors.slipped2), bottomLeading, topTrailing)
     val journals = linear(listOf(Clear30Colors.journal1, Clear30Colors.journal2), topLeading, bottomTrailing)
     val community = linear(listOf(Clear30Colors.community1, Clear30Colors.community2), topLeading, bottomTrailing)
     val instagram = linear(listOf(Clear30Colors.instagram1, Clear30Colors.instagram2), bottomLeading, topTrailing)
@@ -43,6 +53,9 @@ object Clear30Gradients {
     val sleep = linear(listOf(Clear30Colors.sleep1, Clear30Colors.sleep2), bottomLeading, topTrailing)
     val red = linear(listOf(Clear30Colors.red1, Clear30Colors.red2), bottomLeading, topTrailing)
     val claire = linear(listOf(Clear30Colors.claire1, Clear30Colors.claire2), leading, trailing)
+    // Human-support avatars (Support2.swift): Dr. Fred = reversed meditation, Gerad = meditation1→blue.
+    val fred = linear(listOf(Clear30Colors.meditation2, Clear30Colors.meditation1), topLeading, bottomTrailing)
+    val buddy = linear(listOf(Clear30Colors.meditation1, Color(0xFF448EEE)), topLeading, bottomTrailing)
     val white = Brush.linearGradient(listOf(Color.White, Color.White))
     val black = Brush.linearGradient(listOf(Color.Black, Color.Black))
     val button = Brush.linearGradient(listOf(Clear30Colors.button, Clear30Colors.button))

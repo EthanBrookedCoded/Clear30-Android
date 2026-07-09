@@ -1,16 +1,9 @@
 package org.clear30.views.existinguser.profile
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -18,6 +11,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
@@ -25,27 +20,27 @@ import kotlinx.datetime.toLocalDateTime
 import org.clear30.data.Clear30Store
 import org.clear30.data.LogEventType
 import org.clear30.data.Logger
+import org.clear30.data.model.PlainDate
 import org.clear30.data.model.Program
 import org.clear30.data.model.UserInfo
 import org.clear30.views.components.Clear30Card
 import org.clear30.views.components.Heading3
 import org.clear30.views.components.SmallText
-import org.clear30.views.components.TinyText
 import org.clear30.views.theme.Clear30Colors
 import org.clear30.views.theme.Dimens
 
 /**
  * ProgramStartDatePicker — ported from the iOS settings "change program start
- * date" affordance. Shows the current start date and opens a Material3
- * DatePicker dialog to pick a new one. Persists via [Clear30Store] and fires
- * the `changedProgramStartDate` analytic.
+ * date" affordance. Shows the current start date and opens the on-brand
+ * [StartDateCalendarPicker] (iOS `ProgramStartDatePicker` calendar card) to pick a
+ * new one. Persists via [Clear30Store] and fires the `changedProgramStartDate`
+ * analytic.
  *
  * Why we lift `startDate` into a separate composable: the picker mutates the
  * Program in place (matching SwiftData), but the parent needs to recompose to
  * reflect the new headline date — easier to manage that here than thread a
  * refresh counter through every parent.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProgramStartDatePicker(program: Program, userInfo: UserInfo) {
     val scope = rememberCoroutineScope()
@@ -68,38 +63,21 @@ fun ProgramStartDatePicker(program: Program, userInfo: UserInfo) {
     }
 
     if (showPicker) {
-        val state = rememberDatePickerState(initialSelectedDateMillis = program.startDate.toEpochMilliseconds())
-        AlertDialog(
+        Dialog(
             onDismissRequest = { showPicker = false },
-            title = { Text("Program start date") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-                    TinyText(
-                        "Shifting your start date re-anchors the daily content and check-in cadence.",
-                        color = Clear30Colors.text.copy(alpha = 0.5f),
-                    )
-                    DatePicker(state = state, showModeToggle = false)
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = Dimens.horizontalPadding)) {
+                StartDateCalendarPicker(currentStartDate = PlainDate.from(program.startDate)) { picked ->
+                    showPicker = false
+                    if (picked == null) return@StartDateCalendarPicker
+                    program.startDate = picked.dateObject
+                    scope.launch { Clear30Store.save(program) }
+                    Logger.logEvent(userInfo.loggingID, LogEventType.changedProgramStartDate)
+                    refresh++
                 }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = state.selectedDateMillis != null,
-                    onClick = {
-                        val ms = state.selectedDateMillis ?: return@TextButton
-                        val newStart = Instant.fromEpochMilliseconds(ms)
-                        program.startDate = newStart
-                        scope.launch { Clear30Store.save(program) }
-                        Logger.logEvent(
-                            userInfo.loggingID,
-                            LogEventType.changedProgramStartDate,
-                        )
-                        refresh++
-                        showPicker = false
-                    },
-                ) { Text("Save") }
-            },
-            dismissButton = { TextButton(onClick = { showPicker = false }) { Text("Cancel") } },
-        )
+            }
+        }
     }
 }
 

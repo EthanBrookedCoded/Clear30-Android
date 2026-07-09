@@ -114,3 +114,38 @@ data class SubmitFeedbackParams(
 /** Submit the onboarding "how are we doing?" rating (Swift `submitFeedback`). */
 suspend fun SupabaseController.submitFeedback(params: SubmitFeedbackParams): SupabaseFunctionError? =
     callFunction(SupabaseFunction.submitFeedback, params)
+
+/**
+ * Free-form feedback (Feedback Monster). Ported 1:1 from iOS `submitFeedback`: a
+ * DIRECT insert into `comms.feedback` (user_id, feedback, type). The DB insert is
+ * what the backend's Slack trigger watches — so this is what makes feedback show
+ * up in the connected channel.
+ *
+ * The previous Android path invoked a `submit_feedback` EDGE FUNCTION that does
+ * not exist in the project (the backend only has `feedback_handle_webhook`), so
+ * every submission 404'd and was silently swallowed — which is why nothing ever
+ * reached the table or Slack. `comms.feedback` grants insert to anon/authenticated.
+ */
+@Serializable
+private data class FeedbackInsert(
+    val user_id: String,
+    val feedback: String,
+    val type: String = "text",
+    // NOT NULL on prod with a now() default; send it explicitly so the insert can't
+    // fail on an env where the default migration isn't applied.
+    val timestamp: String = org.clear30.util.now().toString(),
+)
+
+suspend fun SupabaseController.submitTextFeedback(userID: String, feedback: String, type: String = "text"): SupabaseFunctionError? = runCatching {
+    client.postgrest.from("comms", "feedback").insert(FeedbackInsert(userID, feedback, type))
+}.onFailure { android.util.Log.w("SupabaseFeedback", "comms.feedback insert failed: ${it.message}") }
+    .fold({ null }, { it.toError() })
+
+// Note on "Feedback Monster sync": the `gaveFeedback` flag stays device-local, on
+// purpose. `comms.feedback` grants SELECT to admins only (RLS "Admin only"), so a
+// client cannot read its own rows to restore the "full" monster on a new device,
+// and iOS itself keeps the flag in SwiftData only (no `users.gave_feedback`
+// column). The actual sync — the submission reaching the backend + Slack — is
+// [submitTextFeedback] above (direct insert; INSERT policy is `true` → the
+// `feedback_notify` trigger posts to Slack). True cross-device restore would need
+// an additive `users.gave_feedback` column on the shared backend (see notes).

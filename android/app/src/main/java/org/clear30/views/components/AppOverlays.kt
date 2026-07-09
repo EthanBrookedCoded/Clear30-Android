@@ -83,12 +83,12 @@ private fun PopupQueueHost() {
             },
         )
         is PopupManager.Payload.Confetti -> {
-            // Auto-dismiss the celebration after ~2s so the user sees it
-            // briefly without an explicit close button — matches the iOS
-            // confetti overlay behavior.
-            LaunchedEffect(p) { delay(2000); PopupManager.dismissCurrent() }
+            // Particle confetti burst + the celebration label, auto-dismissed once
+            // the burst has rained out — matches the iOS `ConfettiCheckIn` overlay.
+            LaunchedEffect(p) { delay(2600); PopupManager.dismissCurrent() }
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Heading1("${p.emoji}  ${p.message}")
+                ConfettiOverlay()
             }
         }
         is PopupManager.Payload.Achievement -> AlertDialog(

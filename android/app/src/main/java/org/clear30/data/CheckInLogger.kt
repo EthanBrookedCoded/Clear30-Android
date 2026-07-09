@@ -10,11 +10,12 @@ import org.clear30.data.model.PlainDate
 import org.clear30.data.model.Program
 import org.clear30.data.model.ProgramDayInfo
 import org.clear30.data.model.UserInfo
+import org.clear30.data.model.weedCheckIn
 import org.clear30.data.supabase.SupabaseController
+import org.clear30.data.supabase.addGroupCheckInActivity
 import org.clear30.data.supabase.updateDayInfo
 import org.clear30.data.supabase.updateLastSmoked
 import org.clear30.data.supabase.updateLatestCheckInMethod
-import org.clear30.util.adding
 import org.clear30.util.now
 
 /**
@@ -26,7 +27,8 @@ import org.clear30.util.now
  * `Program.dayInfo` for the most recent "smoked" entry and lift its timestamp
  * into `Program.lastSmoked`, so the home "time clear" timer always reads off
  * the user's true last use. Reward generation and the health-setback recompute
- * remain TODO (deeper subsystems — see android/TODO.md).
+ * run here too (the day's variable reward is stamped, the health timeline is
+ * pushed back per slip).
  */
 class CheckInLogger(
     private val program: Program,
@@ -43,11 +45,20 @@ class CheckInLogger(
         program.updateDayInfo(plainDate, dayInfo)
 
         handleLastSmoked()
-        // TODO(port): updateProgramHealthSetbackDays + reward generation
-        //   (CheckInRewardVariableGenerator / health-setback module — large; see TODO.md).
 
-        // Analytics: fire a single event per check-in, tagged by outcome.
-        val sober = checkIns.firstOrNull()?.completion
+        // Recompute the health-timeline setback so a logged slip pushes every
+        // milestone back (iOS updateProgramHealthSetbackDays).
+        program.updateHealthSetbackDays()
+
+        // Reward generation: pick + stamp the day's variable reward type (iOS
+        // CheckInRewardVariableGenerator.storeRewardType). The static reward is
+        // generated on demand by the reward sheet.
+        CheckInRewardVariableGenerator(userInfo, program).generate(plainDate)
+
+        // Analytics: fire a single event per check-in, tagged by outcome. Use the
+        // weed check-in's completion specifically (iOS `weedCheckIn?.completion`) —
+        // the first slot isn't guaranteed to be the weed entry once customs exist.
+        val sober = checkIns.weedCheckIn?.completion
         val event = when (sober) {
             true -> LogEventType.loggedCheckIn
             false -> LogEventType.smokedCheckIn
@@ -59,49 +70,13 @@ class CheckInLogger(
             mapOf(LogEventExtraDataType.SOBER to (sober?.toString() ?: "null")),
         )
 
-        // Celebrate streak milestones with a confetti popup. We sniff the
-        // current sober streak *after* the dayInfo write so a flip from
-        // "not logged" → "sober" picks up the new total immediately. The
-        // AchievementEngine fires its own confetti for the underlying
-        // achievement; PopupManager's coalescing window prevents stacking.
-        if (sober == true) maybeCelebrateStreak()
+        // The confetti celebration is rendered inline on the reward screen
+        // (CheckInSheet → CheckInRewardContent) for a sober check-in — that's the
+        // iOS `ConfettiCheckIn` placement, and it shows reliably inside the
+        // check-in dialog window. We deliberately don't fire a global popup here:
+        // it would render behind the dialog and stack on backdated catch-up logs.
 
-        persist()
-    }
-
-    /** Streak day numbers that trigger a celebration overlay. */
-    private val celebrationMilestones = setOf(1, 7, 14, 30, 60, 90, 100, 180, 365)
-
-    private fun maybeCelebrateStreak() {
-        val streak = currentSoberStreak()
-        if (streak !in celebrationMilestones) return
-        val label = when (streak) {
-            1 -> "Day 1 in the books"
-            7 -> "1 week clear"
-            14 -> "2 weeks clear"
-            30 -> "30 days clear"
-            60 -> "2 months clear"
-            90 -> "3 months clear"
-            100 -> "100 days clear"
-            180 -> "6 months clear"
-            365 -> "1 year clear"
-            else -> "$streak days clear"
-        }
-        PopupManager.request(PopupManager.Payload.Confetti(message = label))
-    }
-
-    /** Local copy of the streak calc — kept private so we don't depend on Profile UI. */
-    private fun currentSoberStreak(): Int {
-        var streak = 0
-        var date = now()
-        if (program.dayInfo[PlainDate.from(date)]?.sober != true) {
-            date = date.adding(days = -1)
-        }
-        while (program.dayInfo[PlainDate.from(date)]?.sober == true) {
-            streak++
-            date = date.adding(days = -1)
-        }
-        return streak
+        persist(sober)
     }
 
     /** Convenience for the standard weed check-in (sober = true/false). */
@@ -127,7 +102,7 @@ class CheckInLogger(
         if (latestSmoked != null) program.lastSmoked = latestSmoked
     }
 
-    private fun persist() {
+    private fun persist(sober: Boolean? = null) {
         scope.launch {
             // 1. Persist locally first — this is the source of truth and must
             //    succeed before we attempt the network round-trip.
@@ -156,6 +131,12 @@ class CheckInLogger(
             //    network call (and the local append) when nothing was earned.
             val achievementData = Clear30Store.loadAchievementData()
             AchievementEngine.syncNewlyEarned(achievementData, userInfo, program)
+
+            // 5. If the user is in an accountability group, mirror this check-in into
+            //    the group activity feed (groups.add_checkin_activity). Best-effort.
+            if (!userInfo.groupID.isNullOrEmpty()) {
+                SupabaseController.addGroupCheckInActivity(sober)
+            }
         }
     }
 }

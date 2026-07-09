@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Adaptive launcher icon background — Clear 30 green (Assets.xcassets Clear 30 green). -->
-    <color name="ic_launcher_background">#80C97A</color>
+    <!-- Adaptive launcher icon background — white, matching the iOS app icon
+         (Assets.xcassets Brand/Icon): the green "30" mark sits on white. -->
+    <color name="ic_launcher_background">#FFFFFF</color>
 </resources>

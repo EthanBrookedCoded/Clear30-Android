@@ -18,7 +18,16 @@ data class UserAchievementInsert(
     @SerialName("custom_data") val customData: JsonObject = JsonObject(emptyMap()),
 )
 
-/** Insert a single earned achievement into `user_achievements`. */
+/**
+ * Insert a single earned achievement into `achievements.user_achievements`.
+ *
+ * The table lives in the non-public `achievements` schema, so the call MUST target
+ * `from("achievements", "user_achievements")` — the previous `from("user_achievements")`
+ * hit the default `public` schema (no such table) and every sync 404'd silently, so
+ * earned achievements never reached the backend. The table has a
+ * UNIQUE(user_id, achievement_key); the engine only syncs not-yet-synced rows, so a
+ * plain insert is correct (a duplicate would surface as an error, not corrupt data).
+ */
 suspend fun SupabaseController.addUserAchievement(insert: UserAchievementInsert): SupabaseController.SupabaseFunctionError? = runCatching {
-    client.postgrest.from("user_achievements").insert(insert)
+    client.postgrest.from("achievements", "user_achievements").insert(insert)
 }.fold({ null }, { it.toError() })

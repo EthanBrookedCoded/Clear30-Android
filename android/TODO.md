@@ -50,8 +50,11 @@ Legend: 🔴 blocking build/run · 🟠 core feature gap · 🟡 depth/polish
       `AccountSetupView`; **Apple Sign-In → Google Sign-In** for Android.
 - [ ] Mode slideshows + routing: `CounselorSlideshow`, `GenericSlideshow` (counselor/b2b/nys)
       — `AppRoot` currently always routes to `AllNewUser`.
-- [ ] Paywall: **Helium** Android SDK, hard-paywall detection (`isHardPaywall`), free codes,
-      Stripe/Shopify/Superwall fallback chain.
+- [ ] Paywall: **Helium** Android SDK, Stripe/Shopify/Superwall fallback chain.
+      (Done: hard-paywall detection `isHardPaywall`, free-code auto-skip, RC sign-in
+      attribution incl. email/phone/Amplitude, trial-conversion logging. BLOCKED on
+      dashboard: the RevenueCat project has no Play Store app — create one and put
+      the goog_ key in `local.properties` `REVENUECAT_API_KEY`.)
 
 ## 2. Today tab 🟠
 - [ ] Full calendar: month paging, week view, `CalendarViewModel`, custom check-in modes
@@ -92,8 +95,10 @@ Legend: 🔴 blocking build/run · 🟠 core feature gap · 🟡 depth/polish
 - [ ] App infra: `URLManager` (deep-link routing), `ShortcutHandler`, `PopupManager` +
       popup/highlight/tutorial system, `AlertHandler` (master alert), `LoadingCoordinator`,
       confetti.
-- [ ] Program restore/migration: `ProgramRestoreHandler`, `ProgramSyncHandler`,
-      `ProgramTimelineHandler`, message migrations.
+- [ ] Program restore/migration: `ProgramSyncHandler` (friend start-date sync deep link),
+      message migrations. (Done: `ProgramRestoreHandler` sign-in restore,
+      `ProgramTimelineHandler`, wire-model push of content_info/program_breaks/
+      custom_check_ins matching the iOS backend contract.)
 - [ ] PeerSupport chat; full Dr Fred handler; School/B2B/NYS modes (`SchoolData` fetch,
       leaderboard).
 

@@ -72,11 +72,16 @@ object UserDirectory {
         }
         if (ids.isEmpty()) return
         runCatching {
-            SupabaseController.client.postgrest.from("users")
-                .select(Columns.raw("id, display_name, emoji, name")) {
+            // Community display name + emoji live in community.profiles (id, name,
+            // emoji) — public.users has neither, which is why authors showed as
+            // "User #…". community.profiles is publicly readable (using(true)).
+            SupabaseController.client.postgrest.from("community", "profiles")
+                .select(Columns.raw("id, name, emoji")) {
                     filter { isIn("id", ids.toList()) }
                 }
                 .decodeList<UsersRow>()
+        }.onFailure {
+            android.util.Log.w("UserDirectory", "profiles fetch failed: ${it.message}")
         }.onSuccess { rows ->
             val additions = rows.associate { row ->
                 row.id to Entry(

@@ -145,9 +145,18 @@ private fun TabSlot(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Scale: 1.0 selected, 0.9 unselected — animated through the standard
-    // Compose spring so the tap feels weighted.
-    val scale by animateFloatAsState(if (selected) 1f else 0.9f, label = "tabScale")
+    // Scale: 1.0 selected, 0.9 unselected — iOS animates the switch with
+    // defaultAnimation.speed(2), a quick ~117ms ease.
+    val scale by animateFloatAsState(
+        if (selected) 1f else 0.9f,
+        animationSpec = org.clear30.views.theme.Anim.fast(),
+        label = "tabScale",
+    )
+    val iconAlpha by animateFloatAsState(
+        if (selected) 0.8f else 0.5f,
+        animationSpec = org.clear30.views.theme.Anim.fast(),
+        label = "tabAlpha",
+    )
     Column(
         modifier
             .scale(scale)
@@ -166,7 +175,7 @@ private fun TabSlot(
             Icon(
                 imageVector = sfSymbol(item.iconName(selected)),
                 contentDescription = item.label,
-                tint = Clear30Colors.text.copy(alpha = if (selected) 0.75f else 0.5f),
+                tint = Clear30Colors.text.copy(alpha = iconAlpha), // iOS: 0.8 selected / 0.5 not
                 modifier = Modifier
                     .size(item.iconSize(selected).dp)
                     .offset(y = item.yOffset(selected).dp),

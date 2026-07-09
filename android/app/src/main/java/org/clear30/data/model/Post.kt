@@ -57,3 +57,38 @@ data class Comment(
     val body: String,
     @SerialName("created_at") val createdAt: String? = null,
 )
+
+/** A community profile row (`community.profiles`) — Swift `UserCommunity`. */
+@Serializable
+data class UserCommunity(
+    val id: String,
+    val name: String = "",
+    val emoji: String = "",
+    @SerialName("is_ban") val isBan: Boolean = false,
+)
+
+/** An activity-feed entry (`community.activities`) — Swift `Activity`. */
+@Serializable
+data class Activity(
+    val id: String,
+    @SerialName("created_at") val createdAt: String = "",
+    @SerialName("is_read") var isRead: Boolean = false,
+    val message: String? = null,
+    @SerialName("entity_type") val entityType: String = "",
+    @SerialName("entity_id") val entityId: String? = null,
+    @SerialName("post_id") val postId: String? = null,
+    val action: String = "",
+    @SerialName("actor_id") val actorId: String? = null,
+    @SerialName("recipient_id") val recipientId: String? = null,
+)
+
+/** A daily writing prompt (`community.community_prompts`) — Swift `SupabaseCommunityPrompt`. */
+@Serializable
+data class CommunityPrompt(
+    val id: Int,
+    val title: String,
+    val prompt: String,
+    @SerialName("start_date") val startDate: String,
+    @SerialName("end_date") val endDate: String,
+    @SerialName("tag") val tagID: String? = null,
+)

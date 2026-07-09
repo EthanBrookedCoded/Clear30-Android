@@ -1,5 +1,7 @@
 package org.clear30.views.existinguser
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -75,12 +77,17 @@ fun AllTabs(
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-            when (selected) {
-                CustomTabBarItem.TODAY -> TodayTab(program, userInfo)
-                CustomTabBarItem.COMMUNITY -> CommunityTab(userInfo)
-                CustomTabBarItem.GROUPS -> GroupsTab(userInfo)
-                CustomTabBarItem.PROFILE -> ProfileTab(userInfo, program, journalEntries, onSignOut)
-                CustomTabBarItem.SUPPORT -> SupportTab(program, userInfo, journalEntries)
+            // Crossfade every tab switch so navigation feels smooth instead of
+            // snapping. Keyed on the selected tab; the outgoing screen fades out
+            // as the incoming fades in.
+            Crossfade(targetState = selected, animationSpec = tween(durationMillis = 280), label = "tab") { tab ->
+                when (tab) {
+                    CustomTabBarItem.TODAY -> TodayTab(program, userInfo, journalEntries)
+                    CustomTabBarItem.COMMUNITY -> CommunityTab(program, userInfo)
+                    CustomTabBarItem.GROUPS -> GroupsTab(program, userInfo)
+                    CustomTabBarItem.PROFILE -> ProfileTab(userInfo, program, journalEntries, onSignOut)
+                    CustomTabBarItem.SUPPORT -> SupportTab(program, userInfo, journalEntries)
+                }
             }
         }
     }

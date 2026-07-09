@@ -5,6 +5,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.clear30.data.AssessmentSubmissionHandler
 import org.clear30.data.AttributionHandler
 import org.clear30.data.Clear30Store
 import org.clear30.data.LogEventType
@@ -17,6 +18,8 @@ import org.clear30.data.model.OnboardingSetup
 import org.clear30.data.model.Program
 import org.clear30.data.model.ToggleSettings
 import org.clear30.data.model.UserInfo
+import org.clear30.data.supabase.SupabaseController
+import org.clear30.data.supabase.isHardPaywall
 
 /**
  * Onboarding flow controller — ported from `AllNewUser` (AllNewUser.swift).
@@ -40,6 +43,10 @@ class AllNewUserViewModel(
 
     private var availableSalesSlides: List<NewUserScreen> = emptyList()
     private var signInOnlyMode: Boolean = false
+
+    /** True when the sign-up screen was entered via "Sign In" (existing user) —
+     *  in that case we skip the create-user + assessment submission. */
+    val isSignInOnly: Boolean get() = signInOnlyMode
 
     val clear30: Boolean get() = onboardingSetup.assessmentInfo?.choseClear30 ?: true
 
@@ -119,20 +126,35 @@ class AllNewUserViewModel(
     fun handlePayment(entitlement: EntitlementType?, setPaidFalseOn: kotlinx.datetime.Instant? = null) {
         val isPaid = entitlement != null
         userInfo.notificationSettings = ToggleSettings.notificationDefaults(paid = isPaid)
-        // TODO(port): AssessmentSubmissionHandler.verifyProgramSetup; if paid onboardingSetup.setup(groups);
-        //   SupabaseController.isHardPaywall -> userInfo.paywallHard; NotificationHandler.removeAbandonedOnboarding
+        // TODO(port): AssessmentSubmissionHandler.verifyProgramSetup; if paid onboardingSetup.setup(groups)
+
+        // iOS: look up whether the paywall the user saw is hard (payment.hard_paywalls).
+        // currentPaywallID is only set by Helium-driven paywalls, so this is dormant
+        // until the Helium Android SDK lands — same guard as iOS.
+        org.clear30.data.PaywallController.currentPaywallID.value?.let { paywallID ->
+            scope.launch {
+                SupabaseController.isHardPaywall(paywallID)?.let { hard ->
+                    userInfo.paywallHard = hard
+                    Clear30Store.save(userInfo)
+                }
+            }
+        }
         userInfo.currentEntitlementType = entitlement
         userInfo.setPaidFalseOn = setPaidFalseOn
         userInfo.completedOnboarding = true
 
         // Bridge onboarding's lastSmoked into the program so the home "time
-        // clear" timer reads correctly from day 1. The full submitAssessment
-        // RPC + break creation lives in AssessmentSubmissionHandler (TODO);
-        // until that lands, this is the minimum required for the timer + the
-        // sober streak to be honest.
-        onboardingSetup.assessmentInfo?.let { info ->
+        // clear" timer reads correctly from day 1.
+        val assessmentInfo = onboardingSetup.assessmentInfo
+        assessmentInfo?.let { info ->
             program.lastSmoked = info.lastSmoked
+            // A fresh signup ALWAYS starts at day 0 today. Reset the start date and
+            // drop any stale content (e.g. left over from a prior debug-backdated
+            // run) so the Today feed re-seeds relative to today and unlocks the
+            // lessons one day at a time — never "jumped to day 30".
             program.startDate = org.clear30.util.now()
+            program.contentInfo.clear()
+            program.latestUpdate = null
         }
 
         // iOS: NotificationHandler.removeAbandonedOnboarding() — they made it,
@@ -145,6 +167,19 @@ class AllNewUserViewModel(
         scope.launch {
             Clear30Store.save(userInfo)
             Clear30Store.save(program)
+            // Register the user server-side + submit the assessment (runs AFTER OTP
+            // verify) so every auth.uid()-backed feature works: Claire & Dr. Fred
+            // chat, the daily program messages (correct content per day), etc. New
+            // signups only — a sign-in already has a server account. Without this,
+            // `public.users` has no row and those functions silently fail.
+            if (assessmentInfo != null) {
+                val err = AssessmentSubmissionHandler.submitAssessment(userInfo, program, onboardingSetup)
+                if (err != null) {
+                    android.util.Log.w("Onboarding", "assessment submit failed: $err")
+                } else {
+                    Clear30Store.save(userInfo)  // persist the resolved server userID
+                }
+            }
             onCompletedOnboarding()
         }
     }

@@ -8,6 +8,7 @@ import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.realtime.Realtime
+import io.github.jan.supabase.serializer.KotlinXSerializer
 import io.github.jan.supabase.storage.Storage
 import io.ktor.client.call.body
 import kotlinx.serialization.json.Json
@@ -31,17 +32,6 @@ import org.clear30.data.model.AssessmentQuestionType
  */
 object SupabaseController {
 
-    val client: SupabaseClient = createSupabaseClient(
-        supabaseUrl = BuildConfig.SUPABASE_URL,
-        supabaseKey = BuildConfig.SUPABASE_ANON_KEY,
-    ) {
-        install(Postgrest)
-        install(Auth) { autoLoadFromStorage = true }
-        install(Functions)
-        install(Realtime)
-        install(Storage)
-    }
-
     /** Lenient decoder for backend payloads (Swift `JSONDecoder.supabaseDecoder`). */
     val decoder = Json {
         ignoreUnknownKeys = true
@@ -56,6 +46,30 @@ object SupabaseController {
                 defaultDeserializer { AssessmentQuestionType.Unknown.serializer() }
             }
         }
+    }
+
+    val client: SupabaseClient = createSupabaseClient(
+        supabaseUrl = BuildConfig.SUPABASE_URL,
+        supabaseKey = BuildConfig.SUPABASE_ANON_KEY,
+    ) {
+        // Decode ALL Postgrest/Functions payloads with the lenient [decoder].
+        // supabase-kt's default Json is strict, so one unexpected/null column in a
+        // `select(*)` (e.g. the community feed) throws and the swallowed error
+        // silently empties the result. ignoreUnknownKeys + coerceInputValues +
+        // explicitNulls=false make decodes resilient.
+        defaultSerializer = KotlinXSerializer(decoder)
+        install(Postgrest)
+        install(Auth) { autoLoadFromStorage = true }
+        install(Functions)
+        install(Realtime)
+        install(Storage)
+    }
+
+    init {
+        android.util.Log.i(
+            "SupabaseController",
+            "Supabase → ${if (BuildConfig.SUPABASE_LOCAL) "LOCAL" else "PROD"} @ ${BuildConfig.SUPABASE_URL}",
+        )
     }
 
     data class SupabaseFunctionError(

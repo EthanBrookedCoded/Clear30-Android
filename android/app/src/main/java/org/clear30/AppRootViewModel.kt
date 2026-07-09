@@ -15,6 +15,7 @@ import org.clear30.data.model.OnboardingSetup
 import org.clear30.data.model.Program
 import org.clear30.data.model.UserInfo
 import org.clear30.data.supabase.SupabaseController
+import org.clear30.data.supabase.signOut
 import org.clear30.data.supabase.syncProgramState
 import org.clear30.util.now
 import java.util.UUID
@@ -85,6 +86,15 @@ class AppRootViewModel : ViewModel() {
             Logger.logEvent(userInfo.loggingID, LogEventType.openedApp)
         }
         userInfo.sessions.add(now())
+
+        // Sync the paid entitlement from RevenueCat on load — restores paid state on
+        // a reinstall / new device. Only sets when RevenueCat reports an active
+        // entitlement; never clears a local freeCode/bypass on a transient miss.
+        // Free-code users skip RevenueCat entirely (iOS checkEntitlementChanged).
+        if (userInfo.freeCode == null) {
+            org.clear30.data.PaywallController.activeEntitlement(userInfo)?.let { userInfo.currentEntitlementType = it }
+        }
+
         Clear30Store.save(userInfo)
     }
 
@@ -132,6 +142,13 @@ class AppRootViewModel : ViewModel() {
             Logger.logEvent(loggingId, LogEventType.signedOut)
         }
         viewModelScope.launch {
+            // Clear the Supabase Auth session FIRST — otherwise the persisted token
+            // survives the wipe and the "new" account stays signed in as the old one
+            // (and a stale token from a different env keeps every RLS read empty).
+            org.clear30.data.supabase.SupabaseController.signOut()
+            // Reset RevenueCat to an anonymous user so the next account doesn't
+            // inherit this one's entitlements (iOS PaywallController.signOut).
+            org.clear30.data.PaywallController.signOut()
             // iOS: NotificationHandler.removePending() — the old account's
             // schedules must not keep firing on the new session.
             org.clear30.data.NotificationHandler.removePending()

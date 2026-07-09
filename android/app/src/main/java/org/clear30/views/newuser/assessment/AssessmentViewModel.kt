@@ -19,6 +19,7 @@ import org.clear30.data.model.ProgramAssessmentQuestion
 import org.clear30.data.model.ProgramAssessmentResponse
 import org.clear30.data.model.UserInfo
 import org.clear30.util.now
+import org.clear30.views.theme.Haptics
 
 /**
  * AssessmentViewModel — ported from AssessmentViewModel.swift.
@@ -86,8 +87,11 @@ class AssessmentViewModel(
             }
         }
 
-        // Advance, or finish
+        // Advance, or finish. A light haptic on each slide transition gives the
+        // onboarding "swipe" between slides a tactile tick (iOS lightImpact on
+        // every page change).
         if (index + 1 < slidesWithCompletions.size) {
+            Haptics.lightImpact()
             currentIndex = index + 1
         } else {
             saveAssessment()

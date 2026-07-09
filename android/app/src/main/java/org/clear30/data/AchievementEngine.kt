@@ -39,6 +39,45 @@ object AchievementEngine {
         return null
     }
 
+    /** Read a single int checkParam by exact key (REDUCTION uses percentage/period_days). */
+    private fun intParam(def: AchievementDefinition, key: String): Int? =
+        (def.checkParams[key] as? JsonPrimitive)?.intOrNull
+
+    /**
+     * REDUCTION — ported from iOS `ReductionChecker`. Compares smoking-day frequency
+     * over the trailing `period_days` window against the prior equal-length baseline
+     * window; earned when the reduction is at least `percentage`.
+     *
+     * Frequency = smokingDays / checkedInDays * 100, where a "check-in" is any
+     * `dayInfo` entry in the window and a smoking day is `sober == false` (iOS divides
+     * by actual check-ins so missing days aren't treated as sober). Returns false when
+     * either window has no check-ins or the baseline frequency is zero.
+     */
+    private fun reductionEarned(def: AchievementDefinition, program: Program): Boolean {
+        val percentage = intParam(def, "percentage") ?: return false
+        val periodDays = intParam(def, "period_days") ?: return false
+        if (periodDays <= 0) return false
+
+        val today = PlainDate.from(now())
+        val periodStart = PlainDate.from(now().adding(days = -periodDays))
+        val baselineEnd = PlainDate.from(now().adding(days = -periodDays - 1))
+        val baselineStart = PlainDate.from(now().adding(days = -periodDays * 2 - 1))
+
+        fun frequency(start: PlainDate, end: PlainDate): Double? {
+            val entries = program.dayInfo.filterKeys { it >= start && it <= end }
+            if (entries.isEmpty()) return null
+            val smoking = entries.values.count { it.sober == false }
+            return smoking.toDouble() / entries.size.toDouble() * 100.0
+        }
+
+        val periodFreq = frequency(periodStart, today) ?: return false
+        val baselineFreq = frequency(baselineStart, baselineEnd) ?: return false
+        if (baselineFreq <= 0.0) return false
+
+        val reduction = ((baselineFreq - periodFreq) / baselineFreq) * 100.0
+        return reduction.coerceAtLeast(0.0) >= percentage.toDouble()
+    }
+
     /** Consecutive sober days ending today (or yesterday if today is unlogged). */
     private fun currentSoberStreak(program: Program): Int {
         var streak = 0
@@ -57,16 +96,22 @@ object AchievementEngine {
 
     /** True if [def]'s criteria are currently satisfied by the user's state. */
     fun isEarned(def: AchievementDefinition, program: Program, @Suppress("UNUSED_PARAMETER") userInfo: UserInfo): Boolean {
+        // REDUCTION reads its own params (percentage/period_days), so it bypasses the
+        // shared integer-`target` lookup the threshold check-types rely on.
+        if (def.checkType == AchievementCheckType.REDUCTION) return reductionEarned(def, program)
         val t = target(def) ?: return false
         return when (def.checkType) {
             AchievementCheckType.STREAK -> currentSoberStreak(program) >= t
             AchievementCheckType.CUMULATIVE -> totalSoberDays(program) >= t
             AchievementCheckType.MILESTONE -> program.currentDay >= t
-            AchievementCheckType.COUNT -> daysTracked(program) >= t
-            // TODO(port): REDUCTION compares recent-usage frequency to a baseline;
-            //   needs the iOS reference to know which baseline window. Skipped
-            //   for now — returning false is the safe choice (never falsely earn).
-            AchievementCheckType.REDUCTION -> false
+            // COUNT achievements are ACTIVITY counts (claire_conversation, meditation,
+            // community_post, …), NOT day counts. The app doesn't track per-activity
+            // totals yet, and evaluating them against `daysTracked` falsely earns a
+            // whole batch at once (e.g. "Claire BFF" — 15 Claire chats — fires after
+            // 15 tracked days despite zero chats). Until real activity counters exist,
+            // COUNT never auto-earns.
+            AchievementCheckType.COUNT -> false
+            AchievementCheckType.REDUCTION -> reductionEarned(def, program)
         }
     }
 
@@ -116,18 +161,10 @@ object AchievementEngine {
                     LogEventExtraDataType.ACHIEVEMENT_NAME to def.name,
                 ),
             )
-            // Celebrate. The popup queue coalesces duplicates inside its 800ms
-            // window so a "30 days clear" + "1 month streak" pair both surface
-            // (different captions) — only an identical-payload re-fire is
-            // dropped.
-            PopupManager.request(
-                PopupManager.Payload.Confetti(message = def.name, emoji = "🏆"),
-            )
-            // Post a system notification so the achievement is visible even
-            // if the user has the app backgrounded when the check-in syncs
-            // (e.g. they checked in, swiped away, and AchievementEngine
-            // finishes the achievement-evaluation network round-trip).
-            NotificationHandler.postAchievementEarned(userInfo, def.key, def.name)
+            // No celebration popup / notification: a freshly-restored or backdated
+            // account crosses many thresholds at once, which spammed a stack of
+            // "🏆 …" overlays. Achievements are still recorded silently and show in
+            // the Profile grid. (Re-introduce a tasteful single celebration later.)
         }
         Clear30Store.save(achievementData)
 

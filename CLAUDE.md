@@ -26,6 +26,27 @@ Guidance for Claude Code when working with this Clear30 Android app.
       DO NOT grep the `Backend/supabase/migrations` folder.
 - [ ] Non-public schemas (`community`, `achievements`) need the supabase-kt
       Postgrest schema configured — see `// TODO(port)` markers in `data/supabase/`.
+- [ ] **During dev, run against the LOCAL Supabase** (the `supabase` CLI stack)
+      **unless otherwise specified.** The env is a build flag: `SUPABASE_LOCAL` in
+      `android/local.properties` (default `true` = local). The app logs which env
+      it's on at launch (`SupabaseController` → "Supabase → LOCAL/PROD @ <url>").
+- [ ] **When debugging a backend issue, query the LOCAL DB to see what's actually
+      happening** before guessing — inspect rows, RLS, function output. Don't
+      assume; look.
+
+#### Local vs prod Supabase
+- **Switch:** `SUPABASE_LOCAL=true|false` in `android/local.properties`, then
+  Gradle sync. (Optional overrides: `SUPABASE_LOCAL_URL`, `SUPABASE_LOCAL_ANON_KEY`,
+  and `SUPABASE_ANON_KEY` for prod.)
+- **Local URL:** the CLI serves `http://127.0.0.1:54321`, but from the Android
+  **emulator** that host is `http://10.0.2.2:54321` (the default). On a **physical
+  device**, set `SUPABASE_LOCAL_URL` to your machine's LAN IP. Cleartext HTTP to
+  these hosts is allowed via `res/xml/network_security_config.xml`.
+- **Query / inspect the local DB:**
+  - `supabase status` — URLs + keys.
+  - SQL: `psql postgresql://postgres:postgres@127.0.0.1:54322/postgres` (or
+    `supabase db ... ` / the MCP `execute_sql` against local).
+  - Studio UI: `http://127.0.0.1:54323`. Mail (OTP/magic links): `http://127.0.0.1:54324`.
 
 ### General
 - [ ] **Search/explore first** — never guess file paths or assume code exists.

@@ -46,6 +46,8 @@ value class LogEventType(val rawValue: String) {
         val completedAssessmentSlide = LogEventType("completed_assessment_slide")
         val completedAssessment = LogEventType("completed_assessment")
         val openedFeedback = LogEventType("opened_feedback")
+        val submittedFeedback = LogEventType("submitted_feedback")
+        val startedSubmitFeedback = LogEventType("started_submit_feedback")
         val startedWithTracking = LogEventType("started_with_tracking")
         val walkthrough = LogEventType("walkthrough")
         val openedPaywall = LogEventType("opened_paywall")
@@ -103,6 +105,8 @@ value class LogEventType(val rawValue: String) {
         val receivedClaireResponse = LogEventType("received_claire_response")
         val sentDrFredMessage = LogEventType("sent_dr_fred_message")
         val receivedDrFredResponse = LogEventType("received_dr_fred_response")
+        val openedPeerSupport = LogEventType("opened_peer_support")
+        val talkedToPeerSupport = LogEventType("talked_to_peer_support")
 
         // Achievements
         val earnedAchievement = LogEventType("earned_achievement")
@@ -119,6 +123,8 @@ value class LogEventType(val rawValue: String) {
 
         // Library
         val openedMeditations = LogEventType("opened_meditations")
+        val openedCravingResources = LogEventType("opened_craving_resources")
+        val openedSleepResources = LogEventType("opened_sleep_resources")
         val completedMeditation = LogEventType("completed_meditation")
         val openedYouTube = LogEventType("opened_youtube")
         val openedReddit = LogEventType("opened_reddit")
@@ -126,6 +132,7 @@ value class LogEventType(val rawValue: String) {
 
         // Profile / settings
         val openedSettings = LogEventType("opened_settings")
+        val clickedReviewButton = LogEventType("clicked_review_button")
         val signedOut = LogEventType("signed_out")
         val deletedAccount = LogEventType("deleted_account")
         val openedHealth = LogEventType("opened_health")
@@ -228,8 +235,8 @@ object Logger {
                 SupabaseController.client.postgrest.from("events").insert(supabaseEvent)
             }.onFailure { println("Failed to log event to Supabase: ${it.message}") }
 
-            // TODO(port): forward to AttributionHandler (Facebook/AppStack mapping)
-            //   incl. the openedApp first_launch + signedUp returning->LOGIN special cases.
+            // Forward to the attribution sink (Firebase Analytics on Android).
+            AttributionHandler.trackEvent(event.rawValue, extra ?: emptyMap())
         }
     }
 

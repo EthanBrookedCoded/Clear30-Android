@@ -126,14 +126,17 @@ secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
 max_frequency = "10s"
 
-# Use a production-ready SMTP server
-[auth.email.smtp]
-host = "smtp.gmail.com"
-port = 587
-user = "support@clear30.org"
-pass = "env(SMTP_PASSWORD)"
-admin_email = "support@clear30.org"
-sender_name = "Clear30"
+# Use a production-ready SMTP server.
+# LOCAL DEV: commented out so OTP / confirmation emails go to the built-in Mailpit
+# inbox (http://127.0.0.1:54324) instead of erroring on the unset Gmail password.
+# RE-ENABLE this block for production email — do NOT push it commented out.
+# [auth.email.smtp]
+# host = "smtp.gmail.com"
+# port = 587
+# user = "support@clear30.org"
+# pass = "env(SMTP_PASSWORD)"
+# admin_email = "support@clear30.org"
+# sender_name = "Clear30"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]
@@ -151,8 +154,10 @@ template = "Your Clear30 code is {{ .Code }}"
 max_frequency = "5s"
 
 # Use pre-defined map of phone number to OTP for testing.
-# [auth.sms.test_otp]
-# 4152127777 = "123456"
+# LOCAL DEV: fixed code for a test number so phone OTP works without Twilio creds.
+# In the app enter phone "5555550100" (region +1) and verify with code 123456.
+[auth.sms.test_otp]
+"15555550100" = "123456"
 
 # Configure logged in session timeouts.
 # [auth.sessions]

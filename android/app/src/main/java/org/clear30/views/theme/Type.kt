@@ -1,20 +1,29 @@
+@file:OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
+
 package org.clear30.views.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import org.clear30.R
 
-/** Lexend / Lexend Mono — the app's only bundled fonts (App/Clear30/Fonts). */
+/**
+ * Lexend / Lexend Mono — the app's only bundled fonts (App/Clear30/Fonts).
+ *
+ * `lexend.ttf` is a VARIABLE font (same file iOS ships), so each weight must
+ * drive the `wght` axis explicitly via [FontVariation] — otherwise every weight
+ * renders at the font's default instance (≈400) and headings look un-bold.
+ */
 val Lexend = FontFamily(
-    Font(R.font.lexend, FontWeight.Light),
-    Font(R.font.lexend, FontWeight.Normal),
-    Font(R.font.lexend, FontWeight.Medium),
-    Font(R.font.lexend, FontWeight.SemiBold),
-    Font(R.font.lexend, FontWeight.Bold),
+    Font(R.font.lexend, FontWeight.Light, variationSettings = FontVariation.Settings(FontVariation.weight(300))),
+    Font(R.font.lexend, FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
+    Font(R.font.lexend, FontWeight.Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
+    Font(R.font.lexend, FontWeight.SemiBold, variationSettings = FontVariation.Settings(FontVariation.weight(600))),
+    Font(R.font.lexend, FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
 )
 
 val LexendMono = FontFamily(Font(R.font.lexend_mono))

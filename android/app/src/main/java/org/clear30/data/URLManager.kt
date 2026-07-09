@@ -24,7 +24,8 @@ sealed interface DeepLinkRoute {
     data class Post(val id: String) : DeepLinkRoute
     data class Group(val code: String) : DeepLinkRoute
     data class Meditation(val url: String) : DeepLinkRoute
-    data object Claire : DeepLinkRoute
+    /** Optional [prompt] pre-fills Claire's composer (Claire prompt cards). */
+    data class Claire(val prompt: String = "") : DeepLinkRoute
     data object DrFred : DeepLinkRoute
     data object Settings : DeepLinkRoute
 
@@ -74,7 +75,7 @@ object URLManager {
             }
             "chat" -> when (tail.firstOrNull()?.lowercase()) {
                 "fred", "drfred", "dr_fred", "dr-fred" -> DeepLinkRoute.DrFred
-                else -> DeepLinkRoute.Claire
+                else -> DeepLinkRoute.Claire()
             }
 
             else -> DeepLinkRoute.Unrecognized(raw)

@@ -20,6 +20,30 @@ object Anim {
         stiffness = responseToStiffness(0.3f),
     )
 
+    /** DefaultButtonStyle press = .spring(response: 0.15, dampingFraction: 0.5) —
+     *  the snappy shrink-and-pop every button uses. */
+    fun <T> pressSpring() = spring<T>(
+        dampingRatio = 0.5f,
+        stiffness = responseToStiffness(0.15f),
+    )
+
+    /** GlobalData.defaultTransition = .scale + .spring(response: 0.175, dampingFraction: 1) —
+     *  card/pop-in appear/disappear. */
+    fun <T> transitionSpring() = spring<T>(
+        dampingRatio = 1f,
+        stiffness = responseToStiffness(0.175f),
+    )
+
+    /** GlobalData.rewardSpringAnimation = .spring(response: 0.45, dampingFraction: 0.75) —
+     *  the heavier celebratory bounce (check-in rewards, counters). */
+    fun <T> rewardSpring() = spring<T>(
+        dampingRatio = 0.75f,
+        stiffness = responseToStiffness(0.45f),
+    )
+
+    /** defaultAnimation.speed(2) — e.g. the tab-bar select (≈117ms). */
+    fun <T> fast() = tween<T>(durationMillis = 117)
+
     /** GlobalData.wait = 0.1s */
     const val waitMillis = 100L
 

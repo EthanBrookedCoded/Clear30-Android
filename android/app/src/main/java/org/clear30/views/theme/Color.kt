@@ -41,7 +41,9 @@ object Clear30Colors {
 
     // --- Hard-coded gradient endpoints from GlobalData ---
     val symptom1 = Color(0xFFFF8C59); val symptom2 = Color(0xFFFFA372)
+    val slipped1 = Color(0xFFF97A3D); val slipped2 = Color(0xFFFFAE5C)
     val journal1 = Color(0xFFF0D042); val journal2 = Color(0xFFEFCC34)
+    // Community / Groups accent — iOS communityGradient (#A32EB8→#B93FCF).
     val community1 = Color(0xFFA32EB8); val community2 = Color(0xFFB93FCF)
     val instagram1 = Color(0xFFDD2A7B); val instagram2 = Color(0xFF8134AF)
     val brightGreen1 = Color(0xFF26CD6A); val brightGreen2 = Color(0xFF00BCA5)

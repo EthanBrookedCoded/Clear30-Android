@@ -161,6 +161,8 @@ fun GroupLeaderboard(
     group: Clear30Group,
     userInfo: UserInfo,
     onMemberTap: (Clear30GroupMember) -> Unit,
+    onNote: ((Clear30GroupMember) -> Unit)? = null,
+    onPing: ((Clear30GroupMember) -> Unit)? = null,
 ) {
     if (group.members.isEmpty()) return
     val sorted = group.members.sortedByDescending { it.daysCheckedIn }
@@ -179,11 +181,11 @@ fun GroupLeaderboard(
                 PodiumColumn(rank = 3, member = top3[2], userInfo = userInfo, height = 90.dp, onMemberTap = onMemberTap, modifier = Modifier.weight(1f))
             }
         } else {
-            top3.forEachIndexed { i, m -> RankRow(rank = i + 1, member = m, userInfo = userInfo, onTap = { onMemberTap(m) }) }
+            top3.forEachIndexed { i, m -> RankRow(rank = i + 1, member = m, userInfo = userInfo, onTap = { onMemberTap(m) }, onNote = onNote?.let { f -> { f(m) } }, onPing = onPing?.let { f -> { f(m) } }) }
         }
 
         // Remaining members as standard rows starting at rank 4.
-        rest.forEachIndexed { i, m -> RankRow(rank = i + 4, member = m, userInfo = userInfo, onTap = { onMemberTap(m) }) }
+        rest.forEachIndexed { i, m -> RankRow(rank = i + 4, member = m, userInfo = userInfo, onTap = { onMemberTap(m) }, onNote = onNote?.let { f -> { f(m) } }, onPing = onPing?.let { f -> { f(m) } }) }
     }
 }
 
@@ -232,7 +234,14 @@ private fun PodiumColumn(
 }
 
 @Composable
-private fun RankRow(rank: Int, member: Clear30GroupMember, userInfo: UserInfo, onTap: () -> Unit) {
+private fun RankRow(
+    rank: Int,
+    member: Clear30GroupMember,
+    userInfo: UserInfo,
+    onTap: () -> Unit,
+    onNote: (() -> Unit)? = null,
+    onPing: (() -> Unit)? = null,
+) {
     val isYou = member.memberID == userInfo.userID
     Clear30Card(
         modifier = Modifier.fillMaxWidth().clickable { onTap() },
@@ -247,6 +256,16 @@ private fun RankRow(rank: Int, member: Clear30GroupMember, userInfo: UserInfo, o
                 "${member.daysCheckedIn} days",
                 color = if (isYou) Color.White.copy(alpha = 0.75f) else Clear30Colors.text.copy(alpha = 0.5f),
             )
+            // Inline note / ping actions for other members — iOS GroupMemberCard
+            // routes these through its badges (GroupMembers.swift:197-210).
+            if (!isYou) {
+                onNote?.let {
+                    IconButton("message.fill", height = 15.dp, padding = Dimens.cardSpacing / 3, tint = Clear30Colors.text.copy(alpha = 0.5f), onClick = it)
+                }
+                onPing?.let {
+                    IconButton("bell.fill", height = 15.dp, padding = Dimens.cardSpacing / 3, tint = Clear30Colors.text.copy(alpha = 0.5f), onClick = it)
+                }
+            }
         }
     }
 }

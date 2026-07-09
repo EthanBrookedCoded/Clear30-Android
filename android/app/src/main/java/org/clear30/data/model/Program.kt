@@ -6,6 +6,7 @@ import org.clear30.util.adding
 import org.clear30.util.daysTo
 import org.clear30.util.justDay
 import org.clear30.util.now
+import kotlin.math.ceil
 
 /**
  * Program — ported from Program.swift (`@Model`) and its extensions in
@@ -116,9 +117,82 @@ class Program(
     val coreProgramName: String get() = "Life ${if (coreModeration) "(Moderation)" else "(Abstinence)"}"
     fun getCoreProgramString(moderation: Boolean): String = if (moderation) "🍃 Moderation" else "😁 Weed free"
 
-    // TODO(port, content segment): core-program props (hasCoreMessages, willBeInCoreProgram,
-    //   inCoreProgram, minCoreProgramUnlockOn, coreProgramDay, postAssessmentCardText) — need
-    //   getCoreContentInfo() from ProgramContent.swift.
+    /** Total days checked in as sober (iOS `numDaysSober`) — the Profile counter. */
+    val numDaysSober: Int get() = dayInfo.values.count { it.sober == true }
+
+    /** Days checked in as smoked (iOS `numDaysSmoked`). */
+    val numDaysSmoked: Int get() = dayInfo.values.count { it.sober == false }
+
+    /**
+     * Recompute each health milestone's setback (iOS `updateProgramHealthSetbackDays`).
+     * The health timeline renders `currentDay - setbackDays`, so each logged slip pushes
+     * the whole timeline back by a day. Android's ProgramHealthProgress has no per-entry
+     * start date, so every entry shares the program-wide smoked-day count.
+     */
+    fun updateHealthSetbackDays() {
+        val smoked = numDaysSmoked
+        healthProgress.forEach { it.setbackDays = smoked }
+    }
+
+    /** Auto-calculated $ saved over a break (iOS `getAutoCalculatedMoneySavedOverBreak`):
+     *  cost-per-session × sober days in the break window. */
+    fun getAutoCalculatedMoneySavedOverBreak(programBreak: ProgramBreak): Int? {
+        val initialSpend = programBreak.getInitialWeeklySpend() ?: return null
+        val initialWeeklyUse = programBreak.getInitialWeeklyUsage() ?: return null
+        val expectedSmokingDays = ceil(initialWeeklyUse).toInt()
+        if (expectedSmokingDays <= 0) return null
+        val costPerSession = initialSpend.toFloat() / expectedSmokingDays.toFloat()
+        val startPlain = PlainDate.from(programBreak.startDate)
+        val todayPlain = PlainDate.from(now())
+        if (startPlain > todayPlain) return null
+        val soberDays = dayInfo.entries.count { (d, info) -> d in startPlain..todayPlain && info.sober == true }
+        return (soberDays.toFloat() * costPerSession).toInt()
+    }
+
+    /** $ saved incl. the user's manual adjustment (iOS `getTotalMoneySavedOverBreak`). */
+    fun getTotalMoneySavedOverBreak(programBreak: ProgramBreak): Int? {
+        val auto = getAutoCalculatedMoneySavedOverBreak(programBreak) ?: return null
+        return auto + programBreak.moneySavedAdjustment
+    }
+
+    // MARK: - Core (Life) program (ProgramContent.swift)
+    /**
+     * The "Life" timeline — every `contentInfo` entry whose date falls OUTSIDE
+     * every break's `[startDate, endDate)` window (iOS `getCoreContentInfo`).
+     * `endDate` is the first day *out* of the break, so the window is half-open.
+     */
+    fun getCoreContentInfo(): Map<PlainDate, ContentInfo> {
+        val spans = breaks.map { PlainDate.from(it.startDate) to PlainDate.from(it.endDate) }
+        return contentInfo.filterKeys { date -> spans.none { (start, end) -> start <= date && date < end } }
+    }
+
+    /** Any Life content exists at all. */
+    val hasCoreMessages: Boolean get() = getCoreContentInfo().values.any { it.messages.isNotEmpty() }
+
+    /** Life content is (or will be) scheduled ahead of today. */
+    val willBeInCoreProgram: Boolean
+        get() = hasCoreMessages && getCoreContentInfo().future.values.any { it.messages.isNotEmpty() }
+
+    /** Currently living in the Life program (upcoming Life content + no active break). */
+    val inCoreProgram: Boolean get() = willBeInCoreProgram && currentBreak == null
+
+    /** Earliest Life-content unlock date (iOS `minCoreProgramUnlockOn`). */
+    val minCoreProgramUnlockOn: Instant?
+        get() = getCoreContentInfo().filterValues { it.messages.isNotEmpty() }.keys.minOrNull()?.dateObject
+
+    /** Days since the first Life message (iOS `coreProgramDay`). */
+    val coreProgramDay: Int get() = minCoreProgramUnlockOn?.daysTo(now()) ?: currentDay
+
+    /** Prompt shown once a break's 30 days are up (resume/summary card copy). */
+    val postAssessmentCardText: String?
+        get() {
+            val mostRecent = lastBreak ?: return null
+            if (!mostRecent.postAssessmentCompleted && mostRecent.currentBreakDay >= mostRecent.type.raw) {
+                if (!willBeInCoreProgram) return "${if (hasCoreMessages) "Resume" else "Start"} the Life program 💬"
+                if (mostRecent.currentBreakDay <= mostRecent.type.raw + 3) return "${mostRecent.name} breakdown 📦"
+            }
+            return null
+        }
 
     companion object {
         const val STORE_KEY = "program"
@@ -127,3 +201,12 @@ class Program(
         val defaultCheckIn: CustomCheckIn get() = CheckInDefaults.weed
     }
 }
+
+// MARK: - Timeline map slices (iOS `[PlainDate: ContentInfo]` extensions)
+/** Entries up to and including today (Swift `.current`). */
+val Map<PlainDate, ContentInfo>.current: Map<PlainDate, ContentInfo>
+    get() = PlainDate.from(now()).let { today -> filterKeys { it <= today } }
+
+/** Entries strictly after today (Swift `.future`). */
+val Map<PlainDate, ContentInfo>.future: Map<PlainDate, ContentInfo>
+    get() = PlainDate.from(now()).let { today -> filterKeys { it > today } }

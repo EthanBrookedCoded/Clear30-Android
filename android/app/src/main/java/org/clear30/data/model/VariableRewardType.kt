@@ -39,4 +39,27 @@ enum class VariableRewardType {
 
     val isExclusiveForSmoked: Boolean
         get() = this in setOf(growthProgress, motivationalQuote)
+
+    /** General rewards that get a weight boost on a smoked check-in (iOS `hasSmokedBoost`). */
+    val hasSmokedBoost: Boolean
+        get() = this in setOf(weeklyDaysCheckedIn, weeklyDaysSober, reminderOfWhy, personalBest)
+
+    /** General rewards that get a weight boost on a sober check-in (iOS `hasDidntSmokeBoost`). */
+    val hasDidntSmokeBoost: Boolean
+        get() = this in setOf(weeklyDaysCheckedIn, weeklyDaysSober, reminderOfWhy, personalBest)
+
+    /**
+     * Selection weight (iOS `baseWeight`): exclusive rewards (100) outrank boosted
+     * general rewards (60), which outrank standard general rewards (40).
+     */
+    val baseWeight: Double
+        get() = when {
+            isExclusiveForDidntSmoke || isExclusiveForSmoked -> 100.0
+            hasSmokedBoost || hasDidntSmokeBoost -> 60.0
+            else -> 40.0
+        }
+
+    /** Whether this reward type is echoed into the calendar day-info (iOS `shouldShowInCalendarDayInfo`). */
+    val shouldShowInCalendarDayInfo: Boolean
+        get() = this != calendarFillAnimation
 }

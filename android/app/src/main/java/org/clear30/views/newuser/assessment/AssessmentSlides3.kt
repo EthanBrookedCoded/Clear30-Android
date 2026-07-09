@@ -1,5 +1,6 @@
 package org.clear30.views.newuser.assessment
 
+import org.clear30.data.model.AffirmationCard
 import org.clear30.data.model.AssessmentInfoData
 import org.clear30.data.model.AssessmentInfoDataID
 import org.clear30.data.model.AssessmentQuestionID
@@ -64,13 +65,13 @@ object AssessmentSlides3 {
                         if (isTBreak) {
                             slidesToAdd.add(thenWhatQuestion())
                         } else {
-                            slidesToAdd.add(goalsAffirmationSlide())
+                            slidesToAdd.add(goalsAffirmationSlide(viewModel))
                             addUseQuestions(slidesToAdd, viewModel)
                         }
                     }
 
                     AssessmentQuestionID.THEN_WHAT.raw -> {
-                        slidesToAdd.add(goalsAffirmationSlide())
+                        slidesToAdd.add(goalsAffirmationSlide(viewModel))
                         addUseQuestions(slidesToAdd, viewModel)
                     }
 
@@ -151,7 +152,15 @@ object AssessmentSlides3 {
             }
         }
 
-        viewModel.slidesWithCompletions.addAll(named)
+        // Before appending, drop anything already queued past the current slide
+        // (iOS `removePendingSlides`). Without this, navigating back and forward
+        // re-runs this builder and DUPLICATES the follow-up slides.
+        if (named.isNotEmpty()) {
+            while (viewModel.slidesWithCompletions.size > currentIndex + 1) {
+                viewModel.slidesWithCompletions.removeAt(viewModel.slidesWithCompletions.lastIndex)
+            }
+            viewModel.slidesWithCompletions.addAll(named)
+        }
     }
 
     private const val CLIENT_NAME = "_CLIENTNAME_"
@@ -224,15 +233,36 @@ object AssessmentSlides3 {
         ),
     )
 
-    private fun goalsAffirmationSlide() = info(
-        AssessmentInfoData(
-            id = AssessmentInfoDataID.goalsAffirmation,
-            title = "You're in the right place!",
-            subtitle = "",
-            body = "**Thousands** have started with the same goals, and **Clear30 got them there**.",
-            primaryButtonText = "Understanding Use",
-        ),
-    )
+    private fun goalsAffirmationSlide(vm: AssessmentViewModel): AssessmentSlideWithCompletion {
+        // One card per chosen break reason (iOS goalsAffirmationSlide): emoji +
+        // goal title + an encouraging line (the % stat when it's ≥80%, else the
+        // generic extra-info copy). The bottom card echoes the long-term goal.
+        val reasons = vm.responses[AssessmentQuestionID.BREAK_REASON.raw]?.let { r ->
+            r.responses.mapNotNull { idx -> r.question.options.getOrNull(idx)?.let { BreakReasonType.from(it) } }
+        } ?: emptyList()
+        val cards = reasons.map { type ->
+            val pct = type.percentage?.percentage ?: 0.0
+            val subtitle = if (pct >= 80) type.percentage?.text ?: type.extraInfo else type.extraInfo
+            AffirmationCard(
+                emoji = type.displayText.substringBefore(' '),
+                title = type.displayText.substringAfter(' ').trim(),
+                subtitle = subtitle,
+            )
+        }
+        val longTermGoal = vm.responses[AssessmentQuestionID.THEN_WHAT.raw]?.getSingleOption().orEmpty()
+        return info(
+            AssessmentInfoData(
+                id = AssessmentInfoDataID.goalsAffirmation,
+                title = "You're in the right place!",
+                subtitle = "",
+                body = "**Thousands** have started with the same goals, and **Clear30 got them there**.",
+                primaryButtonText = "Understanding Use",
+                affirmationCards = cards,
+                affirmationBottomLabel = "Where You're Headed",
+                affirmationBottomText = longTermGoal.ifEmpty { null },
+            ),
+        )
+    }
 
     private fun daysUsingQuestion() = question(AssessmentQuestions.daysUsing.copy(prompt1 = "Now, let's understand your use a bit more."))
     private fun consumptionMethodQuestion() = question(AssessmentQuestions.consumptionMethod.copy(prompt1 = "On the days you use,"))
@@ -267,12 +297,15 @@ object AssessmentSlides3 {
                 ?: NormativeData.defaultData.lastOrNull())?.percentile_more_than
         }
         return info(
+            // iOS renders the pain-point chart on a WHITE background (the red
+            // card supplies the color), not the green gradient.
             AssessmentInfoData(
                 id = AssessmentInfoDataID.currentUseSummary,
-                title = "Your current use",
+                title = "",
                 subtitle = "",
-                body = "Here's where your use stands compared to others.",
+                body = "",
                 painPointPercentile = percentile,
+                overrideBackgroundGradient = false,
             ),
         )
     }
@@ -298,14 +331,17 @@ object AssessmentSlides3 {
             spendResp.question.options.getOrNull(idx)?.filter(Char::isDigit)?.toIntOrNull()?.let { it * 4 }
         }
         return info(
+            // iOS renders the "30 Days From Now" projection on a WHITE
+            // background; the gradient cards inside supply the color.
             AssessmentInfoData(
                 id = AssessmentInfoDataID.clear30Recommendation,
-                title = "Your Clear30",
-                subtitle = "30-day break",
-                body = "Here's the future we'll build together.",
+                title = "",
+                subtitle = "",
+                body = "",
                 primaryButtonText = "Continue",
                 dreamOutcomeNouns = nouns,
                 dreamOutcomeSavings = monthly,
+                overrideBackgroundGradient = false,
             ),
         )
     }
@@ -343,10 +379,11 @@ object AssessmentSlides3 {
     private fun fairTrialSlide() = info(
         AssessmentInfoData(
             id = null,
-            title = "Fair Trial Policy",
+            title = "Clear30 is Free for You to Try",
             subtitle = "",
-            body = "Try Clear30 risk-free — for less than the cost of two pre-rolls, give your future self a real shot.",
-            primaryButtonText = "Next",
+            body = "After your trial, we depend on your support to keep delivering the best evidence-backed tools so you can stay committed to change.",
+            primaryButtonText = "That's fair",
+            imageName = "fair_trial_comparison",
         ),
     )
 }

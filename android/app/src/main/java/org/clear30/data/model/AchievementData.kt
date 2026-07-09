@@ -31,17 +31,22 @@ data class AchievementDefinition(
     val key: String,
     val name: String,
     val description: String,
-    val category: AchievementCategory,
-    val subcategory: AchievementSubcategory,
-    @SerialName("sf_symbol") val sfSymbol: String,
+    // Enums carry defaults so an unrecognized server value coerces to the default
+    // (coerceInputValues) instead of throwing and emptying the WHOLE list.
+    val category: AchievementCategory = AchievementCategory.WITHOUT_WEED,
+    val subcategory: AchievementSubcategory = AchievementSubcategory.TIME,
+    // The backend column is `icon_url` (it stores the SF-symbol name). Mapping it to
+    // `sf_symbol` left this required field missing on every row, so `decodeList`
+    // threw and the achievements grid came up blank.
+    @SerialName("icon_url") val sfSymbol: String = "star.fill",
     @SerialName("rarity_id") val rarityId: Int,
-    @SerialName("check_type") val checkType: AchievementCheckType,
+    @SerialName("check_type") val checkType: AchievementCheckType = AchievementCheckType.MILESTONE,
     @SerialName("check_params") val checkParams: Map<String, JsonElement> = emptyMap(),
-    @SerialName("is_active") val isActive: Boolean,
+    @SerialName("is_active") val isActive: Boolean = true,
     @SerialName("show_stats") var showStats: Boolean? = null,
-    @SerialName("display_order") val displayOrder: Int,
-    @SerialName("created_at") val createdAt: String,
-    @SerialName("updated_at") val updatedAt: String,
+    @SerialName("display_order") val displayOrder: Int = 0,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
     @SerialName("notification_title") var notificationTitle: String? = null,
     @SerialName("notification_body") var notificationBody: String? = null,
     @SerialName("notification_delay_minutes") var notificationDelayMinutes: Int? = null,
@@ -58,9 +63,23 @@ data class AchievementRarity(
     val name: String,
     @SerialName("gradient_start") val gradientStart: String,
     @SerialName("gradient_end") val gradientEnd: String,
-    @SerialName("display_order") val displayOrder: Int,
-    @SerialName("sf_symbol") val sfSymbol: String,
-)
+    @SerialName("display_order") val displayOrder: Int = 0,
+    // The `rarities` table has no symbol column; the glyph is derived from the
+    // rarity (see AchievementRarity.glyph). Optional so the row still decodes.
+    @SerialName("sf_symbol") val sfSymbol: String = "",
+) {
+    /** Circle (common) → diamond (rare) → hexagon (epic) → seal (legendary). */
+    val glyph: String
+        get() = sfSymbol.ifBlank {
+            val n = name.lowercase()
+            when {
+                "legend" in n || "mythic" in n -> "seal"
+                "epic" in n -> "hexagon"
+                "rare" in n -> "diamond"
+                else -> "circle"
+            }
+        }
+}
 
 @Serializable
 data class UserAchievement(

@@ -1,13 +1,32 @@
 package org.clear30.data
 
+import android.app.Activity
 import android.content.Context
+import com.revenuecat.purchases.CustomerInfo
+import com.revenuecat.purchases.Offering
+import com.revenuecat.purchases.Package
+import com.revenuecat.purchases.PeriodType
+import com.revenuecat.purchases.PurchaseParams
 import com.revenuecat.purchases.Purchases
 import com.revenuecat.purchases.PurchasesConfiguration
+import com.revenuecat.purchases.PurchasesErrorCode
+import com.revenuecat.purchases.PurchasesException
+import com.revenuecat.purchases.awaitCustomerInfo
+import com.revenuecat.purchases.awaitGetProducts
+import com.revenuecat.purchases.awaitOfferings
+import com.revenuecat.purchases.awaitPurchase
+import com.revenuecat.purchases.awaitRestore
+import com.revenuecat.purchases.awaitSyncPurchases
+import com.revenuecat.purchases.logInWith
+import com.revenuecat.purchases.logOutWith
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.clear30.BuildConfig
+import org.clear30.data.model.EntitlementType
+import org.clear30.data.model.SignUpType
 import org.clear30.data.model.UserInfo
+import org.clear30.util.justDay
 
 /**
  * PaywallController — ported from PaywallController.swift.
@@ -40,22 +59,50 @@ object PaywallController {
         )
     }
 
+    /**
+     * Identify the user with RevenueCat and push subscriber attributes used by
+     * targeting / paywalls (Swift `signIn` → logIn + attribute setters; the iOS
+     * per-field setters fold into the Android `setAttributes(map)`).
+     */
     fun signIn(userInfo: UserInfo, userProperties: Map<String, Any> = emptyMap()) {
-        // TODO(port): the RevenueCat Android SDK's logIn / attribute API surface
-        // differs from the iOS SDK I ported against — concrete calls vary by
-        // SDK version (Purchases.sharedInstance.logInWith(...) vs
-        // logIn(appUserID, LogInCallback), and attribute setters were folded
-        // into setAttributes(map)). Wire these against the version Studio
-        // resolves once the paywall views land — see TODO.md section 1.
-        // For now, no-op so the rest of the app compiles + runs.
-        @Suppress("UNUSED_VARIABLE") val u = userInfo
-        @Suppress("UNUSED_VARIABLE") val p = userProperties
+        if (BuildConfig.REVENUECAT_API_KEY.isBlank()) return
+        val purchases = Purchases.sharedInstance
+        val signUpID = userInfo.signUpID
+        val signUpType = userInfo.signUpType
+        purchases.logInWith(
+            userInfo.userID,
+            onError = { },
+            onSuccess = { _, _ ->
+                runCatching {
+                    purchases.setDisplayName(userInfo.name)
+                    when (signUpType) {
+                        SignUpType.PHONE -> purchases.setPhoneNumber(signUpID)
+                        // Apple sign-in can hand back a nil/placeholder email for
+                        // returning users — only forward real-looking addresses.
+                        SignUpType.EMAIL, SignUpType.APPLE ->
+                            if (signUpID.contains("@")) purchases.setEmail(signUpID)
+                    }
+                    // Android has no setAmplitudeUserID — the reserved attribute
+                    // key feeds the same RevenueCat → Amplitude integration.
+                    purchases.setAttributes(mapOf("\$amplitudeUserId" to userInfo.loggingID))
+                    AttributionHandler.getAppStackID()?.let {
+                        purchases.setAttributes(mapOf("appStackID" to it))
+                    }
+                }
+            },
+        )
+        val attrs = mutableMapOf<String, String?>("Name" to userInfo.name)
+        getUserParams(userInfo).forEach { (k, v) -> attrs[k] = v.toString() }
+        userProperties.forEach { (k, v) -> attrs[k] = v.toString() }
+        runCatching { purchases.setAttributes(attrs) }
     }
 
     fun signOut(context: Context? = null) {
-        // TODO(port): Purchases.sharedInstance.logOut takes a ReceiveCustomerInfoCallback
-        // in the Android SDK (Java SAM not auto-derivable from a no-arg call). Wire
-        // it once the paywall is reconciled — for now skip so sign-out doesn't crash.
+        // logOut resets RevenueCat to an anonymous user (Swift `signOut`). The
+        // Android SDK's callback overload is wrapped by the logOutWith extension.
+        if (BuildConfig.REVENUECAT_API_KEY.isNotBlank()) {
+            runCatching { Purchases.sharedInstance.logOutWith(onError = { }, onSuccess = { }) }
+        }
         // Strip Stripe-managed-sub shortcut (iOS removed this on sign-out so
         // the next account doesn't inherit the old user's billing entry).
         context?.let { ShortcutHandler.removeQuickAction(it, ShortcutHandler.ID_MANAGE_SUB_STRIPE) }
@@ -68,6 +115,141 @@ object PaywallController {
 
     /** No-op on Android — Google Play / RevenueCat surface billing messages. */
     suspend fun listenForStoreKitMessages() { /* iOS StoreKit Message.messages only */ }
+
+    // MARK: - Offerings / purchase / restore / entitlement (RevenueCat 8.x coroutines)
+
+    /**
+     * The current RevenueCat offering (`Default`, packages `$rc_annual` /
+     * `$rc_monthly`). Null when RevenueCat isn't configured (no API key) or the
+     * fetch fails — the paywall then shows its dev pass-through.
+     */
+    suspend fun currentOffering(): Offering? {
+        if (BuildConfig.REVENUECAT_API_KEY.isBlank()) return null
+        return runCatching { Purchases.sharedInstance.awaitOfferings().current }
+            .onFailure { android.util.Log.w("Paywall", "offerings failed: ${it.message}") }
+            .getOrNull()
+    }
+
+    /**
+     * Launch the Google Play purchase flow for [pkg]. Returns the resolved
+     * [EntitlementType] on success, or null on cancel/failure. Requires the current
+     * [Activity] (Play Billing launches its sheet from an Activity).
+     */
+    suspend fun purchase(activity: Activity, pkg: Package): EntitlementType? {
+        if (BuildConfig.REVENUECAT_API_KEY.isBlank()) return null
+        return runCatching {
+            val result = Purchases.sharedInstance.awaitPurchase(PurchaseParams.Builder(activity, pkg).build())
+            _event.value = PaywallEvent.USER_SUBSCRIBED
+            entitlementFrom(result.customerInfo) ?: EntitlementType.DEFAULT
+        }.getOrElse { e ->
+            if (e is PurchasesException && e.error.code == PurchasesErrorCode.PurchaseCancelledError) {
+                _event.value = PaywallEvent.USER_CANCELED
+            } else {
+                android.util.Log.w("Paywall", "purchase failed: ${e.message}")
+            }
+            null
+        }
+    }
+
+    /** Restore prior purchases (Swift `restore`). Returns the active entitlement, if any. */
+    suspend fun restore(): EntitlementType? {
+        if (BuildConfig.REVENUECAT_API_KEY.isBlank()) return null
+        return runCatching {
+            val info = Purchases.sharedInstance.awaitRestore()
+            _event.value = PaywallEvent.USER_RESTORED
+            entitlementFrom(info)
+        }.onFailure { android.util.Log.w("Paywall", "restore failed: ${it.message}") }.getOrNull()
+    }
+
+    /**
+     * The user's currently-active paid entitlement, or null (Swift
+     * `getCurrentEntitlement`). With a [userInfo], also honours the
+     * `bypassPaidUntil` bridge (Stripe purchases reach RevenueCat with a delay)
+     * and tracks trial → paid conversion for analytics.
+     */
+    suspend fun activeEntitlement(
+        userInfo: UserInfo? = null,
+        bypassEntitlement: EntitlementType? = null,
+    ): EntitlementType? {
+        if (BuildConfig.REVENUECAT_API_KEY.isBlank()) return null
+        if (userInfo?.bypassPaidUntil?.let { it > org.clear30.util.now() } == true) {
+            return bypassEntitlement ?: userInfo.currentEntitlementType ?: EntitlementType.DEFAULT
+        }
+        return try {
+            val info = Purchases.sharedInstance.awaitSyncPurchases()
+            if (userInfo != null) checkTrialStatus(userInfo, info)
+            entitlementFrom(info)
+                ?: entitlementFrom(Purchases.sharedInstance.awaitCustomerInfo())
+        } catch (e: Exception) {
+            android.util.Log.w("Paywall", "entitlement check failed: ${e.message}")
+            // iOS falls back to the stored entitlement (or default) on error.
+            userInfo?.currentEntitlementType ?: userInfo?.let { EntitlementType.DEFAULT }
+        }
+    }
+
+    /**
+     * iOS `checkEntitlementChanged` — refresh the entitlement from RevenueCat and
+     * report whether it changed. Free-code users always keep their access.
+     * Mutates [userInfo].currentEntitlementType (caller persists).
+     */
+    suspend fun checkEntitlementChanged(userInfo: UserInfo): Pair<Boolean, EntitlementType?> {
+        if (userInfo.freeCode != null) return false to null
+        if (BuildConfig.REVENUECAT_API_KEY.isBlank()) return false to null
+
+        // Expire a scheduled downgrade (setPaidFalseOn) before comparing.
+        val setPaidFalseOn = userInfo.setPaidFalseOn
+        if (userInfo.currentEntitlementType != null && setPaidFalseOn != null &&
+            setPaidFalseOn.justDay <= org.clear30.util.now().justDay
+        ) {
+            userInfo.currentEntitlementType = null
+            userInfo.setPaidFalseOn = null
+        }
+
+        val initial = userInfo.currentEntitlementType
+        val new = activeEntitlement(userInfo)
+        userInfo.currentEntitlementType = new
+        return if (initial == new) false to null else true to new
+    }
+
+    /** Map RevenueCat's active entitlements (`Plus` / `Core`) to our [EntitlementType]. */
+    private fun entitlementFrom(info: CustomerInfo): EntitlementType? {
+        val active = info.entitlements.active.keys
+        return when {
+            active.any { it.equals("Plus", true) } -> EntitlementType.PLUS
+            active.any { it.equals("Core", true) } -> EntitlementType.CORE
+            else -> null
+        }
+    }
+
+    // MARK: - Trial conversion detection (Swift checkTrialStatus / logTrialConversion)
+
+    private suspend fun checkTrialStatus(userInfo: UserInfo, info: CustomerInfo) {
+        val entitlement = info.entitlements.active.values.firstOrNull { it.isActive } ?: return
+        val onTrial = entitlement.periodType == PeriodType.TRIAL || entitlement.periodType == PeriodType.INTRO
+        if (onTrial && userInfo.wasOnTrial != true) userInfo.wasOnTrial = true
+        if (entitlement.periodType == PeriodType.NORMAL &&
+            userInfo.wasOnTrial == true && userInfo.trialConversionLogged != true
+        ) {
+            logTrialConversion(userInfo, entitlement.productIdentifier)
+        }
+    }
+
+    private suspend fun logTrialConversion(userInfo: UserInfo, productId: String) {
+        val product = runCatching {
+            Purchases.sharedInstance.awaitGetProducts(listOf(productId)).firstOrNull()
+        }.getOrNull() ?: return
+        val price = product.price.amountMicros / 1_000_000.0
+        Logger.logEvent(
+            userInfo.loggingID,
+            LogEventType.trialConverted,
+            mapOf(
+                LogEventExtraDataType.REVENUE to String.format(java.util.Locale.US, "%.2f", price),
+                LogEventExtraDataType.CURRENCY to product.price.currencyCode,
+                LogEventExtraDataType.TYPE to productId,
+            ),
+        )
+        userInfo.trialConversionLogged = true
+    }
 
     /**
      * Helium / paywall user traits (Swift `getUserParams`). Assessment-response

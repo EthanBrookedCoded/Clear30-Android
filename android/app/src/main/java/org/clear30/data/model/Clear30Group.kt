@@ -2,6 +2,7 @@ package org.clear30.data.model
 
 import androidx.compose.ui.graphics.Brush
 import kotlinx.datetime.Instant
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.clear30.views.theme.Clear30Gradients
 
@@ -30,9 +31,14 @@ data class Clear30Group(
 @Serializable
 data class Clear30GroupMember(
     val memberID: String,
-    val name: String,
-    val emoji: String,
-    val dayInfo: Map<String, ProgramDayInfo>? = null,
+    // Defaults so a member whose users row has no name/emoji can't throw and nuke
+    // the whole group decode (which would leave the user stuck on the create/join
+    // screen even though the group exists).
+    val name: String = "",
+    val emoji: String = "",
+    // The `groups.get()` payload keys this `_dayInfo` (see migration); without the
+    // @SerialName it deserialized to null and every member showed 0 days.
+    @SerialName("_dayInfo") val dayInfo: Map<String, ProgramDayInfo>? = null,
     val showInRank: Boolean? = null,
     val joinDate: Instant? = null,
 ) {
@@ -50,3 +56,42 @@ data class Clear30GroupNote(
     val message: String,
     val timestamp: Instant? = null,
 )
+
+/** A group chat message (`groups.group_messages`) — Swift `Clear30GroupChatMessage`. */
+@Serializable
+data class Clear30GroupChatMessage(
+    val id: String,
+    @SerialName("group_id") val groupId: String,
+    @SerialName("user_id") val userId: String,
+    val message: String,
+    val timestamp: String,
+    @SerialName("is_deleted") val isDeleted: Boolean = false,
+)
+
+/** Group activity kinds (`groups.group_activity.activity`) — Swift `Clear30GroupActivityItemType`. */
+@Serializable
+enum class Clear30GroupActivityItemType {
+    @SerialName("smoked") SMOKED,
+    @SerialName("sober") SOBER,
+    @SerialName("joined") JOINED,
+    @SerialName("message") MESSAGE,
+}
+
+/** A group activity-feed row (`groups.group_activity`) — Swift `Clear30GroupActivityItem`. */
+@Serializable
+data class Clear30GroupActivityItem(
+    val id: String,
+    @SerialName("group_id") val groupId: String = "",
+    @SerialName("user_id") val userId: String,
+    val activity: String,
+    val timestamp: String,
+) {
+    val type: Clear30GroupActivityItemType?
+        get() = when (activity) {
+            "smoked" -> Clear30GroupActivityItemType.SMOKED
+            "sober" -> Clear30GroupActivityItemType.SOBER
+            "joined" -> Clear30GroupActivityItemType.JOINED
+            "message" -> Clear30GroupActivityItemType.MESSAGE
+            else -> null
+        }
+}

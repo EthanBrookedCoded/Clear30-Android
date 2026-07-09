@@ -41,25 +41,29 @@ object AssessmentQuestions {
         displayedOptions = listOf("❌ Quitting Weed", "⏰ Taking a break", "📊 Moderation", "🤔 Don't know yet"),
         affirmations = listOf(
             AssessmentInfoData(
-                id = AssessmentInfoDataID.goalsAffirmation,
+                id = AssessmentInfoDataID.planPath,
+                badge = "Quit",
                 title = "Let's learn about your weed habits so we can help you quit.",
                 subtitle = "",
                 body = "• These questions help you reflect.\n• Your answers help us build your plan.",
             ),
             AssessmentInfoData(
-                id = AssessmentInfoDataID.goalsAffirmation,
+                id = AssessmentInfoDataID.planPath,
+                badge = "Break",
                 title = "Let's dig into your weed habits so we can help you reset.",
                 subtitle = "",
                 body = "• These questions help you reflect.\n• Your answers help us build your plan.",
             ),
             AssessmentInfoData(
-                id = AssessmentInfoDataID.goalsAffirmation,
+                id = AssessmentInfoDataID.planPath,
+                badge = "Balance",
                 title = "Let's learn about your weed habits so we can help find your balance.",
                 subtitle = "",
                 body = "• These questions help you reflect.\n• Your answers help us build your plan.",
             ),
             AssessmentInfoData(
-                id = AssessmentInfoDataID.goalsAffirmation,
+                id = AssessmentInfoDataID.planPath,
+                badge = "Explore",
                 title = "Let's figure out where you are with weed and where you want to be.",
                 subtitle = "",
                 body = "• These questions help you reflect.\n• Your answers help us find the best path forward.",
@@ -159,6 +163,8 @@ object AssessmentQuestions {
         prompt2 = "How old are you?",
         options = listOf("18-20", "21-25", "26-30", "31-40", "41-50", "51-64", "65+"),
         displayedOptions = listOf("18 - 20", "21 - 25", "26 - 30", "31 - 40", "41 - 50", "51 - 64", "65+"),
+        // Terms-of-Use footer shown on the age screen (iOS subtext via MiniTextWithLinks).
+        subtext = "By continuing you agree to our [Terms of Use](https://www.clear30.org/terms-and-conditions) and [Privacy Policy](https://clear30.org/privacy-policy/).",
         min = 1, max = 1,
     )
 
@@ -546,6 +552,60 @@ enum class BreakReasonType(val rawValue: String) {
             OTHER -> "❓ Other Benefits"
         }
 
+    /** Encouraging one-liner shown under each goal on the goals-affirmation cards (iOS `extraInfo`). */
+    val extraInfo: String
+        get() = when (this) {
+            GAIN_MENTAL_CLARITY -> "We'll help clear your head, so you can finish your thoughts—and sentences—in peace."
+            REDUCE_ANXIETY -> "We'll focus on tools to make life feel a bit lighter."
+            REDUCE_DEPRESSION -> "We can help you find your spark again."
+            REDUCE_BEING_STUCK_IN_OWN_HEAD -> "We'll help you step out of your head and into the present."
+            IMPROVE_SLEEP_QUALITY -> "We'll help you get real beauty sleep."
+            IMPROVE_SELF_CONTROL -> "Taking a weed break strengthens self-control and helps you align your actions with your goals."
+            REDUCE_DEPENDENCY -> "Let's focus on putting you back in charge—because you're a better boss anyway."
+            EXPLORE_LIFE_WITHOUT -> "Cutting out weed can force you to leave your comfort zone and make some real memories!"
+            LOWER_TOLERANCE -> "Taking a break helps reset your system, so you can enjoy the effects again without needing more."
+            IMPROVE_OVERALL_HEALTH -> "We'll help you build habits your body and mind will thank you for."
+            IMPROVE_LUNG_HEALTH -> "We'll help you breathe easier and feel healthier again."
+            INCREASE_PRODUCTIVITY -> "We'll help you lock in."
+            INCREASE_MOTIVATION -> "We'll help you turn your weed break into motivation your future self will brag about."
+            SAVE_MONEY -> "We can focus on helping you save cash to spend it on things you really value."
+            IMPROVE_RELATIONSHIPS -> "We'll help you use your weed break to reconnect and level up your relationships."
+            ENHANCE_SOCIAL_CONNECTIONS -> "Taking a break from weed can create space for new friendships and deeper connections."
+            REDUCE_LONELINESS -> "Taking a break from weed can create space for new friendships and deeper connections."
+            PASS_DRUG_TEST -> "We'll help you clear weed out of your system, so you're confident and ready."
+            MEET_LEGAL_OBLIGATIONS -> "We'll help you stick to your weed break and clear your obligations smoothly."
+            ENTER_NEW_PHASE -> "This break is your fresh start. We'll help you build the foundation for whatever comes next."
+            HEALTHY_PREGNANCY -> "Taking a break from cannabis is a great step for your health and your baby's. We'll support you through this journey."
+            OTHER -> "Everyone has their own unique motivation. Whatever yours is, we're here to support you through it."
+        }
+
+    /** Optional "% of Clear30 users saw…" stat (iOS `percentage`); null when not applicable. */
+    val percentage: BreakReasonPercentage?
+        get() = when (this) {
+            GAIN_MENTAL_CLARITY -> BreakReasonPercentage(81.08, "81.08% of Clear30 users saw improved mental clarity.")
+            REDUCE_ANXIETY -> BreakReasonPercentage(79.17, "79.17% of Clear30 users saw reduced anxiety.")
+            REDUCE_DEPRESSION -> BreakReasonPercentage(77.27, "77.27% of Clear30 users saw reduced depression.")
+            REDUCE_BEING_STUCK_IN_OWN_HEAD -> BreakReasonPercentage(85.71, "85.71% of Clear30 users saw improved mental freedom.")
+            IMPROVE_SLEEP_QUALITY -> BreakReasonPercentage(73.68, "73.68% of Clear30 users saw improved sleep quality.")
+            IMPROVE_SELF_CONTROL -> BreakReasonPercentage(87.5, "87.5% of Clear30 users saw improved self-control.")
+            REDUCE_DEPENDENCY -> BreakReasonPercentage(78.12, "78.12% of Clear30 users saw reduced dependency on cannabis.")
+            EXPLORE_LIFE_WITHOUT -> BreakReasonPercentage(86.67, "86.67% of Clear30 users saw improved life without cannabis.")
+            LOWER_TOLERANCE -> BreakReasonPercentage(90.0, "90% of Clear30 users reduced their tolerance.")
+            IMPROVE_OVERALL_HEALTH -> BreakReasonPercentage(80.0, "80% of Clear30 users saw improved overall health.")
+            IMPROVE_LUNG_HEALTH -> BreakReasonPercentage(88.89, "88.89% of Clear30 users saw improved lung health.")
+            INCREASE_PRODUCTIVITY -> BreakReasonPercentage(100.0, "100% of Clear30 users saw improved productivity.")
+            INCREASE_MOTIVATION -> BreakReasonPercentage(88.89, "88.89% of Clear30 users saw improved motivation.")
+            SAVE_MONEY -> BreakReasonPercentage(66.67, "66.67% of Clear30 users saved money.")
+            IMPROVE_RELATIONSHIPS -> BreakReasonPercentage(71.43, "71.43% of Clear30 users saw improved relationships.")
+            ENHANCE_SOCIAL_CONNECTIONS -> BreakReasonPercentage(80.0, "80% of Clear30 users saw improved social connections.")
+            REDUCE_LONELINESS -> BreakReasonPercentage(80.0, "80% of Clear30 users saw reduced loneliness.")
+            PASS_DRUG_TEST -> BreakReasonPercentage(75.0, "75% of Clear30 users passed their drug test.")
+            MEET_LEGAL_OBLIGATIONS -> BreakReasonPercentage(0.0, "0% of Clear30 users met their legal obligations.")
+            ENTER_NEW_PHASE -> BreakReasonPercentage(85.0, "85% of Clear30 users felt ready to enter a new phase of life.")
+            HEALTHY_PREGNANCY -> BreakReasonPercentage(90.0, "90% of Clear30 users achieved their pregnancy health goals.")
+            OTHER -> BreakReasonPercentage(100.0, "100% of Clear30 users saw improved outcomes.")
+        }
+
     val affirmation: AssessmentInfoData
         get() = breakReasonAffirmation(this)
 
@@ -567,6 +627,9 @@ enum class BreakReasonType(val rawValue: String) {
         fun from(text: String): BreakReasonType? = entries.firstOrNull { it.rawValue == text }
     }
 }
+
+/** iOS `(percentage: Double, text: String)` tuple for a break-reason outcome stat. */
+data class BreakReasonPercentage(val percentage: Double, val text: String)
 
 private fun reasonAffirmation(title: String, body: String, symbol: String) = AssessmentInfoData(
     id = AssessmentInfoDataID.breakReasonAffirmation,
