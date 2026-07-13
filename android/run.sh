@@ -14,7 +14,7 @@ ADB="$SDK/platform-tools/adb"
 AVD="Medium_Phone_API_36.0"
 BACKEND_DIR="$HOME/Workspace/iOS/Clear30/Backend"
 APK="app/build/outputs/apk/debug/app-debug.apk"
-APP_ID="org.clear30.debug"
+APP_ID="org.clear30.Clear30v1.debug"
 
 export JAVA_HOME="${JAVA_HOME:-$(/usr/libexec/java_home -v 21)}"
 
@@ -27,6 +27,19 @@ if ! grep -q '^SUPABASE_LOCAL=false' local.properties 2>/dev/null; then
     else
         step "Starting local Supabase ($BACKEND_DIR)"
         (cd "$BACKEND_DIR" && supabase start)
+    fi
+
+    # Edge functions (Claire/AI chat, reddit_proxy, normative feedback).
+    # --no-verify-jwt: the local runtime rejects even the local anon key when
+    # verification is on (JWT-secret mismatch in the local stack).
+    FUNCTIONS_LOG="/tmp/clear30-functions-serve.log"
+    if pgrep -f "supabase functions serve" >/dev/null 2>&1; then
+        step "Edge functions already serving"
+    else
+        step "Serving edge functions (log: $FUNCTIONS_LOG)"
+        (cd "$BACKEND_DIR" && nohup supabase functions serve --no-verify-jwt >"$FUNCTIONS_LOG" 2>&1 &)
+        sleep 2
+        pgrep -f "supabase functions serve" >/dev/null || echo "  ⚠ functions serve failed to start — see $FUNCTIONS_LOG"
     fi
 else
     step "SUPABASE_LOCAL=false — skipping local backend"

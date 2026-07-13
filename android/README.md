@@ -54,9 +54,10 @@ One-time steps:
    REVENUECAT_API_KEY=
    ```
 3. **`app/google-services.json`** (optional until FCM/Crashlytics needed) —
-   Firebase console → Android app `org.clear30`, then uncomment the
-   `google-services` / `crashlytics` plugin lines in `build.gradle.kts` (root)
-   and `app/build.gradle.kts`.
+   Firebase console (project `clear30-24f18`) → add Android apps
+   `org.clear30.Clear30v1` and `org.clear30.Clear30v1.debug`, then uncomment
+   the `google-services` / `crashlytics` plugin lines in `build.gradle.kts`
+   (root) and `app/build.gradle.kts`.
 
 ## Running from the CLI
 
@@ -88,9 +89,10 @@ $SDK/platform-tools/adb wait-for-device
 until [ "$($SDK/platform-tools/adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; do sleep 3; done
 
 $SDK/platform-tools/adb install -r app/build/outputs/apk/debug/app-debug.apk
-$SDK/platform-tools/adb shell monkey -p org.clear30.debug -c android.intent.category.LAUNCHER 1
+$SDK/platform-tools/adb shell monkey -p org.clear30.Clear30v1.debug -c android.intent.category.LAUNCHER 1
 ```
-(Debug builds get the `.debug` applicationId suffix — hence `org.clear30.debug`.)
+(The applicationId is `org.clear30.Clear30v1` — it must match the OLD Play
+listing so the new app ships as an update; debug builds add a `.debug` suffix.)
 
 Verify it's on the right backend (logged at launch):
 ```bash

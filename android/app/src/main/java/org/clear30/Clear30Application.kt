@@ -42,6 +42,17 @@ class Clear30Application : Application() {
             com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance()
                 .isCrashlyticsCollectionEnabled = !BuildConfig.DEBUG
         }
+
+        // FCM registration token: Clear30MessagingService.onNewToken only fires
+        // when the token is (re)created, so fetch the current one every launch —
+        // mirrors iOS's MessagingDelegate delivering the token on each start.
+        runCatching {
+            com.google.firebase.messaging.FirebaseMessaging.getInstance().token
+                .addOnSuccessListener { token ->
+                    AppState.setFcmToken(token)
+                    if (BuildConfig.DEBUG) android.util.Log.i("Clear30FCM", "FCM token: $token")
+                }
+        }
     }
 
     /**

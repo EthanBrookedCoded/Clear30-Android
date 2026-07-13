@@ -464,9 +464,21 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
 
 ## 10. Notifications & FCM
 
-- [ ] **N1 · P2 · env+feature — FCM end-to-end test.** Needs
+- [x] **N1 · P2 · env+feature — FCM end-to-end test.** Needs
   `google-services.json` + the two plugins uncommented. Token/channel/routing
   plumbing already ported (`A/messaging/Clear30MessagingService.kt`).
+  (done 2026-07-13 — `google-services.json` in place (release + debug clients
+  registered in project `clear30-24f18`; keep BOTH — debug builds fail without
+  a matching client), plugins enabled, device obtains a token, and a console
+  test push was delivered and displayed on the emulator. Fixed two real token
+  gaps found on the way: nothing fetched the token at launch (`onNewToken`
+  only fires on creation) — now fetched in `Clear30Application.onCreate`; and
+  nothing ever wrote `UserInfo.fcmToken` (so `create_user` pushed a null token
+  and rotations never synced) — ported iOS `ContentView.updateFCM` into
+  `AppRootViewModel.observeFcmToken`. Note for N2: the FCM service-account key
+  exists only as a prod Supabase secret (`FIREBASE_SERVICE_ACCOUNT_JSON_B64_ENC`),
+  not in either repo — local `notification_send` runs need it added to
+  `BE/supabase/functions/.env`.)
 - [ ] **N2 · P2 · missing — Health + pop-in notification scheduling.**
   `A/data/NotificationHandler.kt` has no `scheduleHealth`/`schedulePopIn` (only
   a pop-in *cancel* tag at `:189`); silent-push payload is stored
@@ -500,7 +512,7 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
 
 ## 12. Local dev environment
 
-- [ ] **E1 · env — Run edge functions locally** (`supabase functions serve` from
+- [x] **E1 · env — Run edge functions locally** (`supabase functions serve` from
   `BE/`) — required for Claire/AI chat and `reddit_proxy` (T7). Claire failing
   on the emulator is almost certainly this, not app code.
   *(2026-07-13: partially done — serve is running in the background with
@@ -509,24 +521,47 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   now also needed for onboarding's normative feedback (O4). Remaining: wire
   `supabase functions serve --no-verify-jwt` into `android/run.sh` so it
   survives new sessions.)*
+  (done 2026-07-13 — `run.sh` step 1 now starts
+  `supabase functions serve --no-verify-jwt` in the background when no serve
+  process is running, logging to `/tmp/clear30-functions-serve.log`; both the
+  already-running and cold-start branches exercised, and a function call
+  through the local gateway verified reaching the app's auth middleware)
 - [x] **E2 · env — Silence Slack on local.** Slack pings come from edge functions
   (`slack_send_message`, `user_handle_new`, etc. under `BE/supabase/functions/`)
   — neuter via local function env (unset the Slack webhook secret), not a seed
   file. (verified 2026-07-13: already silent — webhook URLs live per-channel in
   `comms.slack_channels`, which is EMPTY locally, and `slack_send_message` also
   guards against cross-environment calls; nothing to neuter)
-- [ ] **E3 · env — Seed sleep meditations** into the local DB. Prod tables
+- [x] **E3 · env — Seed sleep meditations** into the local DB. Prod tables
   verified: `library.sleep_resources` (and `library.craving_resources`). Pull
   rows from prod via the Supabase MCP → new numbered seed file (pattern:
   `BE/supabase/seeds/01…37_*.sql`).
-- [ ] **E4 · env — Seed feature wishlist** the same way.
+  (done 2026-07-13 — `BE/supabase/seeds/38_sleep_resources.sql`, 4 rows;
+  applied to the running local DB and md5-verified identical to prod;
+  read back through local PostgREST with `Accept-Profile: library`)
+- [x] **E4 · env — Seed feature wishlist** the same way.
+  (done 2026-07-13 — `BE/supabase/seeds/39_feature_ideas.sql`, 51
+  `comms.feature_ideas` rows with `user_id` remapped to the seeded Test user
+  `'1'` (prod author IDs would violate the FK to `public.users`; the UI never
+  shows the author) + `setval` so new local submissions don't collide;
+  content md5-verified identical to prod incl. trailing-whitespace fidelity;
+  `feature_idea_votes` intentionally not seeded — it's per-user data)
 
 ## 13. Prod readiness (external — Thatcher only)
 
+*(Decided 2026-07-13: the new app ships as an UPDATE to the old RN app's Play
+listing — `applicationId` changed to `org.clear30.Clear30v1` (debug:
+`org.clear30.Clear30v1.debug`). Use these package names in every console
+below. Verify the old app's signing key still exists (or the listing is on
+Play App Signing) — without it the update route is impossible.)*
+
 - [ ] RevenueCat: create the Play Store app in the dashboard → `goog_` key into
   `local.properties`.
-- [ ] Firebase: `google-services.json` + uncomment plugins (unblocks N1).
-- [ ] Play Console: signing keystore, internal-testing track, listing.
+- [ ] Firebase: add Android apps `org.clear30.Clear30v1` +
+  `org.clear30.Clear30v1.debug` to project `clear30-24f18` →
+  `google-services.json` + uncomment plugins (unblocks N1).
+- [ ] Play Console: signing keystore (must be the OLD app's key), update the
+  existing `org.clear30.Clear30v1` listing, internal-testing track.
 - [ ] Launcher icons + SVG vector import (polish).
 
 ## 14. TODO.md corrections (audit 2026-07-13)

@@ -17,6 +17,7 @@ import org.clear30.data.model.UserInfo
 import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.signOut
 import org.clear30.data.supabase.syncProgramState
+import org.clear30.data.supabase.updateFCMToken
 import org.clear30.util.now
 import java.util.UUID
 
@@ -48,7 +49,38 @@ class AppRootViewModel : ViewModel() {
     lateinit var onboardingSetup: OnboardingSetup
         private set
 
-    init { loadStorage() }
+    init {
+        loadStorage()
+        observeFcmToken()
+    }
+
+    /**
+     * ContentView.updateFCM — keep UserInfo + the users row in sync with the FCM
+     * registration token. Combined with the routing state so a token that arrives
+     * before loadStorage finishes still lands once a UserInfo exists. Without
+     * this, `create_user` pushes a null fcm_token at signup and token rotations
+     * never reach the backend (pushes silently die for existing users).
+     */
+    private fun observeFcmToken() {
+        viewModelScope.launch {
+            kotlinx.coroutines.flow.combine(_state, AppState.fcmToken) { s, t -> s to t }
+                .collect { (s, token) ->
+                    if (token == null) return@collect
+                    val userInfo = (s as? AppRootState.ExistingUser)?.userInfo
+                        ?: (s as? AppRootState.NewUser)?.userInfo
+                        ?: return@collect
+                    if (userInfo.fcmToken != token) {
+                        userInfo.fcmToken = token
+                        Clear30Store.save(userInfo)
+                        // Pre-signup there's no users row/auth session yet — the token
+                        // reaches the backend inside the create_user payload instead.
+                        if (userInfo.userID.isNotEmpty()) {
+                            SupabaseController.updateFCMToken(token)
+                        }
+                    }
+                }
+        }
+    }
 
     /** ContentView.loadStorage — load persisted models, patch, route. */
     private fun loadStorage() {

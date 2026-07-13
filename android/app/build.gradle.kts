@@ -4,9 +4,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
-    // Uncomment once google-services.json is added (see README in app/):
-    // alias(libs.plugins.google.services)
-    // alias(libs.plugins.firebase.crashlytics)
+    alias(libs.plugins.google.services)
+    alias(libs.plugins.firebase.crashlytics)
 }
 
 android {
@@ -14,7 +13,10 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "org.clear30"
+        // Must stay "org.clear30.Clear30v1": the new app ships as an UPDATE to the
+        // old RN app's Play listing (same package = old users auto-update + access
+        // to the old app's on-device data for migration). Play identity is immutable.
+        applicationId = "org.clear30.Clear30v1"
         minSdk = 26
         targetSdk = 35
         versionCode = 21601
