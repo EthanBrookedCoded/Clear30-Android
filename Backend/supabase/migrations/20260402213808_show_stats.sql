@@ -1,1 +1,0 @@
-  ALTER TABLE achievements.definitions ADD COLUMN show_stats boolean NOT NULL DEFAULT true;

@@ -1,5 +1,0 @@
-id,name,gradient_start,gradient_end,display_order,created_at,updated_at,sf_symbol
-1,Common,#5BB4A9,#80C97A,1,2025-10-15 23:05:57.83498+00,2025-10-18 22:49:11.736368+00,circle.fill
-2,Rare,#5B9CF0,#5BAEE6,2,2025-10-15 23:05:57.83498+00,2025-10-18 22:49:11.736368+00,diamond.fill
-3,Epic,#C942FE,#E875FF,3,2025-10-15 23:05:57.83498+00,2025-10-18 22:49:11.736368+00,hexagon.fill
-4,Legendary,#E8A200,#EFBF04,4,2025-10-15 23:05:57.83498+00,2025-10-18 22:49:11.736368+00,seal.fill

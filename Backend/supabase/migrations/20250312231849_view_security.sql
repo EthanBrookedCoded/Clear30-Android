@@ -1,1 +1,0 @@
-ALTER TABLE "views"."assessment_responses_clear30" OWNER TO "postgres";

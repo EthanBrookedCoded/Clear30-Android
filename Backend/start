@@ -1,4 +1,0 @@
-supabase stop --no-backup
-supabase start
-supabase db pull
-supabase db reset
