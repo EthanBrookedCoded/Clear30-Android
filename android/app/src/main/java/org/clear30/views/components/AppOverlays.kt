@@ -99,14 +99,6 @@ private fun PopupQueueHost() {
                 TextButton(onClick = { PopupManager.dismissCurrent() }) { Text("Nice") }
             },
         )
-        is PopupManager.Payload.TutorialStep -> AlertDialog(
-            onDismissRequest = { PopupManager.dismissCurrent() },
-            title = { Text(p.screen) },
-            text = { Text(p.captionKey) },
-            confirmButton = {
-                TextButton(onClick = { PopupManager.dismissCurrent() }) { Text("Got it") }
-            },
-        )
     }
 }
 

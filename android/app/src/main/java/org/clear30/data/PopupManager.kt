@@ -41,9 +41,6 @@ object PopupManager {
 
         /** Achievement reveal card. Resolved by the AchievementsSection renderer. */
         data class Achievement(val achievementKey: String) : Payload
-
-        /** Tutorial highlight step (a single ring + caption). */
-        data class TutorialStep(val screen: String, val captionKey: String) : Payload
     }
 
     /** Queue head exposed to the renderer. */

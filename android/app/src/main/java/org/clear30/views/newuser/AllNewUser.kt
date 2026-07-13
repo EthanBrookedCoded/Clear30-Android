@@ -64,11 +64,7 @@ fun AllNewUser(
                 onComplete = vm::handleNextScreen,
                 onBack = { vm.back(NewUserScreen.Intro) },
             )
-            is NewUserScreen.Feedback -> {
-                val nf = program.getBreak(org.clear30.util.now())?.normativeFeedback
-                if (nf != null) NormativeFeedbackView(nf, userInfo, onNext = vm::handleNextScreen)
-                else StepPlaceholder("Your feedback", "feedback", onNext = vm::handleNextScreen)
-            }
+            is NewUserScreen.Feedback -> NormativeFeedbackView(s.feedback, userInfo, onNext = vm::handleNextScreen)
             is NewUserScreen.Notifications -> OnboardingNotificationRequest(onComplete = vm::handleNextScreen)
             is NewUserScreen.Reviews -> ReviewsSlide(userInfo, onNext = vm::handleNextScreen)
             is NewUserScreen.Commitment -> CommitmentSlide(userInfo, onNext = vm::handleNextScreen)

@@ -56,7 +56,9 @@ class AllNewUserViewModel(
     }
 
     private fun setInitialPage() {
-        // TODO(port): program.initialFeedback -> jump straight to Feedback (ProgramContent)
+        // A returning mid-onboarding user with feedback jumps straight to it
+        // (iOS setInitialPage).
+        program.initialFeedback?.let { _screen.value = NewUserScreen.Feedback(it) }
         logScreen(_screen.value)
     }
 
@@ -80,8 +82,10 @@ class AllNewUserViewModel(
             is NewUserScreen.Intro -> NewUserScreen.Assessment
             is NewUserScreen.Assessment -> NewUserScreen.SignUp
             is NewUserScreen.SignUp ->
-                // TODO(port): if program.initialFeedback != null -> Feedback(it)
-                handleSalesSlide(_screen.value) ?: NewUserScreen.Payment
+                // Clear30 signups see their normative feedback first; Life (no
+                // feedback) goes straight to the sales slides (iOS handleNextScreen).
+                program.initialFeedback?.let { NewUserScreen.Feedback(it) }
+                    ?: handleSalesSlide(_screen.value) ?: NewUserScreen.Payment
             is NewUserScreen.Feedback,
             is NewUserScreen.Notifications,
             is NewUserScreen.Reviews,

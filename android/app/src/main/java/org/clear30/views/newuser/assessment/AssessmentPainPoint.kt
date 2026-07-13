@@ -55,8 +55,9 @@ import org.clear30.views.theme.Lexend
 import org.clear30.views.theme.colorFromHex
 
 /**
- * AssessmentPainPoint — a faithful 1:1 port of `AssessmentPainPoint2.swift` (the
- * variant actually used by the `currentUseSummary` slide).
+ * AssessmentPainPoint — a faithful 1:1 port of `AssessmentPainPoint.swift`, the
+ * consumption-method + monthly-spend variant currently shipping on iOS (§17-Q3;
+ * the experiment gating the `AssessmentPainPoint2` money-loss variant is off).
  *
  * CRITICAL: the iOS slide sets `overrideBackgroundGradient: false`, so it renders
  * on a WHITE background with DARK content. The parent ([AllAssessment]) supplies
@@ -65,27 +66,20 @@ import org.clear30.views.theme.colorFromHex
  * (provided by [Clear30Card]).
  *
  * The reveal is staged exactly like iOS:
- *   1. `!showCard && !showingLoss` — just the "You vs Others" comparison card on a
- *      bare (transparent, shadowless) wrapper, centered "higher than X%" copy, and
- *      a "Go On" button.
- *   2. `showingLoss && !showCard` — adds the "Losing $/week·month·year" card and
- *      swaps the copy to the yearly-spend projection; button becomes "Anything Else?".
- *   3. `showCard` — wraps everything in the RED gradient hero card (with the soft
- *      drop shadow), adds the name heading + age×help-harm "Impact on Life" card
- *      (with a WORKING Show more / Show less toggle), and replaces the button with
- *      the national-datasets citation footnote.
+ *   1. `!showCard` — just the "You vs Others" comparison card on a bare
+ *      (transparent, shadowless) wrapper, centered "higher than X%" copy, and a
+ *      "Next" button.
+ *   2. `showCard` — wraps everything in the RED gradient hero card (with the soft
+ *      drop shadow), adds the name heading, the Method + Monthly Spend card row
+ *      (`consumptionMethod.question.badges[response]`; spend = weekly × 4 as
+ *      "✅ $0" / "😬 -$X"), the age×help-harm "Impact on Life" card (with a
+ *      WORKING Show more / Show less toggle), and replaces the button with the
+ *      national-datasets citation footnote.
  *
  * iOS drives the final "Next" through `viewModel.showNextButton`; in the Android
  * dispatcher that parent button is owned by [AssessmentInfoSlide], so this view
- * only owns the staged "Go On" / "Anything Else?" button (stages 1–2). Once
- * `showCard` is reached the parent's primary button advances the flow.
- *
- * // TODO(port): the dispatcher renders [AssessmentInfoSlide]'s primary "Next"
- * pill unconditionally for this slide (its `primaryButtonText` defaults to
- * "Next"). To match iOS's `showNextButton` gating — hidden until `showCard`, and
- * suppressing our own staged button afterwards — the dispatcher needs to set
- * `primaryButtonText = ""` for `currentUseSummary` and let this view own the CTA,
- * or expose a `showNextButton`-style hook. That lives outside this file.
+ * only owns the staged "Next" button (stage 1). Once `showCard` is reached the
+ * parent's primary button advances the flow.
  */
 @Composable
 fun AssessmentPainPoint(
@@ -166,24 +160,51 @@ fun AssessmentPainPoint(
                     if (!showCard) {
                         // Centered headline (iOS Heading3WithLinks +
                         // multilineTextAlignment(.center)); renders the `__bold__`
-                        // emphasis and per-line centers. // TODO(port): numericText
-                        // content transition on the showingLoss swap.
+                        // emphasis and per-line centers.
                         CenteredHeadline(
-                            text = painPointText(false, weeklySpend, normativeData),
+                            text = "Your cannabis use is higher than __${normativeData.percentile_more_than}%__ of other people.",
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = Dimens.cardSpacing * 2),
                         )
-                    } else if (helpHarmEmoji != null && feedback != null) {
-                        // Impact-on-life card with the working Show more / Show less toggle.
-                        Clear30Card(modifier = Modifier.fillMaxWidth()) {
-                            ImpactOnLifeView(
-                                emoji = helpHarmEmoji,
-                                title = feedback.first,
-                                body = feedback.second,
-                                showMore = showMoreImpact,
-                                onToggle = { showMoreImpact = !showMoreImpact },
-                            )
+                    } else {
+                        // Method + Monthly Spend card row (iOS AssessmentPainPoint.swift:53-87).
+                        val methodBadge = consumptionMethodBadge(responses)
+                        if (methodBadge != null || weeklySpend != null) {
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = Dimens.cardSpacing),
+                                horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+                            ) {
+                                methodBadge?.let {
+                                    Clear30Card(modifier = Modifier.weight(1f)) {
+                                        LabeledStatCard(label = "Method", value = it)
+                                    }
+                                }
+                                weeklySpend?.let { weekly ->
+                                    val monthlySpend = weekly * 4
+                                    Clear30Card(modifier = Modifier.weight(1f)) {
+                                        LabeledStatCard(
+                                            label = "Monthly Spend",
+                                            value = if (monthlySpend == 0) "✅ \$0" else "😬 -\$$monthlySpend",
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (helpHarmEmoji != null && feedback != null) {
+                            // Impact-on-life card with the working Show more / Show less toggle.
+                            Clear30Card(modifier = Modifier.fillMaxWidth()) {
+                                ImpactOnLifeView(
+                                    emoji = helpHarmEmoji,
+                                    title = feedback.first,
+                                    body = feedback.second,
+                                    showMore = showMoreImpact,
+                                    onToggle = { showMoreImpact = !showMoreImpact },
+                                )
+                            }
                         }
                     }
                 }
@@ -191,10 +212,10 @@ fun AssessmentPainPoint(
         }
 
         if (!showCard) {
-            // Stage-1 "Go On" button (iOS TextIconButton: a white card pill with
+            // Stage-1 "Next" button (iOS TextIconButton: a white card pill with
             // centered dark text + trailing arrow) — advances to the red hero card.
             PainPointButton(
-                text = "Go On",
+                text = "Next",
                 // Parent already applies horizontalPadding; only vertical here.
                 modifier = Modifier.padding(vertical = Dimens.cardSpacing),
                 onClick = { showCard = true },
@@ -339,31 +360,15 @@ private fun ComparisonBar(
     }
 }
 
-/** The "Losing" weekly/monthly/yearly money projection (iOS moneyLossView). */
+/** A tiny dim label over a value (the Method / Monthly Spend cards). */
 @Composable
-private fun MoneyLossView(weeklySpend: Int?) {
+private fun LabeledStatCard(label: String, value: String) {
     Column(
         Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+        verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 4),
     ) {
-        TinyText("Losing", modifier = Modifier.alpha(0.5f))
-
-        if (weeklySpend != null) {
-            val monthlySpend = weeklySpend * 4
-            val yearlySpend = weeklySpend * 52
-
-            MoneyRow("\$$weeklySpend", " per week", colorFromHex("#FCB334"))
-            MoneyRow("\$$monthlySpend", " per month", colorFromHex("#FD6B20"))
-            MoneyRow("\$$yearlySpend", " per year", colorFromHex("#FF0000"))
-        }
-    }
-}
-
-@Composable
-private fun MoneyRow(amount: String, suffix: String, amountColor: Color) {
-    Row(verticalAlignment = Alignment.Bottom) {
-        Heading3(amount, color = amountColor)
-        SmallText(suffix, modifier = Modifier.alpha(0.5f))
+        TinyText(label, modifier = Modifier.alpha(0.5f))
+        SmallText(value)
     }
 }
 
@@ -470,13 +475,12 @@ private fun PainPointButton(text: String, modifier: Modifier = Modifier, onClick
  * Derived values (ported from AssessmentPainPoint2.swift)
  * ------------------------------------------------------------------------- */
 
-/** The staged headline copy (iOS `text` computed property). */
-private fun painPointText(showingLoss: Boolean, weeklySpend: Int?, normativeData: NormativeData): String =
-    if (showingLoss && weeklySpend != null) {
-        "Plus, you're on track to spend __$${weeklySpend * 52}__ on weed this year."
-    } else {
-        "Your cannabis use is higher than __${normativeData.percentile_more_than}%__ of other people."
-    }
+/** The chosen consumption method's display badge (e.g. "🖊️ Pen"). */
+private fun consumptionMethodBadge(responses: Map<String, ProgramAssessmentResponse>): String? {
+    val response = responses[AssessmentQuestionID.CONSUMPTION_METHOD.raw] ?: return null
+    val index = response.responses.firstOrNull() ?: return null
+    return response.question.badges?.getOrNull(index)
+}
 
 /**
  * Weekly spend — first selected option of the moneySpent question parsed to Int,

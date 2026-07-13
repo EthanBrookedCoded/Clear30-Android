@@ -51,7 +51,6 @@ import org.clear30.data.AlertHandler
 import org.clear30.data.Clear30Store
 import org.clear30.data.LogEventType
 import org.clear30.data.Logger
-import org.clear30.data.TutorialController
 import org.clear30.data.model.AppMode
 import org.clear30.data.model.Program
 import org.clear30.data.model.ToggleSettings
@@ -122,17 +121,6 @@ fun SettingsSection(userInfo: UserInfo, program: Program, onSignOut: () -> Unit,
             "Custom Check In",
             onClick = { showCustomCheckIn = true },
         ) { SettingsTrailingIcon("calendar.badge.checkmark") }
-        SettingsCard(
-            "Show Tutorial",
-            onClick = {
-                // iOS resets the per-tab tutorial cache and closes settings; the
-                // flows re-fire from TutorialController.maybeShow on tab entry.
-                TutorialController.reset(userInfo)
-                scope.launch { Clear30Store.save(userInfo) }
-                onClose()
-            },
-        ) { SettingsTrailingIcon("hand.point.up.left.and.text.fill") }
-
         SettingsSectionHeader("Notifications")
         Clear30Card(modifier = Modifier.fillMaxWidth()) {
             Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {

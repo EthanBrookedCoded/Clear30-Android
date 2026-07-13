@@ -228,6 +228,20 @@ fun AssessmentMultipleChoice(question: ProgramAssessmentQuestion, onCompleted: (
     val selected = remember { mutableStateListOf<Int>() }
     var pendingAutoForward by remember { mutableStateOf(false) }
 
+    // Display order: shuffled questions (breakReason/triggers) shuffle ONCE per
+    // entry — computed in remember{} so redraws don't reshuffle — with any
+    // "…Other" option pinned last (iOS AssessmentMultipleChoice.swift:70-81).
+    // `selected` keeps ORIGINAL option indices, so responses map back to the
+    // right labels regardless of display order.
+    val optionIndexes = remember(question) {
+        if (question.shuffled == true) {
+            val other = options.indices.filter { options[it].lowercase().endsWith("other") }
+            (options.indices - other.toSet()).shuffled() + other
+        } else {
+            options.indices.toList()
+        }
+    }
+
     // Single-select auto-forward: hold ~3 * GlobalData.wait so the green gradient
     // has time to finish filling in (the fill runs ~Anim.default = 233ms) and is
     // fully visible before the slide pushes to the next question.
@@ -271,7 +285,8 @@ fun AssessmentMultipleChoice(question: ProgramAssessmentQuestion, onCompleted: (
                     .padding(vertical = Dimens.headingTopPadding),
                 verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
             ) {
-                options.forEachIndexed { index, option ->
+                optionIndexes.forEach { index ->
+                    val option = options[index]
                     val isSelected = index in selected
                     val isDisabled = selected.size >= max && !isSelected
                     Box(

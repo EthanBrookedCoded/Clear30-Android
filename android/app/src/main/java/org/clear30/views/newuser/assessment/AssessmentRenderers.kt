@@ -33,6 +33,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import org.clear30.data.model.ProgramAssessmentQuestion
 import org.clear30.views.components.Heading1
 import org.clear30.views.components.MultiLineOffWhiteInput
@@ -240,9 +241,15 @@ fun AssessmentSpectrum(
     ) {
         QuestionCard(question.prompt1, question.prompt2, modifier = Modifier.padding(bottom = Dimens.cardSpacing))
         Spacer(Modifier.weight(1f))
-        // Big emoji / display for the current step (shown when showDots).
-        if (showDots && index in displays.indices) {
-            Heading1(displays[index])
+        // Current step's display, in BOTH modes (iOS AssessmentSpectrum.swift:47-61):
+        // showDots gets the large 75pt emoji in an 80pt frame; the non-dots
+        // variant (e.g. numeric steps) reads as a Heading1.
+        if (index in displays.indices) {
+            if (showDots) {
+                androidx.compose.material3.Text(displays[index], fontSize = 75.sp, modifier = Modifier.height(80.dp))
+            } else {
+                Heading1(displays[index])
+            }
             Spacer(Modifier.height(Dimens.cardSpacing * 2))
         }
         Slider(

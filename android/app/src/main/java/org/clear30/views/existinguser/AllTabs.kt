@@ -54,20 +54,6 @@ fun AllTabs(
         org.clear30.AppState.requestTab(null)  // ack
     }
 
-    // First-visit tutorial per tab — enqueues into PopupManager which renders
-    // above every screen via AppOverlays. Idempotent: maybeShow short-circuits
-    // once the screen is in the user's cached completion set.
-    androidx.compose.runtime.LaunchedEffect(selected) {
-        val screen = when (selected) {
-            CustomTabBarItem.TODAY -> "today"
-            CustomTabBarItem.PROFILE -> "profile"
-            CustomTabBarItem.COMMUNITY -> "community"
-            CustomTabBarItem.GROUPS -> "groups"
-            CustomTabBarItem.SUPPORT -> null
-        }
-        screen?.let { org.clear30.data.TutorialController.maybeShow(userInfo, it) }
-    }
-
     Scaffold(
         bottomBar = {
             CustomTabBar(selected = selected, onSelect = { tab ->

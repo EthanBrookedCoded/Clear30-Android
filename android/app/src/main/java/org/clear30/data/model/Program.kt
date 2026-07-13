@@ -69,6 +69,11 @@ class Program(
         it.startDate.justDay <= date.justDay && date.justDay <= it.endDate.adding(days = -1)
     }
 
+    /** The onboarding feedback payload (iOS `Program.initialFeedback`):
+     *  the first real (non-start-soon) break's normative feedback. */
+    val initialFeedback: ProgramNormativeFeedback?
+        get() = breaks.firstOrNull { !it.isStartSoon }?.normativeFeedback
+
     val currentBreakNotStartSoon: ProgramBreak?
         get() {
             val today = now().justDay

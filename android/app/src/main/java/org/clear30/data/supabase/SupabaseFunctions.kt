@@ -66,6 +66,36 @@ suspend fun SupabaseController.updateNotificationSettings(settings: ToggleSettin
 suspend fun SupabaseController.updateYourWhy(yourWhy: String): SupabaseFunctionError? =
     updateUser(cols(SupabaseUserProps.YOUR_WHY to JsonPrimitive(yourWhy)))
 
+// Normative feedback
+
+@Serializable
+private data class NormativeFeedbackParams(
+    val userId: String,
+    val lastSmokedDate: String,
+    val startDate: String,
+)
+
+/**
+ * Generate the onboarding normative-feedback payload (iOS `getNormativeFeedback`
+ * → the `program_generate_normative_feedback` EDGE function; requires
+ * `supabase functions serve` when running locally). Dates travel in the
+ * assessment "yyyy-MM-dd" format.
+ */
+suspend fun SupabaseController.getNormativeFeedback(
+    userID: String,
+    lastSmoked: Instant,
+    startDate: Instant,
+): Pair<org.clear30.data.model.ProgramNormativeFeedback?, SupabaseFunctionError?> =
+    callEdgeFunction(
+        SupabaseEdgeFunction("program_generate_normative_feedback"),
+        NormativeFeedbackParams(
+            userId = userID,
+            lastSmokedDate = org.clear30.data.model.PlainDate.from(lastSmoked).dateString,
+            startDate = org.clear30.data.model.PlainDate.from(startDate).dateString,
+        ),
+        org.clear30.data.model.ProgramNormativeFeedback::class.java,
+    )
+
 suspend fun SupabaseController.updateUserMetadata(timezone: String, appVersion: String): SupabaseFunctionError? =
     updateUser(cols(
         SupabaseUserProps.TIMEZONE to JsonPrimitive(timezone),

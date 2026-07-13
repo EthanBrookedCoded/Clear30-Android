@@ -120,7 +120,10 @@ object AssessmentSlides3 {
                         slidesToAdd.add(triggersQuestion())
                     }
                     AssessmentInfoDataID.lifeContext -> {
-                        slidesToAdd.add(modAbsQuestion())
+                        // §17-Q2: the ONLY route into Life is "Moderation" on
+                        // What-brings-you-here, which auto-sets LO_USE_STATE=1 —
+                        // don't re-ask moderation-vs-weed-free (deliberate
+                        // divergence from iOS, which still shows modAbsQuestion).
                         slidesToAdd.add(assessmentCredibility())
                         slidesToAdd.add(referral())
                         slidesToAdd.add(fairTrialSlide())
@@ -195,15 +198,24 @@ object AssessmentSlides3 {
 
     private fun whatBringsYouHereQuestion() = question(AssessmentQuestions.whatBringsYouHere) { vm, _ ->
         val choiceIndex = vm.responses[AssessmentQuestionID.WHAT_BRINGS_YOU_HERE.raw]?.responses?.firstOrNull() ?: return@question
+        // The MOST RECENT choice always wins (§17-Q1): every branch writes
+        // choseClear30 explicitly, so touching Moderation and then backing out
+        // to Quit/Break/Don't-know can't leave a stale `false` behind.
         when (choiceIndex) {
-            0 -> vm.responses[AssessmentQuestionID.THEN_WHAT.raw] = ProgramAssessmentResponse(AssessmentQuestions.afterClear30, listOf(0))
-            1 -> Unit // T-Break: user answers Then-What
+            0 -> {
+                vm.choseClear30 = true
+                vm.responses[AssessmentQuestionID.THEN_WHAT.raw] = ProgramAssessmentResponse(AssessmentQuestions.afterClear30, listOf(0))
+            }
+            1 -> vm.choseClear30 = true // T-Break: user answers Then-What
             2 -> {
                 vm.responses[AssessmentQuestionID.THEN_WHAT.raw] = ProgramAssessmentResponse(AssessmentQuestions.afterClear30, listOf(1))
                 vm.choseClear30 = false
                 vm.responses[AssessmentQuestionID.LO_USE_STATE.raw] = ProgramAssessmentResponse(AssessmentQuestions.modAbs, listOf(1))
             }
-            3 -> vm.responses[AssessmentQuestionID.THEN_WHAT.raw] = ProgramAssessmentResponse(AssessmentQuestions.afterClear30, listOf(3))
+            3 -> {
+                vm.choseClear30 = true
+                vm.responses[AssessmentQuestionID.THEN_WHAT.raw] = ProgramAssessmentResponse(AssessmentQuestions.afterClear30, listOf(3))
+            }
         }
     }
 
@@ -275,7 +287,6 @@ object AssessmentSlides3 {
     private fun symptomsQuestion() = question(AssessmentQuestions.symptoms)
     private fun triggersQuestion() = question(AssessmentQuestions.triggers)
     private fun commitmentQuestion() = question(AssessmentQuestions.commitment)
-    private fun modAbsQuestion() = question(AssessmentQuestions.modAbs)
     private fun referral() = question(AssessmentQuestions.referral)
 
     private fun whereYouAre() = info(

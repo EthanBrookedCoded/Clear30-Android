@@ -11,8 +11,11 @@ import org.clear30.data.model.UserInfo
 import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.SupabaseNewUser
 import org.clear30.data.supabase.createUser
+import org.clear30.data.supabase.getNormativeFeedback
 import org.clear30.data.supabase.submitAssessment
+import org.clear30.util.adding
 import org.clear30.util.daysTo
+import org.clear30.util.justDay
 import org.clear30.util.now
 
 /**
@@ -107,8 +110,18 @@ object AssessmentSubmissionHandler {
         if (submitError != null) return submitError.message
         mainBreak.assessmentResponseID = responseID?.toInt()
 
-        // TODO(port O4/X7): getNormativeFeedback (`program_get_feedback`) →
-        // mainBreak.normativeFeedback, shown on the Feedback onboarding screen.
+        // Normative feedback → the Feedback onboarding screen (iOS handleClear30 →
+        // getNormativeFeedback). iOS anchors startDate on the assessment's
+        // start-date answer, defaulting to tomorrow — the live flow asks no
+        // start-date, so tomorrow it is. Failing the signup on a feedback error
+        // mirrors iOS; locally this needs `supabase functions serve` (E1).
+        val (feedback, feedbackError) = SupabaseController.getNormativeFeedback(
+            userID = userInfo.userID,
+            lastSmoked = lastSmoked,
+            startDate = now().justDay.adding(days = 1),
+        )
+        if (feedbackError != null) return feedbackError.message
+        mainBreak.normativeFeedback = feedback
 
         // Consumption method → the default check-in method (iOS handleClear30).
         val methodResponse = mainBreak.getAssessmentResponse(AssessmentQuestionID.CONSUMPTION_METHOD.raw)
