@@ -121,7 +121,7 @@ from iOS) · `env` (local/dev environment task).
   `restoreToModels` drops it; no write path exists. iOS:
   `iOS/Data/Program/ProgramRestoreHandler.swift:103-115`. (Pairs with S12.)
 
-- [ ] **X7 · P1 · missing — Break rows pushed with null `assessment_response_id` + `normative_feedback`.**
+- [x] (done 2026-07-13 — response ID in 3a63877, normative_feedback in 6d33fe8; both verified in the users row) **X7 · P1 · missing — Break rows pushed with null `assessment_response_id` + `normative_feedback`.**
   Android never captures the submit-response ID onto the break and never calls
   `program_get_feedback` (`A/data/AssessmentSubmissionHandler.kt:82-99`; iOS:
   `AssessmentSubmissionHandler.swift:151,166`). Fix together with O4.
@@ -158,7 +158,7 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
 
 ## 3. Onboarding & assessment
 
-- [ ] **O1 · P1 · bug — "Quitting → Better Life Program" routing.**
+- [x] (done 2026-07-13, 6d33fe8 — verified: Moderation → back → Taking-a-break lands the Clear30 track) **O1 · P1 · bug — "Quitting → Better Life Program" routing.**
   **Requirement (§17-Q1): the most recent What-brings-you-here choice must win.**
   Root cause: only the Moderation branch touches `choseClear30` (sets `false`,
   `A/views/newuser/assessment/AssessmentSlides3.kt:203`); nothing resets it to
@@ -175,7 +175,7 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   (done 2026-07-13, 3a63877 — landed as part of X3's `handleLife` port, which
   submits `AssessmentType.LifeOnboarding`)
 
-- [ ] **O3 · P2 · decided — Remove moderation-vs-weed-free question from the Life branch.**
+- [x] (done 2026-07-13, 6d33fe8) **O3 · P2 · decided — Remove moderation-vs-weed-free question from the Life branch.**
   **Decision (§17-Q2):** the ONLY route into Life is selecting "Moderation" on
   What-brings-you-here; do not ask mod-vs-weed-free afterward — the auto-set
   `LO_USE_STATE=1` (moderation) stands. **Fix:** drop `modAbsQuestion()` from the
@@ -183,7 +183,7 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   *does* still ask it (`iOS/.../AssessmentSlides3.swift:272-276`) — this is an
   intentional Android divergence per Thatcher; iOS change out of scope here.
 
-- [ ] **O4 · P2 · missing — Normative feedback never shown.** Three breaks:
+- [x] (done 2026-07-13, 6d33fe8 — CORRECTION: the onboarding feedback comes from the `program_generate_normative_feedback` EDGE function (iOS `getNormativeFeedback`), NOT the `program_get_feedback` RPC — that RPC feeds the legacy `[ProgramAssessmentFeedback]` cards. Submit → feedback → break (X7) → `Feedback` screen after SignUp via `Program.initialFeedback`, all verified e2e. Locally requires `supabase functions serve --no-verify-jwt` (E1); the local runtime rejects even the local anon key without the flag.) **O4 · P2 · missing — Normative feedback never shown.** Three breaks:
   `program_get_feedback` (plain RPC — no edge functions needed) has zero call
   sites (`A/data/supabase/SupabaseController.kt:167`); the `Feedback` screen is
   never inserted into the flow (`A/views/newuser/AllNewUserViewModel.kt:78-91`,
@@ -197,13 +197,13 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   expands (`A/views/newuser/assessment/AssessmentSocialProof.kt:517-603`); iOS
   sheets at `AssessmentSocialProof.swift:124-173`.
 
-- [ ] **O6 · P2 · bug — Shuffle flag never consumed.** `shuffled=true` set on
+- [x] (done 2026-07-13, 6d33fe8) **O6 · P2 · bug — Shuffle flag never consumed.** `shuffled=true` set on
   breakReason/triggers (`A/data/model/ProgramAssessmentQuestions.kt:97,351`) but
   no renderer reads it. **Fix:** port iOS's shuffle-once-with-"Other"-pinned-last
   (`iOS/.../AssessmentMultipleChoice.swift:70-81`) into Android's
   `AssessmentMultipleChoice`, computed in `remember{}` so redraws don't reshuffle.
 
-- [ ] **O7 · P2 · decided — Pain-point slide: port the consumption-method variant.**
+- [x] (done 2026-07-13, 6d33fe8 — Method badge + Monthly Spend cards added to the hero-card state; dead MoneyLossView removed; verified "🍪 Edible" + "😬 -$140") **O7 · P2 · decided — Pain-point slide: port the consumption-method variant.**
   **Decision (§17-Q3):** target is iOS `AssessmentPainPoint.swift` (the variant
   currently shipping on iOS — experiment off): `showCard` state shows a
   **Method** card from `consumptionMethod.question.badges[responseIndex]`
@@ -212,7 +212,7 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   the *other* variant (`AssessmentPainPoint2`) and even dropped its money stage
   (`MoneyLossView` defined, never called — `A/.../AssessmentPainPoint.kt:342-360`).
 
-- [ ] **O8 · P3 · bug — Help/harm emoji ~half size.** Spectrum `showDots` branch
+- [x] (done 2026-07-13, 6d33fe8 — 75sp emoji in 80dp frame on showDots, Heading1 otherwise; swapped semantics fixed) **O8 · P3 · bug — Help/harm emoji ~half size.** Spectrum `showDots` branch
   renders `Heading1` (~32sp) (`A/.../AssessmentRenderers.kt:244-245`); iOS uses
   75pt with 80pt frame (`AssessmentSpectrum.swift:47-61`). Note the branch
   semantics are also swapped vs iOS (large-emoji belongs to `showDots==true`).
@@ -222,7 +222,7 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   In-App Review prompt (iOS `requestReview()` `:71`), no edge fade, unicode 🌿
   laurels, flat star color (`A/views/newuser/sales/ReviewsSlide.kt:69-194`).
 
-- [ ] **O10 · P3 · decided — Delete the tab tutorial popups** ("Today (1/3)" etc.)
+- [x] (done 2026-07-13, 6d33fe8 — TutorialController deleted along with the AllTabs trigger, settings reset row, and the popup payload/renderer) **O10 · P3 · decided — Delete the tab tutorial popups** ("Today (1/3)" etc.)
   **for ALL tabs** (today/profile/community/groups — §17-Q4). Self-contained
   Android plumbing: remove the `maybeShow` trigger (`A/views/existinguser/AllTabs.kt:68`)
   and the flows (`A/data/TutorialController.kt:26-45`); also remove the reset
@@ -503,10 +503,18 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
 - [ ] **E1 · env — Run edge functions locally** (`supabase functions serve` from
   `BE/`) — required for Claire/AI chat and `reddit_proxy` (T7). Claire failing
   on the emulator is almost certainly this, not app code.
-- [ ] **E2 · env — Silence Slack on local.** Slack pings come from edge functions
+  *(2026-07-13: partially done — serve is running in the background with
+  `--no-verify-jwt` (the local runtime rejects even the local anon key when
+  verification is on; likely a JWT-secret mismatch in the local stack) and is
+  now also needed for onboarding's normative feedback (O4). Remaining: wire
+  `supabase functions serve --no-verify-jwt` into `android/run.sh` so it
+  survives new sessions.)*
+- [x] **E2 · env — Silence Slack on local.** Slack pings come from edge functions
   (`slack_send_message`, `user_handle_new`, etc. under `BE/supabase/functions/`)
   — neuter via local function env (unset the Slack webhook secret), not a seed
-  file.
+  file. (verified 2026-07-13: already silent — webhook URLs live per-channel in
+  `comms.slack_channels`, which is EMPTY locally, and `slack_send_message` also
+  guards against cross-environment calls; nothing to neuter)
 - [ ] **E3 · env — Seed sleep meditations** into the local DB. Prod tables
   verified: `library.sleep_resources` (and `library.craving_resources`). Pull
   rows from prod via the Supabase MCP → new numbered seed file (pattern:
