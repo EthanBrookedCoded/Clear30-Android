@@ -169,9 +169,16 @@ fun TodayTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30.d
         communityPosts = SupabaseController.getCommunityFeed(start = 0, end = 5, sortBy = "recent").getOrNull().orEmpty()
     }
 
-    // Day's feed content. `refresh`/`selectedDay` re-derive it.
+    // Day's feed content. `refresh`/`selectedDay` re-derive it. Newest day
+    // first, but READING order (unlockOn ascending) within a day — a plain
+    // `.reversed()` would also flip within-day order, putting a day's
+    // assessment-response messages before its core message.
     val messages = remember(selectedDay, refresh) {
-        program.contentInfo.values.flatMap { it.messages }.unlocked.reversed()
+        program.contentInfo.values.flatMap { it.messages }.unlocked
+            .sortedWith(
+                compareByDescending<org.clear30.data.model.ProgramMessage> { PlainDate.from(it.unlockOn) }
+                    .thenBy { it.unlockOn },
+            )
     }
     val hasCommunity = communityPosts.isNotEmpty()
     // Full component separation (iOS `buildItems`): every container in a lesson is

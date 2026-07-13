@@ -161,7 +161,13 @@ object ProgramMessageHandler {
         clientName: String = "",
     ): MutableMap<PlainDate, ContentInfo> {
         val stagesById = packaged.stages.associateBy { it.id }
-        val messages = if (removePrefix <= packaged.messages.size) packaged.messages.drop(removePrefix) else emptyList()
+        val messages = (if (removePrefix <= packaged.messages.size) packaged.messages.drop(removePrefix) else emptyList())
+            // Assessment-response messages (carrying a question_id) render AFTER
+            // the day's core message (Thatcher, 2026-07-13). The stable sort keeps
+            // delivered order otherwise; per-day buckets are keyed by `day`, so
+            // only within-day order changes — the +N-second unlockOn offsets then
+            // encode it for the feed, the viewer, and the pushed message_ids.
+            .sortedBy { it.question_id != null }
         val anchor = startDate.justDay.adding(seconds = UNLOCK_HOUR_SECONDS) // Day 0 @ 10:00
         val byDate = mutableMapOf<PlainDate, ContentInfo>()
         messages.forEach { raw ->
