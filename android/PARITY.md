@@ -304,7 +304,7 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   iOS shows per-method `CheckInStatus` rows with remove (`xmark.circle.fill`),
   "smoked again" (+), inline amount picker, timestamps, and a detail editor
   (`iOS/.../CheckInDayCard.swift:97-104,182-234,388-472`). Port the stateful card.
-- [ ] **T5 · P2 · divergent — Feed cards internally scroll instead of expanding.**
+- [x] (done 2026-07-13, 8c944dd — cards fill the page height, overflow clips behind a fade + tap-to-expand full-screen reader; reddit preview expands; YouTube plays inline in the card) **T5 · P2 · divergent — Feed cards internally scroll instead of expanding.**
   `MessageContentCard`/`GuidesFeedCard`/`RedditFeedCard` cap at 62% screen height
   with inner `verticalScroll`
   (`A/views/existinguser/today/feed/FeedContentCards.kt:91-92,132,173,218`).
@@ -312,13 +312,13 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   and inline reddit/YouTube embeds (`RedditFeedCard` is preview-only `:214-245`;
   `YouTubeFeedCard` static thumbnail `:258-289`). Depends on T7 (reddit data)
   and S8 (YouTube player).
-- [ ] **T6 · P2 · missing — End-of-feed celebration.** iOS `TodayTabEndFeedView`:
+- [x] (done 2026-07-13, 8c944dd — FeedEndCelebration: 7%/90ms progress ticks + haptics, 100-piece confetti, All Messages / Enter the Community CTA at +1s, Back to Top at +2s; appended after the day's messages; verified on-device) **T6 · P2 · missing — End-of-feed celebration.** iOS `TodayTabEndFeedView`:
   animated progress ring → fills to 100% → `ConfettiPop(num:100, radius:300)` +
   `successHeavy` haptic → "All Messages"/"Enter the Community" CTAs + "Back to
   Top" (`iOS/.../TodayFeedViews.swift:931-1069`). Android feed ends at the
   community item (`A/.../TodayTab.kt:197`); `ConfettiOverlay`
   (`A/views/components/Confetti.kt:33`) exists to reuse.
-- [ ] **T7 · P1 · bug — Reddit proxy payload mismatch (fixes reddit everywhere).**
+- [x] (done 2026-07-13, 8c944dd — `{subreddit, postId}` extracted with the iOS regex; entity decoding ported; verified on-device: proxy call reaches the function (no more 400) and a cache-seeded thread renders natively. NOTE: locally Reddit 403s the function's own fetch and `library.reddit_threads` is empty — seed threads locally (see `BE/scripts/seed_reddit_threads.mjs`) or it falls back to the web view; prod has the cache + OAuth secrets) **T7 · P1 · bug — Reddit proxy payload mismatch (fixes reddit everywhere).**
   Android sends `{"url": ...}` to `reddit_proxy`; the edge function requires
   `{subreddit, postId}` and 400s (`BE/supabase/functions/reddit_proxy/index.ts:136-141`)
   → Android silently falls back to direct reddit.com scraping (403-blocked from
@@ -331,34 +331,34 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
 
 ## 6. Support tab & content viewers
 
-- [ ] **S1 · P2 · divergent — Meditations: one standardized sheet.** Shared
+- [x] (done 2026-07-13, 8c944dd — full-screen `MeditationPage` sheet from library/cravings/sleep/hub-rail + `MeditationPageInline` in feed cards; ad-hoc mini-player deleted; starts paused like iOS; seekable scrubber) **S1 · P2 · divergent — Meditations: one standardized sheet.** Shared
   `MeditationPlayer` exists but is presented ad-hoc (bottom mini-player in
   library + cravings, inline swap in message detail, no-op route from hub rail —
   `A/.../library/MeditationsScreen.kt:101-222`, `cravings/CravingHub.kt:158-160`,
   `today/feed/MessageDetail.kt:191-214`, `SupportTab.kt:244`). iOS = one
   full-screen `MeditationPage` sheet everywhere (`iOS/.../MeditationPage.swift`).
   Keep cravings' separate `craving_resources` data source (matches iOS).
-- [ ] **S2 · P2 · divergent — Dr Fred + Gerad (peer-support) chat composers.**
+- [x] (done 2026-07-13, 8c944dd — shared `ChatComposer`/`ChatBubble`/`ChatTypingBubble` extracted from AiChatScreen; Gerad keeps long-press delete) **S2 · P2 · divergent — Dr Fred + Gerad (peer-support) chat composers.**
   Both use bare `OutlinedTextField` + arrow IconButton
   (`A/.../drfred/DrFredChat.kt:229-237`, `peersupport/PeerSupportChat.kt:216-224`)
   instead of the Claire/`AiChatScreen` composer (off-white input + gradient send
   disc, `A/views/components/views/AiChatScreen.kt:109-137`). They're human-backed
   `comms.*` threads — share the composer + bubble styling, not the whole screen.
-- [ ] **S3 · P3 · bug — Reddit viewer close button is top-LEFT**
+- [x] (done 2026-07-13, 8c944dd) **S3 · P3 · bug — Reddit viewer close button is top-LEFT**
   (`A/views/components/RedditDialog.kt:86-98`); move the `xmark` to the trailing
   side of the top bar.
-- [ ] **S4 · P1 · bug — Symptom → Claire → back skips the symptom page.** Support
+- [x] (done 2026-07-13, 8c944dd — SupportTab routes through a real back stack; verified symptom→Claire→back and prompts→Claire→back on-device) **S4 · P1 · bug — Symptom → Claire → back skips the symptom page.** Support
   tab uses one local `route` state, no back stack
   (`A/views/existinguser/support/SupportTab.kt:88,146,165-171`). Fix with a real
   back stack (preferred; TODO.md §6's Navigation Compose item) or by
   remembering/restoring the prior route.
-- [ ] **S5 · P2 · bug — Reddit viewer inconsistency.** Symptom "Real stories"
+- [x] (done 2026-07-13, 8c944dd — symptoms route through RedditDialog; the WebView fallback remains only for actual fetch failures) **S5 · P2 · bug — Reddit viewer inconsistency.** Symptom "Real stories"
   opens raw `WebViewDialog` (`A/.../SymptomDetailScreen.kt:109-135`) while all
   other paths use `RedditDialog` (orange-bar native viewer); and `RedditDialog`
   silently falls back to WebView when the scrape fails
   (`A/views/components/RedditDialog.kt:63-66`) — currently always, per T7.
   **Fix:** T7 + route symptoms through `RedditDialog`.
-- [ ] **S6 · P2 · missing — Message viewer as paged feed.** iOS
+- [x] (done 2026-07-13, 8c944dd — MessageDetail is a full-screen VerticalPager: topic card w/ break badge, one page per content part (reusing the Today feed cards), back+heart header ↔ topic+progress header, ContentInfo progress write-back, feed-end celebration; verified on-device incl. favorite heart + progress header) **S6 · P2 · missing — Message viewer as paged feed.** iOS
   `ProgramMessagesView` = full-screen pager, one section per content part
   (topicCard/video/message/carousel/pageInfo/meditation/instagram/reddit/youtube/
   memberPerk/clairePrompt/journal/feedEnd) with progress header + feedEnd
@@ -366,27 +366,27 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   Android `MessageDetail.kt:126-236` = flat scroll with collapsed link rows.
   Pagination note: the Today tab already uses `VerticalPager`, so paging is not
   hard — do it.
-- [ ] **S7 · P3 · bug — Remove per-row star in the messages list**
+- [x] (done 2026-07-13, 8c944dd — favoriting is the heart inside the opened viewer, like iOS) **S7 · P3 · bug — Remove per-row star in the messages list**
   (`A/.../library/MessagesLibraryScreen.kt:140-146`; iOS list has no star —
   favoriting is a heart inside the opened message,
   `iOS/.../ProgramMessagesView.swift:319-348`).
-- [ ] **S8 · P1 · bug — YouTube player white screen.** Raw WebView embed can't
+- [x] (done 2026-07-13, 8c944dd — IFrame Player API + JS bridge (no new dependency): onError codes 2/5/100/101/150, main-frame failures, and a 12s load timeout all trigger the Watch-on-YouTube fallback; `InlineYouTubePlayer` reuses it in feed cards) **S8 · P1 · bug — YouTube player white screen.** Raw WebView embed can't
   detect YouTube's in-player embed errors (only main-frame HTTP errors handled —
   `A/views/components/VideoPlayer.kt:147-181,163-169`) → blank player, "Watch on
   YouTube" fallback never triggers. iOS uses YouTubePlayerKit with a real error
   state (`iOS/.../YouTubeViewer.swift:150-158,206-216`). **Fix:** adopt the
   `android-youtube-player` IFrame library (or JS bridge for
   `onError`/`onStateChange`) with the watch-on-YouTube fallback.
-- [ ] **S9 · P2 · missing — Claire prompts "View all" → all-prompts list.**
+- [x] (done 2026-07-13, 8c944dd — `AllPromptsScreen`: break tabs (Android's library pattern in place of iOS's filter sheet), stage sections latest-first, 2-col PromptCard grid, tap pre-fills Claire; verified on-device) **S9 · P2 · missing — Claire prompts "View all" → all-prompts list.**
   Currently routes to empty Claire (`A/.../SupportTab.kt:243`); no list route
   exists in `SupportRoute` (`:64-84`). iOS `AllPromptsView.swift`:
   break-filtered, stage-sectioned 2-col grid of prompt cards, each seeding
   Claire (`:59-96,200-231`).
-- [ ] **S10 · P3 — Remove "Journal Prompts" + "Is Therapy For Me?"** from the
+- [x] (done 2026-07-13, 8c944dd — rows, label, and routes removed; JournalPromptsScreen/BetterHelp files kept as dead code) **S10 · P3 — Remove "Journal Prompts" + "Is Therapy For Me?"** from the
   Extras section (`A/.../SupportTab.kt:252-255` + routes/handlers
   `:75,:77,:157,:159`; the Extras label goes too since the section empties).
   Per-message journal prompts in `MessageDetail.kt:227-230` stay.
-- [ ] **S11 · P3 · decided — Feedback monster colors.** **Decision (§17-Q10): the
+- [x] (done 2026-07-13, 8c944dd — unfed = orange (reddit gradient) + hungry-monster art, fed = journals yellow + full art; card render gated on the experiment load so nothing flashes) **S11 · P3 · decided — Feedback monster colors.** **Decision (§17-Q10): the
   default/unfed monster is ORANGE (sad, nobody fed it); fed state stays
   yellow/journals.** Currently `FeedbackMonsterCard` hardcodes yellow for both
   states (`A/.../SupportTab.kt:451-470`); also fix the async-null experiment
