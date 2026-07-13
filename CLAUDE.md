@@ -84,26 +84,40 @@ Clear30 is a health and wellness app for substance-use reduction. Tech stack:
   - `messaging/` — FCM service (iOS `AppDelegate` MessagingDelegate)
   - `util/` — `Dates` (kotlinx.datetime helpers), `Strings`
 
-**Backend structure**:
-- `Backend/supabase/functions/` — edge functions
-- `Backend/supabase/migrations/` — SQL migrations
-- `Backend/supabase/seeds/` — seed data
+**Backend structure** — the backend lives in the iOS repo, NOT here
+(the `Backend/` folder was removed from this repo 2026-07-13):
+- `~/Workspace/iOS/Clear30/Backend/supabase/functions/` — edge functions
+- `~/Workspace/iOS/Clear30/Backend/supabase/migrations/` — SQL migrations
+- `~/Workspace/iOS/Clear30/Backend/supabase/seeds/` — seed data
+- Run all `supabase` CLI commands from `~/Workspace/iOS/Clear30/Backend/`.
 
 ## Key commands
 
-**Android**: open `android/` in Android Studio. The Gradle wrapper jar is
-git-ignored; let Studio regenerate it or run `gradle wrapper`.
+**Android — build/run/debug from the CLI** (Android Studio NOT required):
+```bash
+android/run.sh              # everything: backend + emulator if needed, build, install, launch
+android/run.sh --no-build   # reinstall + relaunch last-built APK
+~/Library/Android/sdk/platform-tools/adb logcat -d | grep "Supabase →"     # verify env
+~/Library/Android/sdk/platform-tools/adb exec-out screencap -p > screen.png  # for iOS parity checks
+```
+Manual step-by-step (what `run.sh` automates): `android/README.md` → "Running
+from the CLI".
 
-**Build prerequisites** (one-time):
-1. Add `android/app/google-services.json` (Firebase, app id `org.clear30`);
-   uncomment the `google-services` + `firebase-crashlytics` plugins in both
-   `android/build.gradle.kts` and `android/app/build.gradle.kts`.
-2. Fill `android/local.properties` with secrets: `SUPABASE_ANON_KEY`,
-   `REVENUECAT_API_KEY` (+ Helium / Facebook / AppStack as those are wired).
-3. Import the 25 brand SVGs in `android/svg-import/` via Studio →
-   `File → New → Vector Asset`; name them `clear30_logo`, `nih`, `umich`, etc.
+**Build prerequisites** (one-time, already done on this machine — details in
+`android/README.md`):
+1. Gradle wrapper jar + `gradlew` (git-ignored; fetch from the Gradle repo, tag
+   `v8.11.1`, or let Studio regenerate).
+2. Fill `android/local.properties`: `sdk.dir`, `SUPABASE_LOCAL_ANON_KEY` (from
+   `supabase status` — differs from the default in `app/build.gradle.kts`),
+   `SUPABASE_ANON_KEY` (prod), `REVENUECAT_API_KEY` (blank OK — no Play Store
+   app in RevenueCat yet, purchase code no-ops).
+3. Optional: `android/app/google-services.json` + uncomment the
+   `google-services`/`firebase-crashlytics` plugins (only for FCM/Crashlytics).
+4. Optional: import the 25 brand SVGs in `android/svg-import/` via Studio →
+   `File → New → Vector Asset` (all referenced drawables already resolve to
+   migrated PNGs, so this is polish, not a blocker).
 
-**Supabase**:
+**Supabase** (run from `~/Workspace/iOS/Clear30/Backend/`):
 ```bash
 supabase migration new MIGRATION_NAME    # always use this for schema changes
 supabase db reset                        # test locally
