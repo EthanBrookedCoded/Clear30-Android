@@ -15,7 +15,6 @@ import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.addGroupCheckInActivity
 import org.clear30.data.supabase.updateDayInfo
 import org.clear30.data.supabase.updateLastSmoked
-import org.clear30.data.supabase.updateLatestCheckInMethod
 import org.clear30.util.now
 
 /**
@@ -120,11 +119,11 @@ class CheckInLogger(
             // 3. Push the affected columns up to Supabase. Each write is
             //    individually try-caught inside the helpers, so a transient
             //    failure in one column doesn't roll back the others. We push
-            //    only what the check-in actually mutated: day_info,
-            //    last_smoked, and (when applicable) the latest check-in method.
+            //    only what the check-in actually mutated: day_info and
+            //    last_smoked. (`latestCheckInMethod` stays device-local — there
+            //    is no such column on prod `users`.)
             SupabaseController.updateDayInfo(program.dayInfo)
             SupabaseController.updateLastSmoked(program.lastSmoked)
-            program.latestCheckInMethod?.let { SupabaseController.updateLatestCheckInMethod(it) }
 
             // 4. Evaluate achievement criteria against the new state and write
             //    any newly-earned achievements to user_achievements. Skips the

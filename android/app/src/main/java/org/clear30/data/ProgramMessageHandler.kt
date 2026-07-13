@@ -15,11 +15,15 @@ import org.clear30.util.daysTo
 import org.clear30.util.justDay
 
 /**
- * ProgramMessageHandler — ported (core path) from ProgramMessageHandler.swift.
- * Fetches the packaged program messages and buckets them into
- * `Program.contentInfo` by their unlock date (startDate + message.day), with the
- * referenced stage attached. The fuller handler (core-program/start-soon/stage
- * variants) layers on from here.
+ * ProgramMessageHandler — ported from ProgramMessageHandler.swift. Two jobs:
+ *
+ *  1. SCHEDULING ([schedule] / [scheduleStartSoon]): map the packaged library
+ *     topics onto calendar dates in `Program.contentInfo`. Only the break
+ *     mechanics in [ProgramTimelineHandler] call these — content is scheduled
+ *     when a program starts or a break moves, never on a routine refresh.
+ *  2. REFRESH ([updateMessages], via [ensureContent] from the tabs): when the
+ *     server content revision changes, copy revised message fields in place by
+ *     `messageID` — buckets/unlockOn/progress are never rebuilt.
  */
 object ProgramMessageHandler {
 
@@ -72,40 +76,71 @@ object ProgramMessageHandler {
     }
 
     /**
-     * Fetch + apply messages to [program], unlocking from [startDate]. Returns
-     * the number of messages added beyond what was already cached — call sites
-     * can use this to decide whether to invalidate the UI (or fire a "new
-     * content unlocked" notification once the user is signed in).
-     *
-     * Refresh policy: we always re-call the backend regardless of the existing
-     * cache. The packaged feed is small (<100KB typical) and the server may
-     * have shipped revised copy that the user should see next time they open
-     * the message; clobbering preserves consistency across devices without
-     * forcing a manual pull-to-refresh.
+     * Content refresh (iOS `updateMessages`, run on every Program load): compare
+     * the server's content revision (`program_get_latest_update`) with the one we
+     * last pulled; when it changed, re-fetch the packaged messages and copy the
+     * revised fields INTO the existing [ProgramMessage] objects by `messageID`.
+     * The `contentInfo` buckets themselves — dates, `unlockOn`, and per-day
+     * `progress` — are never touched, so completed-day progress always survives
+     * a refresh. Returns true when anything was updated.
      */
-    suspend fun fetchAndApply(program: Program, startDate: Instant, clientName: String = ""): Int {
-        val packaged = getMessages() ?: return 0
-        val stagesById = packaged.stages.associateBy { it.id }
+    suspend fun updateMessages(program: Program, clientName: String = ""): Boolean {
+        val updatedAt = getLatestUpdate() ?: return false
+        if (program.latestUpdate == updatedAt) return false
+        val packaged = getMessages() ?: return false
+        val byID = packaged.messages.associateBy { it.id }
 
-        val byDate = mutableMapOf<PlainDate, ContentInfo>()
-        packaged.messages.forEach { raw ->
-            val msg = raw.withClientName(clientName)
-            // Unlock at 10:00 on (startDate + day); add a per-message second offset so
-            // messages sharing a day keep their delivered order (iOS handlePackagedMessages).
-            val base = startDate.justDay.adding(days = msg.day, seconds = UNLOCK_HOUR_SECONDS)
-            val plainDate = PlainDate.from(base)
-            val offset = byDate[plainDate]?.messages?.size ?: 0
-            val unlockOn = base.adding(seconds = offset.toLong())
-            val stage = msg.stage?.let { stagesById[it]?.toStage() }
-            byDate.add(plainDate, msg.toProgramMessage(unlockOn), stage)
+        program.contentInfo.values.flatMap { it.messages }.forEach { msg ->
+            val new = byID[msg.messageID]?.withClientName(clientName) ?: return@forEach
+            msg.title = new.title
+            msg.subtitle = new.subtitle
+            msg.message = new.body
+            msg.meditation = new.meditation
+            msg.pageInfo = (new.page_info ?: emptyList()).map { listOf(it.title, it.body) }
+            msg.clairePrompts = new.claire_prompts_json ?: new.claire_prompts ?: emptyList()
+            msg.allResources = new.resources ?: emptyList()
+            msg.journalPrompts = new.journal_prompts
+            msg.questionID = new.question_id
+            msg.questionResponse = new.question_response
+            msg.thumbnailURL = new.thumbnail_url
+            msg.videoURL = new.video_url
+            msg.instagramVideos = new.instagram_videos
+            msg.carouselImages = new.carousel_images
+            msg.memberPerks = new.member_perks
         }
 
-        val before = program.contentInfo.values.sumOf { it.messages.size }
-        program.contentInfo.putAll(byDate)
-        val after = program.contentInfo.values.sumOf { it.messages.size }
-        program.latestUpdate = org.clear30.util.now()
+        program.latestUpdate = updatedAt
         Clear30Store.save(program)
-        return (after - before).coerceAtLeast(0)
+        return true
+    }
+
+    /**
+     * Tab-open content hook. The timeline is normally scheduled once, at
+     * onboarding/new-break time (ProgramTimelineHandler.start/newClear30 →
+     * [schedule]) — so the steady-state job here is just the in-place copy
+     * refresh ([updateMessages]). The empty case is a REPAIR path only (dev
+     * installs predating the scheduler wiring, or a signup whose content fetch
+     * failed): schedule the full feed from [startDate] with the faithful
+     * scheduler. Returns true when the UI should re-derive the feed.
+     */
+    suspend fun ensureContent(program: Program, startDate: Instant, clientName: String = ""): Boolean {
+        if (program.contentInfo.values.any { it.messages.isNotEmpty() }) {
+            return updateMessages(program, clientName)
+        }
+        val packaged = getMessages() ?: return false
+        val content = schedule(startDate, packaged, clientName = clientName)
+        if (content.isEmpty()) return false
+        content.forEach { (date, info) ->
+            // Keep anything already there for a day (e.g. an empty restored
+            // bucket carrying progress) from being clobbered wholesale.
+            val existing = program.contentInfo[date]
+            program.contentInfo[date] =
+                if (existing == null) info
+                else existing.copy(messages = existing.messages + info.messages, stage = existing.stage ?: info.stage)
+        }
+        program.latestUpdate = getLatestUpdate()
+        Clear30Store.save(program)
+        return true
     }
 
     /**
@@ -216,12 +251,5 @@ object ProgramMessageHandler {
             Clear30Store.save(program)
         }
         return added
-    }
-
-    /** Stale check — re-fetch if our latest pull is more than [hours] old. */
-    fun isStale(program: Program, hours: Int = 12): Boolean {
-        val last = program.latestUpdate ?: return true
-        val cutoff = org.clear30.util.now().toEpochMilliseconds() - hours * 60L * 60_000L
-        return last.toEpochMilliseconds() < cutoff
     }
 }

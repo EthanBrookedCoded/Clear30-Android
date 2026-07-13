@@ -68,9 +68,16 @@ object ProgramTimelineHandler {
         }
     }
 
-    /** Reset scroll progress for every day strictly after [today] (Swift `progress = nil`). */
-    private fun MutableMap<PlainDate, ContentInfo>.resetFutureProgress(today: PlainDate) {
-        keys.filter { it > today }.forEach { this[it] = this[it]!!.copy(progress = null) }
+    /**
+     * Reset scroll progress for future days (Swift `progress = nil`). iOS is
+     * inconsistent on purpose: `restartBreak` resets from today INCLUSIVE
+     * (`>= today`, ProgramTimelineHandler.swift:158) — today is the new Day 1 and
+     * must render fresh — while `adjustBreakTime` resets strictly after today
+     * (`> today`, :309).
+     */
+    private fun MutableMap<PlainDate, ContentInfo>.resetFutureProgress(today: PlainDate, includeToday: Boolean = false) {
+        keys.filter { if (includeToday) it >= today else it > today }
+            .forEach { this[it] = this[it]!!.copy(progress = null) }
     }
 
     /**
@@ -358,7 +365,7 @@ object ProgramTimelineHandler {
         val daysFromStart = startDate.daysTo(today) - 1
 
         val updated = shiftContent(program.contentInfo, daysFromStart) { startPlain <= it && it < endPlain }
-        updated.resetFutureProgress(nowPlain)
+        updated.resetFutureProgress(nowPlain, includeToday = true)
         program.contentInfo = updated
 
         target.startDate = startDate.adding(days = daysFromStart)
@@ -373,7 +380,10 @@ object ProgramTimelineHandler {
 
     /**
      * End the current break (iOS `endBreak`): set its end to yesterday, delete
-     * content from today forward, and drop into the Life program in moderation.
+     * content from today forward, and drop into the WEED-FREE Life program
+     * (decision §17-Q5). iOS sets `coreModeration = true` and then `switchCore`
+     * toggles it — the net effect is `coreModeration == false` with
+     * `LO-Use-State = 0` submitted; we pass the net target directly.
      */
     suspend fun endBreak(program: Program): String? {
         val current = program.currentBreak ?: return null
@@ -381,8 +391,7 @@ object ProgramTimelineHandler {
         val todayPlain = PlainDate.from(today)
         current.overrideEndDate(today.adding(days = -1)) // last day in = yesterday
         program.contentInfo = program.contentInfo.filterKeys { it < todayPlain }.toMutableMap()
-        program.coreModeration = true
-        return switchCore(program, startOn = today, newModeration = true)
+        return switchCore(program, startOn = today, newModeration = false)
     }
 
     /**

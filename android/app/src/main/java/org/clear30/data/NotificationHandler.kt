@@ -79,7 +79,7 @@ object NotificationHandler {
      * Schedule one notification per future-dated [ProgramMessage] that carries
      * a `notificationTitle` + `notificationBody`. Replaces any previously
      * scheduled content notifications (idempotent — safe to re-call after every
-     * `ProgramMessageHandler.fetchAndApply`).
+     * `ProgramMessageHandler.ensureContent`).
      */
     fun scheduleContent(userInfo: UserInfo, messages: List<ProgramMessage>) {
         val settings = userInfo.notificationSettings ?: return

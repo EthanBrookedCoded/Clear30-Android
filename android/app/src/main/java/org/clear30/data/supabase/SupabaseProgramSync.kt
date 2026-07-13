@@ -5,10 +5,8 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import org.clear30.data.model.CheckInMethod
 import org.clear30.data.model.ContentInfo
 import org.clear30.data.model.CustomCheckIn
 import org.clear30.data.model.DayInfoArraySerializer
@@ -83,15 +81,6 @@ suspend fun SupabaseController.updateUserMetadata(): SupabaseController.Supabase
 suspend fun SupabaseController.updateLastSmoked(lastSmoked: Instant): SupabaseController.SupabaseFunctionError? =
     updateColumn(SupabaseUserProps.LAST_SMOKED, JsonPrimitive(lastSmoked.toString()))
 
-suspend fun SupabaseController.updateLatestCheckInMethod(method: CheckInMethod?): SupabaseController.SupabaseFunctionError? {
-    val value: JsonElement = if (method == null) JsonNull
-        else decoder.encodeToJsonElement(CheckInMethod.serializer(), method)
-    // No dedicated column was confirmed yet; piggyback on the user table only
-    // if/when the backend exposes one. Stub: write through updateUser as a
-    // best-effort but expect the call to no-op for unknown columns.
-    return updateColumn("latest_check_in_method", value)
-}
-
 /**
  * One-shot push of the live program state — call from the foreground/sync path
  * or right after a write that mutates several fields (e.g. assessment submission,
@@ -107,7 +96,6 @@ suspend fun SupabaseController.syncProgramState(program: Program): SupabaseContr
     rec(updateProgramBreaks(program.breaks))
     rec(updateCustomCheckIns(program.customCheckIns))
     rec(updateLastSmoked(program.lastSmoked))
-    rec(updateLatestCheckInMethod(program.latestCheckInMethod))
     rec(updateUserMetadata())
     return firstErr
 }

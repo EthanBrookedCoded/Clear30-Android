@@ -90,9 +90,14 @@ data class SupabaseMessageWithStage(
     val subtitle: String,
     val body: String,
     val page_info: List<ProgramPageInfo>? = null,
-    val meditation: ProgramMeditation? = null,
-    val resources: List<ProgramResource>? = null,
-    val claire_prompts: List<ProgramClairePrompt>? = null,
+    // Unlike program_get_messages (which returns transformed shapes), this RPC
+    // returns the RAW columns: meditation and resources are `{ "Title": "url" }`
+    // maps, and legacy claire_prompts is a `{ "Title": "prompt" }` map. iOS
+    // converts them in a custom decoder (SupabaseModels.swift:247-274); the
+    // `*Converted` properties below mirror that.
+    val meditation: Map<String, String>? = null,
+    val resources: Map<String, String>? = null,
+    val claire_prompts: Map<String, String>? = null,
     val claire_prompts_json: List<ProgramClairePrompt>? = null,
     val journal_prompts: List<String>? = null,
     val notification_title: String? = null,
@@ -111,6 +116,20 @@ data class SupabaseMessageWithStage(
     val stage_color2: String? = null,
     val stage_fred_experience: String? = null,
 ) {
+    /** First entry of the raw `{title: url}` map as a [ProgramMeditation] (iOS conversion). */
+    private val meditationConverted: ProgramMeditation?
+        get() = meditation?.entries?.firstOrNull()?.let { (name, url) -> ProgramMeditation(name = name, url = url) }
+
+    /** Raw `{title: url}` map → resource list (iOS conversion). */
+    private val resourcesConverted: List<ProgramResource>?
+        get() = resources?.map { (title, url) -> ProgramResource(title = title, url = url) }
+
+    /** Prefer the new claire_prompts_json column; fall back to the legacy `{title: prompt}` map. */
+    private val clairePromptsConverted: List<ProgramClairePrompt>
+        get() = claire_prompts_json
+            ?: claire_prompts?.map { (title, prompt) -> ProgramClairePrompt(title = title, prompt = prompt) }
+            ?: emptyList()
+
     /** Reconstruct the [Stage] from the flattened `stage_*` columns, if present. */
     fun toStage(): Stage? =
         if (stage_title != null && stage_color1 != null && stage_color2 != null) {
@@ -129,9 +148,9 @@ data class SupabaseMessageWithStage(
         subtitle = subtitle,
         message = body,
         pageInfo = (page_info ?: emptyList()).map { listOf(it.title, it.body) },
-        meditation = meditation,
-        allResources = resources ?: emptyList(),
-        clairePrompts = claire_prompts_json ?: claire_prompts ?: emptyList(),
+        meditation = meditationConverted,
+        allResources = resourcesConverted ?: emptyList(),
+        clairePrompts = clairePromptsConverted,
         journalPrompts = journal_prompts,
         notificationTitle = notification_title,
         notificationBody = notification_body,

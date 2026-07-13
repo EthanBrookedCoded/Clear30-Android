@@ -1,37 +1,40 @@
 package org.clear30.data
 
+import org.clear30.data.model.AssessmentQuestionID
+import org.clear30.data.model.AssessmentType
+import org.clear30.data.model.CheckInMethod
 import org.clear30.data.model.OnboardingSetup
 import org.clear30.data.model.Program
+import org.clear30.data.model.ProgramAssessmentResponse
 import org.clear30.data.model.ProgramBreakType
 import org.clear30.data.model.UserInfo
 import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.SupabaseNewUser
 import org.clear30.data.supabase.createUser
 import org.clear30.data.supabase.submitAssessment
-import org.clear30.data.supabase.syncProgramState
-import org.clear30.util.justDay
+import org.clear30.util.daysTo
 import org.clear30.util.now
 
 /**
- * AssessmentSubmissionHandler — ported (partially) from AssessmentSubmissionHandler.swift.
+ * AssessmentSubmissionHandler — ported from AssessmentSubmissionHandler.swift.
  *
- * Orchestrates the post-sign-up account creation + assessment submission so that
- * a fresh account exists in `public.users` and its onboarding answers land in
- * `programs.program_assessment_responses` (visible in Studio).
+ * Runs ONCE per signup, right after OTP verification (both RPCs read `auth.uid()`
+ * server-side): creates the `public.users` row, submits the onboarding assessment,
+ * and starts the program through the faithful scheduler
+ * ([ProgramTimelineHandler.start] → `ProgramMessageHandler.schedule`), mirroring
+ * iOS `submitAssessment` → `handleClear30` / `handleLife`. The payment screen must
+ * NOT re-submit — it only runs [verifyProgramSetup] (iOS `AllNewUser.handlePayment`).
  *
- * SCOPE: this is the "create a user + record the assessment responses" slice only.
- * The iOS handler additionally runs Amplitude/RevenueCat sign-in and the normative
- * feedback → break creation → `program.start` machinery. The analytics is
- * intentionally skipped for now; the program-setup machinery (handleClear30 /
- * handleLife / getNormativeFeedback / program.start) remains the TODO tracked in
- * [org.clear30.views.newuser.AllNewUserViewModel].
- *
- * Must run AFTER OTP verification (both RPCs read `auth.uid()` server-side).
+ * Still-unported iOS pieces, marked inline: `program_get_feedback` normative
+ * feedback onto the break (O4/X7) and the adolescent/guardian branch.
  */
 object AssessmentSubmissionHandler {
 
+    /** UserInfo cache key stamping when the assessment was submitted (iOS uses the same string). */
+    private const val INITIAL_SUBMISSION_KEY = "initialAssessmentSubmission"
+
     /**
-     * Create the user, then submit the collected assessment responses.
+     * Create the user, submit the assessment, and start the program timeline.
      * Returns an error message on failure, or null on success. Mutates
      * [userInfo]._userID with the resolved `users.id`.
      */
@@ -43,9 +46,7 @@ object AssessmentSubmissionHandler {
         // The onboarding assessment may be skipped/stubbed, so this can be null —
         // we DON'T bail in that case. An assessment response is what assigns the
         // user a program; without one `program_get_messages` returns no content
-        // and the Today feed is empty. So we always submit one (defaulting to the
-        // clear30 30-day program with empty responses, which still returns one
-        // lesson per day — including the day-0 intro video).
+        // and the Today feed is empty. Default to the clear30 30-day program.
         val info = onboardingSetup.assessmentInfo
 
         // 1. Create (upsert) the user. Phone/email come from auth.users server-side.
@@ -69,39 +70,112 @@ object AssessmentSubmissionHandler {
         // No-ops when RevenueCat isn't configured (blank API key).
         PaywallController.signIn(userInfo, PaywallController.getUserParams(userInfo))
 
-        // 2. Submit the assessment responses. The backend filters the payload to
-        //    the assessment's known question IDs, so unrelated prompts are dropped.
-        //    `clear30` / `life` are the only valid assessment ids (each maps to a
-        //    program); default to clear30 when nothing was chosen.
-        val assessmentID = when {
-            info == null -> "clear30"
-            info.choseClear30 -> "clear30"
-            else -> "life"
-        }
+        // Clear any existing breaks and messages (iOS does the same before starting)
+        // — a fresh signup starts clean. Accounts with existing server data never
+        // reach this path: the sign-up screen routes them to restore instead.
+        program.breaks.clear()
+        program.contentInfo = mutableMapOf()
+
+        // Stamp the submission time — verifyProgramSetup shifts the timeline by
+        // the days elapsed between now and payment (midnight-crossing signups).
+        userInfo.setCacheDate(INITIAL_SUBMISSION_KEY, now())
+
         val responses = info?.responses ?: emptyList()
-        val (responseID, submitError) = SupabaseController.submitAssessment(assessmentID, responses)
+        val lastSmoked = info?.lastSmoked ?: program.lastSmoked
+        return if (info?.choseClear30 != false) {
+            handleClear30(userInfo, program, responses, lastSmoked)
+        } else {
+            handleLife(userInfo, program, responses, lastSmoked)
+        }
+    }
+
+    /**
+     * The Clear30 track (iOS `handleClear30`): build the break(s), submit under
+     * `"clear30"`, keep the response ID on the break, and start the program —
+     * which schedules the content (incl. start-soon topics for a future-dated
+     * break) and pushes the whole state to Supabase.
+     */
+    private suspend fun handleClear30(
+        userInfo: UserInfo,
+        program: Program,
+        responses: List<ProgramAssessmentResponse>,
+        lastSmoked: kotlinx.datetime.Instant,
+    ): String? {
+        val (startSoonBreak, mainBreak) = ProgramTimelineHandler.handleBreaks(ProgramBreakType.CLEAR30, responses)
+
+        val (responseID, submitError) = SupabaseController.submitAssessment(AssessmentType.Clear30.string, responses)
+        if (submitError != null) return submitError.message
+        mainBreak.assessmentResponseID = responseID?.toInt()
+
+        // TODO(port O4/X7): getNormativeFeedback (`program_get_feedback`) →
+        // mainBreak.normativeFeedback, shown on the Feedback onboarding screen.
+
+        // Consumption method → the default check-in method (iOS handleClear30).
+        val methodResponse = mainBreak.getAssessmentResponse(AssessmentQuestionID.CONSUMPTION_METHOD.raw)
+            ?.responses?.firstOrNull() ?: 1
+        val consumptionMethod = when (methodResponse) {
+            1 -> CheckInMethod.PEN
+            2 -> CheckInMethod.DAB
+            3 -> CheckInMethod.EDIBLE
+            else -> CheckInMethod.BUD
+        }
+
+        ProgramTimelineHandler.start(
+            program = program,
+            mainBreak = mainBreak,
+            startSoonBreak = startSoonBreak,
+            lastSmoked = lastSmoked,
+            checkInMethod = consumptionMethod,
+            clientName = userInfo.name,
+        )?.let { return it }
+
+        Clear30Store.save(userInfo)
+        Logger.logEvent(userInfo.loggingID, LogEventType.completedAssessment, mapOf(LogEventExtraDataType.TYPE to "clear30"))
+        return null
+    }
+
+    /**
+     * The Life ("Better Life Program") track (iOS `handleLife`): submit under
+     * `"life-onboarding"` (NOT `"life"`, the post-assessment ID), set the
+     * moderation mode from LO-Use-State, and start the core program.
+     */
+    private suspend fun handleLife(
+        userInfo: UserInfo,
+        program: Program,
+        responses: List<ProgramAssessmentResponse>,
+        lastSmoked: kotlinx.datetime.Instant,
+    ): String? {
+        val loUseState = responses.firstOrNull { it.question.strippedPrompt == AssessmentQuestionID.LO_USE_STATE.raw }
+            ?.responses?.firstOrNull() ?: 0
+        val weedFree = loUseState == 0
+
+        val (_, submitError) = SupabaseController.submitAssessment(AssessmentType.LifeOnboarding.string, responses)
         if (submitError != null) return submitError.message
 
-        // 3. Place the user on the Clear30 (vs Life) track by registering the break.
-        //    iOS builds this via handleBreaks → program.start; the live onboarding
-        //    asks no start-date, so Day 0 = today with no start-soon bridge. Content
-        //    itself is pulled lazily by the Today/Support tabs (anchored to the break
-        //    start); here we create + push the break so the badge ("Clear30 Day N"),
-        //    calendar window and Previous Breaks reflect it and it survives reinstall.
-        //    Life ("Moderation") users get no break — currentBreak == null == Life.
-        if (assessmentID == "clear30" && program.breaks.none { it.type == ProgramBreakType.CLEAR30 }) {
-            val (startSoon, main) = ProgramTimelineHandler.handleBreaks(ProgramBreakType.CLEAR30, responses)
-            program.breaks.add(main)
-            startSoon?.let { program.breaks.add(it) }
-            program.startDate = now().justDay
-            Clear30Store.save(program)
-            SupabaseController.syncProgramState(program)
-        }
+        program.coreModeration = !weedFree
 
-        android.util.Log.i(
-            "AssessmentSubmission",
-            "Created user $userID, submitted '$assessmentID' assessment → response id $responseID",
-        )
+        ProgramTimelineHandler.start(
+            program = program,
+            mainBreak = null,
+            startSoonBreak = null,
+            lastSmoked = lastSmoked,
+            clientName = userInfo.name,
+        )?.let { return "Failed to start core program: $it" }
+
+        Clear30Store.save(userInfo)
+        Logger.logEvent(userInfo.loggingID, LogEventType.completedAssessment, mapOf(LogEventExtraDataType.TYPE to "life"))
         return null
+    }
+
+    /**
+     * iOS `verifyProgramSetup`, run at payment: if the user signed up (and got
+     * their timeline scheduled) but didn't finish the paywall until N days later,
+     * shift the whole program forward by N so today is still Day 1.
+     */
+    suspend fun verifyProgramSetup(userInfo: UserInfo, program: Program) {
+        val submissionDate = userInfo.getCachedDate(INITIAL_SUBMISSION_KEY) // fallback = now → shift 0
+        val daysToShift = submissionDate.daysTo(now())
+        if (daysToShift <= 0) return
+        ProgramTimelineHandler.adjustBreakTime(program, daysToShift)
     }
 }

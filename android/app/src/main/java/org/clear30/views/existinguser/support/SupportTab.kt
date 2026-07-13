@@ -105,10 +105,8 @@ fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30
     var refresh by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     var symptomInfos by remember { mutableStateOf<org.clear30.data.model.SymptomInfos?>(null) }
     androidx.compose.runtime.LaunchedEffect(Unit) {
-        if (program.contentInfo.isEmpty() || org.clear30.data.ProgramMessageHandler.isStale(program)) {
-            val added = org.clear30.data.ProgramMessageHandler.fetchAndApply(program, program.startDate, userInfo.name)
-            if (added > 0) refresh++
-        }
+        val contentStart = program.currentBreak?.startDate ?: program.startDate
+        if (org.clear30.data.ProgramMessageHandler.ensureContent(program, contentStart, userInfo.name)) refresh++
         // Pull the REAL symptom infos from the backend (`get_symptom_infos`, the
         // emoji-Name → {tips,reddits,prompts} map) — the same source iOS uses. Cache
         // them; fall back to the last cache, then the built-in set, so the carousel

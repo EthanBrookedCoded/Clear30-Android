@@ -43,6 +43,7 @@ import org.clear30.data.model.Program
 import org.clear30.data.model.SignUpType
 import org.clear30.data.model.UserInfo
 import org.clear30.data.supabase.SupabaseController
+import org.clear30.data.supabase.fetchUserData
 import org.clear30.data.supabase.getUserAuthID
 import org.clear30.data.supabase.getUserID
 import org.clear30.data.supabase.signInWithOtpEmail
@@ -174,16 +175,18 @@ fun AllSignUp(
                             else SupabaseController.verifyOtpPhone(target, code)
                             if (err == null) {
                                 patchUserAfterAuth(userInfo, target, isEmail)
-                                // New accounts: create the user + record assessment
-                                // responses (iOS AllSignUpViewModel.submitAssessment →
-                                // AssessmentSubmissionHandler). Existing users signing
-                                // in instead RESTORE their program state from the
-                                // backend (iOS restoreAccount → ProgramRestoreHandler).
-                                // Stay on LOADING while either runs.
-                                val submitError = if (signInOnly) {
-                                    restoreAccount(userInfo, program)
-                                } else {
-                                    AssessmentSubmissionHandler.submitAssessment(userInfo, program, onboardingSetup)
+                                // DB-level returning-user detection after EVERY verify
+                                // (iOS checkIfReturningUser): a users row with non-empty
+                                // content_info must RESTORE — even when the user came in
+                                // through sign-up — or submitting a fresh assessment
+                                // would clobber their server-side program state.
+                                // Old-Android-app accounts (row present, EMPTY program
+                                // state) fall through to fresh onboarding, keeping
+                                // their users row/ID (§17-Q7). Stay on LOADING.
+                                val submitError = when {
+                                    checkIfReturningUser() -> restoreAccount(userInfo, program)
+                                    signInOnly -> "No account found.\nPlease sign up first."
+                                    else -> AssessmentSubmissionHandler.submitAssessment(userInfo, program, onboardingSetup)
                                 }
                                 if (submitError != null) {
                                     error = submitError
@@ -521,6 +524,18 @@ private suspend fun patchUserAfterAuth(userInfo: UserInfo, contact: String, isEm
     // createUser RPC + assessment submission now run in AssessmentSubmissionHandler
     // (invoked from the verify path). The real users.id replaces this auth-id there.
     // TODO(port): program message fetch / normative feedback + break creation.
+}
+
+/**
+ * Returning-user check — iOS AllSignUpViewModel.checkIfReturningUser: the verified
+ * contact counts as an existing account only when its `users` row exists AND has a
+ * non-empty `content_info` (enough program state to restore). Rows with empty
+ * program state — notably the old Android app's ~3k users — are treated as new.
+ */
+private suspend fun checkIfReturningUser(): Boolean {
+    val userID = SupabaseController.getUserID()?.takeIf { it.isNotEmpty() } ?: return false
+    val userData = SupabaseController.fetchUserData(userID)
+    return !userData?.content_info.isNullOrEmpty()
 }
 
 /**

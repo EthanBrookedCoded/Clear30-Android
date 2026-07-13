@@ -126,7 +126,7 @@ class AllNewUserViewModel(
     fun handlePayment(entitlement: EntitlementType?, setPaidFalseOn: kotlinx.datetime.Instant? = null) {
         val isPaid = entitlement != null
         userInfo.notificationSettings = ToggleSettings.notificationDefaults(paid = isPaid)
-        // TODO(port): AssessmentSubmissionHandler.verifyProgramSetup; if paid onboardingSetup.setup(groups)
+        // TODO(port): if paid, onboardingSetup.setup (groups)
 
         // iOS: look up whether the paywall the user saw is hard (payment.hard_paywalls).
         // currentPaywallID is only set by Helium-driven paywalls, so this is dormant
@@ -143,20 +143,6 @@ class AllNewUserViewModel(
         userInfo.setPaidFalseOn = setPaidFalseOn
         userInfo.completedOnboarding = true
 
-        // Bridge onboarding's lastSmoked into the program so the home "time
-        // clear" timer reads correctly from day 1.
-        val assessmentInfo = onboardingSetup.assessmentInfo
-        assessmentInfo?.let { info ->
-            program.lastSmoked = info.lastSmoked
-            // A fresh signup ALWAYS starts at day 0 today. Reset the start date and
-            // drop any stale content (e.g. left over from a prior debug-backdated
-            // run) so the Today feed re-seeds relative to today and unlocks the
-            // lessons one day at a time — never "jumped to day 30".
-            program.startDate = org.clear30.util.now()
-            program.contentInfo.clear()
-            program.latestUpdate = null
-        }
-
         // iOS: NotificationHandler.removeAbandonedOnboarding() — they made it,
         // cancel the "come back" nudges.
         org.clear30.data.NotificationHandler.removeAbandonedOnboarding()
@@ -165,21 +151,15 @@ class AllNewUserViewModel(
         org.clear30.data.NotificationHandler.scheduleCheckInReminder(userInfo)
 
         scope.launch {
+            // The user + assessment + program timeline were all created right after
+            // OTP verification (AssessmentSubmissionHandler.submitAssessment, ONCE
+            // per signup — re-submitting here would duplicate the
+            // program_assessment_responses row and the break). At payment, iOS only
+            // verifies the setup: if the paywall was finished on a later day than
+            // sign-up, shift the whole timeline so today is still Day 1.
+            AssessmentSubmissionHandler.verifyProgramSetup(userInfo, program)
             Clear30Store.save(userInfo)
             Clear30Store.save(program)
-            // Register the user server-side + submit the assessment (runs AFTER OTP
-            // verify) so every auth.uid()-backed feature works: Claire & Dr. Fred
-            // chat, the daily program messages (correct content per day), etc. New
-            // signups only — a sign-in already has a server account. Without this,
-            // `public.users` has no row and those functions silently fail.
-            if (assessmentInfo != null) {
-                val err = AssessmentSubmissionHandler.submitAssessment(userInfo, program, onboardingSetup)
-                if (err != null) {
-                    android.util.Log.w("Onboarding", "assessment submit failed: $err")
-                } else {
-                    Clear30Store.save(userInfo)  // persist the resolved server userID
-                }
-            }
             onCompletedOnboarding()
         }
     }

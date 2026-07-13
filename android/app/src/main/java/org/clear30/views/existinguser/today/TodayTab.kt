@@ -141,14 +141,13 @@ fun TodayTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30.d
     var monthAnchor by remember { mutableStateOf(firstOfMonth(today)) }
 
     LaunchedEffect(Unit) {
-        // Seed the daily content from the current break's start when there is one
-        // (so a freshly-started break unlocks its lessons day-by-day from day 1),
+        // Refresh message copy in place when the server content revision changed
+        // (progress/unlockOn survive); if the timeline was never scheduled
+        // (repair path), schedule it from the current break's start — so a
+        // freshly-started break unlocks its lessons day-by-day from day 1 —
         // otherwise from the program start.
         val contentStart = program.currentBreak?.startDate ?: program.startDate
-        if (program.contentInfo.isEmpty() || org.clear30.data.ProgramMessageHandler.isStale(program)) {
-            val added = org.clear30.data.ProgramMessageHandler.fetchAndApply(program, contentStart, userInfo.name)
-            if (added > 0) refresh++
-        }
+        if (org.clear30.data.ProgramMessageHandler.ensureContent(program, contentStart, userInfo.name)) refresh++
         // Fall back to the built-in daily lessons whenever the backend returned no
         // content (local dev / pre-assessment) so the Today feed is never empty.
         if (program.contentInfo.values.sumOf { it.messages.size } == 0) {

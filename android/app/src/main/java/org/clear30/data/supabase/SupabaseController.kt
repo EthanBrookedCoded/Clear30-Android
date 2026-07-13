@@ -37,6 +37,15 @@ object SupabaseController {
         ignoreUnknownKeys = true
         coerceInputValues = true
         explicitNulls = false
+        // This Json doubles as the PUSH ENCODER for every RPC param and column
+        // write. Swift's Codable always encodes non-optional fields, so defaulted
+        // fields are part of the cross-platform wire contract: without this,
+        // `platform: "android"` is dropped from create_user (row lands as 'ios'),
+        // and empty `loggedSymptoms` / `message_ids` are dropped from
+        // day_info/content_info — which iOS decodes NON-optionally, so its
+        // sign-in restore of Android-written data throws. Nulls stay omitted
+        // (explicitNulls=false), matching Swift's nil handling.
+        encodeDefaults = true
         serializersModule = SerializersModule {
             // Forward-compat: unknown AssessmentQuestionType discriminators
             // (server-side A/B test of a new question kind) fall back to
