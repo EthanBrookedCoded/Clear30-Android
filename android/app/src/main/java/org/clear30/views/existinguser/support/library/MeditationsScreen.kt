@@ -99,7 +99,7 @@ fun MeditationsScreen(program: Program, onBack: () -> Unit) {
         }
 
         playing?.let { med ->
-            MeditationPlayer(meditation = med, program = program, onClose = { playing = null })
+            MeditationPage(meditation = med, program = program, onDismiss = { playing = null })
         }
     }
 }
@@ -124,107 +124,5 @@ internal fun MeditationRow(meditation: ProgramMeditation, isPlaying: Boolean, on
     }
 }
 
-/**
- * Mini audio player — wraps a Media3 ExoPlayer. Lifecycle:
- *  - constructed on entry, prepared with the meditation URL, auto-plays
- *  - polls position every 500ms for the progress bar
- *  - on the first time the user actually plays, flips `meditation.visited`
- *    and persists the program (matching iOS' visited tracking)
- *  - released when the composable leaves (DisposableEffect)
- */
-@Composable
-internal fun MeditationPlayer(
-    meditation: ProgramMeditation,
-    program: Program,
-    onClose: () -> Unit,
-) {
-    val context = LocalContext.current
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
-    val player = remember(meditation.url) {
-        ExoPlayer.Builder(context).build().apply {
-            // Process-wide audio attributes baseline (iOS AVAudioSession
-            // .playback / .mixWithOthers analog). handleAudioFocus = true so
-            // the meditation pauses on incoming call / nav prompt instead of
-            // being talked over.
-            setAudioAttributes(org.clear30.data.AudioBaseline.attributes, /* handleAudioFocus = */ true)
-            setMediaItem(MediaItem.fromUri(meditation.url))
-            prepare()
-            playWhenReady = true
-        }
-    }
-    var isPlaying by remember { mutableStateOf(false) }
-    var progress by remember { mutableFloatStateOf(0f) }
-    var durationMs by remember { mutableStateOf(0L) }
-
-    DisposableEffect(meditation.url) {
-        val listener = object : Player.Listener {
-            override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
-            override fun onPlaybackStateChanged(state: Int) {
-                if (state == Player.STATE_READY) durationMs = player.duration.coerceAtLeast(0L)
-            }
-        }
-        player.addListener(listener)
-        onDispose {
-            player.removeListener(listener)
-            player.release()
-        }
-    }
-
-    // Mark visited on first actual play.
-    LaunchedEffect(isPlaying) {
-        if (isPlaying && !meditation.visited) {
-            // Locate the meditation on its owning message and flip the flag —
-            // ProgramMeditation is a value type so we have to mutate via the
-            // parent message graph.
-            val target = program.contentInfo.values
-                .flatMap { it.messages }
-                .firstOrNull { it.meditation?.url == meditation.url }
-                ?.meditation
-            target?.visited = true
-            scope.launch { Clear30Store.save(program) }
-        }
-    }
-
-    // 500ms progress poll while playing — ExoPlayer doesn't push position updates.
-    LaunchedEffect(isPlaying, durationMs) {
-        while (isPlaying && durationMs > 0L) {
-            progress = (player.currentPosition.toFloat() / durationMs).coerceIn(0f, 1f)
-            delay(500L)
-        }
-    }
-
-    Clear30Card(
-        modifier = Modifier.fillMaxWidth().padding(top = Dimens.cardSpacing),
-        gradient = Clear30Gradients.meditation,
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                SmallText(meditation.name, color = Color.White)
-                Spacer(Modifier.weight(1f))
-                IconButton("xmark", tint = Color.White, onClick = onClose)
-            }
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.fillMaxWidth(),
-                color = Color.White,
-                trackColor = Color.White.copy(alpha = 0.25f),
-            )
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-                IconButton(if (isPlaying) "pause.fill" else "play.fill", tint = Color.White) {
-                    if (player.isPlaying) player.pause() else player.play()
-                }
-                TinyText(formatTime(player.currentPosition), color = Color.White)
-                Spacer(Modifier.weight(1f))
-                TinyText(formatTime(durationMs), color = Color.White.copy(alpha = 0.5f))
-            }
-        }
-    }
-}
-
-private fun formatTime(ms: Long): String {
-    if (ms <= 0L) return "0:00"
-    val totalSec = ms / 1000
-    val m = totalSec / 60
-    val s = totalSec % 60
-    return "$m:${s.toString().padStart(2, '0')}"
-}
+// The mini bottom player was replaced by the standardized full-screen
+// MeditationPage sheet (MeditationPage.kt), matching iOS.

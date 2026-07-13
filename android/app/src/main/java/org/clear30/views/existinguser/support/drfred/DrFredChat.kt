@@ -226,15 +226,14 @@ fun DrFredChat(userInfo: UserInfo, onBack: () -> Unit) {
             }
         }
 
-        // Compose bar
-        Row(
-            Modifier.fillMaxWidth().padding(top = Dimens.cardSpacing / 2),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
-        ) {
-            OutlinedTextField(input, { input = it }, modifier = Modifier.weight(1f), enabled = !sending)
-            IconButton("arrow.right") { send() }
-        }
+        // Compose bar — the shared Claire-style composer (off-white input +
+        // gradient send disc), per-chat gradient.
+        org.clear30.views.components.ChatComposer(
+            input = input,
+            onInputChange = { input = it },
+            sendBrush = fredGradient,
+            modifier = Modifier.padding(top = Dimens.cardSpacing / 2),
+        ) { send() }
     }
 }
 
@@ -277,47 +276,12 @@ private fun DateSeparator(label: String) {
 
 /** Three pulsing dots in an assistant-styled bubble — Dr. Fred is "thinking". */
 @Composable
-private fun FredTypingBubble() {
-    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "fredTyping")
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
-        Row(
-            Modifier.clip(RoundedCornerShape(Dimens.cornerRadius))
-                .background(Clear30Colors.opacityGrayFlattened)
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            repeat(3) { i ->
-                val alpha by transition.animateFloat(
-                    initialValue = 0.2f,
-                    targetValue = 0.9f,
-                    animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-                        animation = androidx.compose.animation.core.tween(450, easing = androidx.compose.animation.core.LinearEasing),
-                        repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
-                        initialStartOffset = androidx.compose.animation.core.StartOffset(i * 150),
-                    ),
-                    label = "fredDot$i",
-                )
-                Box(Modifier.size(8.dp).clip(CircleShape).background(Clear30Colors.text.copy(alpha = alpha)))
-            }
-        }
-    }
-}
+private fun FredTypingBubble() = org.clear30.views.components.ChatTypingBubble()
 
 /** A single message bubble (Dr. Fred messages aren't deletable — no soft-delete column). */
 @Composable
-private fun Bubble(message: DrFredMessage) {
-    val isUser = message.isUser
-    Box(Modifier.fillMaxWidth(), contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart) {
-        Box(
-            Modifier.widthIn(max = 280.dp).clip(RoundedCornerShape(Dimens.cornerRadius))
-                .then(if (isUser) Modifier.background(fredGradient) else Modifier.background(Clear30Colors.opacityGrayFlattened))
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-        ) {
-            SmallText(message.text, color = if (isUser) Color.White else Clear30Colors.text)
-        }
-    }
-}
+private fun Bubble(message: DrFredMessage) =
+    org.clear30.views.components.ChatBubble(message.text, message.isUser, fredGradient)
 
 // MARK: - Day grouping helpers (specialized for DrFredMessage; mirrors PeerSupportChat)
 

@@ -107,7 +107,7 @@ fun CravingResources(program: Program, userInfo: UserInfo, kind: MeditationResou
             }
         }
 
-        playing?.let { med -> MeditationPlayer(meditation = med, program = program, onClose = { playing = null }) }
+        playing?.let { med -> MeditationPage(meditation = med, program = program, onDismiss = { playing = null }) }
     }
 }
 

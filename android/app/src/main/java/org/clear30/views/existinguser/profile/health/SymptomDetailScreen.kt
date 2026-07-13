@@ -79,8 +79,9 @@ fun SymptomDetailScreen(
     var expandedTip by remember { mutableStateOf<SymptomTip?>(null) }
     var showAllReddits by remember { mutableStateOf(false) }
     var showAllPrompts by remember { mutableStateOf(false) }
-    // Reddit "Real stories" open in the in-app web viewer instead of the browser.
-    var webUrl by remember { mutableStateOf<String?>(null) }
+    // Reddit "Real stories" open in the native in-app viewer, like every other
+    // reddit path (it falls back to the web view itself if the fetch fails).
+    var redditUrl by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(key) {
         Logger.logEvent(userInfo.loggingID, LogEventType.loggedSymptom, mapOf(LogEventExtraDataType.SYMPTOM to key))
@@ -108,7 +109,7 @@ fun SymptomDetailScreen(
                 TwoColumnGrid(if (showAllReddits) entries else entries.take(2)) { e ->
                     RedditMini(e.key, e.value) {
                         Logger.logEvent(userInfo.loggingID, LogEventType.openedRedditThread, mapOf(LogEventExtraDataType.URL to e.value))
-                        webUrl = e.value
+                        redditUrl = e.value
                     }
                 }
                 if (entries.size > 2) ShowMoreRow(showAllReddits) { showAllReddits = !showAllReddits }
@@ -131,8 +132,8 @@ fun SymptomDetailScreen(
             TipExpandedOverlay(tip) { expandedTip = null }
         }
 
-        webUrl?.let { u ->
-            org.clear30.views.components.WebViewDialog(u, onDismiss = { webUrl = null })
+        redditUrl?.let { u ->
+            org.clear30.views.components.RedditDialog(u, onDismiss = { redditUrl = null })
         }
     }
 }

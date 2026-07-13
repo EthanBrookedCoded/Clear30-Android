@@ -8,6 +8,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -102,45 +103,88 @@ fun AiChatScreen(
             modifier = Modifier.weight(1f).fillMaxWidth().padding(vertical = Dimens.cardSpacing),
             verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
         ) {
-            items(messages) { msg -> Bubble(msg, userBubble) }
-            if (sending) item { TypingBubble() }
+            items(messages) { msg -> ChatBubble(msg.text, msg.isUser, userBubble) }
+            if (sending) item { ChatTypingBubble() }
         }
 
-        // Composer — iOS ChatComposeMessageView: off-white filled input + a
-        // 30pt gradient send disc that only appears once there's text.
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-            MultiLineOffWhiteInput(input, { input = it }, placeholder = "Message", modifier = Modifier.weight(1f), smallText = true)
-            if (input.isNotBlank()) {
-                Box(
-                    Modifier.size(30.dp).pressScale {
-                        val text = input.trim()
-                        if (text.isEmpty() || sending) return@pressScale
-                        messages.add(ClaireMessage(text = text, isUser = true))
-                        input = ""; sending = true
-                        scope.launch {
-                            val history = messages.map { SupabaseClaireMessage(if (it.isUser) "user" else "assistant", it.text) }
-                            val reply = send(history)
-                            messages.add(ClaireMessage(text = reply ?: "Sorry, I couldn't respond just now.", isUser = false))
-                            sending = false
-                        }
-                    }.clip(CircleShape).background(userBubble),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    androidx.compose.material3.Icon(
-                        sfSymbol("arrow.up"),
-                        contentDescription = "Send",
-                        tint = Color.White,
-                        modifier = Modifier.size(15.dp),
-                    )
-                }
+        ChatComposer(input = input, onInputChange = { input = it }, sendBrush = userBubble) {
+            val text = input.trim()
+            if (text.isEmpty() || sending) return@ChatComposer
+            messages.add(ClaireMessage(text = text, isUser = true))
+            input = ""; sending = true
+            scope.launch {
+                val history = messages.map { SupabaseClaireMessage(if (it.isUser) "user" else "assistant", it.text) }
+                val reply = send(history)
+                messages.add(ClaireMessage(text = reply ?: "Sorry, I couldn't respond just now.", isUser = false))
+                sending = false
             }
         }
     }
 }
 
-/** Animated "…typing" bubble shown on the assistant side while awaiting a reply. */
+/**
+ * ChatComposer — the shared composer (iOS `ChatComposeMessageView`): off-white
+ * filled multi-line input + a 30dp gradient send disc that only appears once
+ * there's text. Used by Claire, Dr. Fred, and Gerad so every chat reads the same.
+ */
 @Composable
-private fun TypingBubble() {
+fun ChatComposer(
+    input: String,
+    onInputChange: (String) -> Unit,
+    sendBrush: Brush,
+    modifier: Modifier = Modifier,
+    onSend: () -> Unit,
+) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+        MultiLineOffWhiteInput(input, onInputChange, placeholder = "Message", modifier = Modifier.weight(1f), smallText = true)
+        if (input.isNotBlank()) {
+            Box(
+                Modifier.size(30.dp).pressScale { onSend() }.clip(CircleShape).background(sendBrush),
+                contentAlignment = Alignment.Center,
+            ) {
+                androidx.compose.material3.Icon(
+                    sfSymbol("arrow.up"),
+                    contentDescription = "Send",
+                    tint = Color.White,
+                    modifier = Modifier.size(15.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * ChatBubble — the shared bubble (iOS `BubbleStyle`, Cards.swift:936-946):
+ * vertical padding cardSpacing × 0.8, horizontal cardSpacing, capped at ~80% of
+ * the screen width; gradient for the user side, flat gray for the other side.
+ * [onLongPressUser] enables long-press actions on the user's own bubbles
+ * (e.g. delete in the Gerad chat).
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun ChatBubble(text: String, isUser: Boolean, userBubble: Brush, onLongPressUser: (() -> Unit)? = null) {
+    val maxBubbleWidth = LocalConfiguration.current.screenWidthDp.dp * 0.8f
+    Box(Modifier.fillMaxWidth(), contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart) {
+        Box(
+            Modifier.widthIn(max = maxBubbleWidth).clip(RoundedCornerShape(Dimens.cornerRadius))
+                .then(if (isUser) Modifier.background(userBubble) else Modifier.background(Clear30Colors.opacityGrayFlattened))
+                .then(
+                    if (isUser && onLongPressUser != null) {
+                        Modifier.combinedClickable(onClick = {}, onLongClick = onLongPressUser)
+                    } else {
+                        Modifier
+                    },
+                )
+                .padding(horizontal = Dimens.cardSpacing, vertical = Dimens.cardSpacing * 0.8f),
+        ) {
+            SmallText(text, color = if (isUser) Color.White else Clear30Colors.text)
+        }
+    }
+}
+
+/** Animated "…typing" bubble shown on the non-user side while awaiting a reply. */
+@Composable
+fun ChatTypingBubble() {
     val transition = rememberInfiniteTransition(label = "typing")
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
         Row(
@@ -167,18 +211,3 @@ private fun TypingBubble() {
     }
 }
 
-@Composable
-private fun Bubble(msg: ClaireMessage, userBubble: Brush) {
-    // iOS BubbleStyle (Cards.swift:936-946): vertical padding cardSpacing * 0.8,
-    // horizontal padding cardSpacing; bubbles cap at ~80% of the screen width.
-    val maxBubbleWidth = LocalConfiguration.current.screenWidthDp.dp * 0.8f
-    Box(Modifier.fillMaxWidth(), contentAlignment = if (msg.isUser) Alignment.CenterEnd else Alignment.CenterStart) {
-        Box(
-            Modifier.widthIn(max = maxBubbleWidth).clip(RoundedCornerShape(Dimens.cornerRadius))
-                .then(if (msg.isUser) Modifier.background(userBubble) else Modifier.background(Clear30Colors.opacityGrayFlattened))
-                .padding(horizontal = Dimens.cardSpacing, vertical = Dimens.cardSpacing * 0.8f),
-        ) {
-            SmallText(msg.text, color = if (msg.isUser) Color.White else Clear30Colors.text)
-        }
-    }
-}

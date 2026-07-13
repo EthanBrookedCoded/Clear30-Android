@@ -124,62 +124,177 @@ fun VideoPlayerDialog(uri: String, onDismiss: () -> Unit) {
     }
 }
 
-/** Full-screen embedded YouTube IFrame player (in-app, no external jump). */
-@Composable
-fun YouTubeDialog(videoId: String, onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    var loading by remember(videoId) { mutableStateOf(true) }
-    var failed by remember(videoId) { mutableStateOf(false) }
+/** Open [videoId] in the YouTube app (or a browser) — the fallback when the
+ *  in-app embed can't play (blocked embed, region lock, removed video). */
+fun openYouTubeExternally(context: android.content.Context, videoId: String) {
+    runCatching {
+        context.startActivity(
+            android.content.Intent(
+                android.content.Intent.ACTION_VIEW,
+                android.net.Uri.parse("https://www.youtube.com/watch?v=$videoId"),
+            ),
+        )
+    }
+}
 
-    // Open the video in the YouTube app (or a browser) — the escape hatch when the
-    // in-app embed is blocked (error 150/152) or the network is too slow to wait on.
-    val openExternally = {
-        runCatching {
-            context.startActivity(
-                android.content.Intent(
-                    android.content.Intent.ACTION_VIEW,
-                    android.net.Uri.parse("https://www.youtube.com/watch?v=$videoId"),
-                ),
-            )
-        }
+/**
+ * Embedded YouTube player driven by the IFrame Player API with a JS bridge, so
+ * in-player failures actually surface (a raw embed WebView renders embed errors
+ * as a white/black frame with no signal). Mirrors iOS's YouTubePlayerKit error
+ * state (`YouTubeViewer.swift:150-158`): [onFailed] fires on player error codes
+ * (2 invalid id, 5 HTML5 error, 100 removed/private, 101/150 embedding
+ * disabled), a main-frame load failure, or a load timeout; [onPlaying] fires
+ * when playback actually starts.
+ *
+ * The page is served via `loadDataWithBaseURL("https://www.youtube.com", …)` so
+ * the player sees a genuine youtube.com origin — an opaque/null origin is what
+ * triggers the embedded-player "Error code: 150/152".
+ */
+@Composable
+fun YouTubeEmbedPlayer(
+    videoId: String,
+    modifier: Modifier = Modifier,
+    onPlaying: () -> Unit = {},
+    onFailed: () -> Unit = {},
+) {
+    val context = LocalContext.current
+    var playing by remember(videoId) { mutableStateOf(false) }
+
+    // If the IFrame API never reaches a playable state (script blocked, dead
+    // network — cases with no error callback at all), fail over after 12s.
+    androidx.compose.runtime.LaunchedEffect(videoId) {
+        kotlinx.coroutines.delay(12_000)
+        if (!playing) onFailed()
     }
 
     val webView = remember(videoId) {
+        val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
         WebView(context).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
-            settings.loadWithOverviewMode = true
-            settings.useWideViewPort = true
             // Cache aggressively so re-opening a video (or the same one after a
             // network blip) is near-instant instead of a full cold load each time.
             settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
             setBackgroundColor(android.graphics.Color.BLACK)
             webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, url: String?) { loading = false }
-                // Only a MAIN-frame failure means the video won't play — surface the
-                // "Watch on YouTube" fallback then (subresource errors are noise).
                 override fun onReceivedError(
                     view: WebView?,
                     request: android.webkit.WebResourceRequest?,
                     error: android.webkit.WebResourceError?,
                 ) {
-                    if (request?.isForMainFrame == true) { failed = true; loading = false }
+                    if (request?.isForMainFrame == true) mainHandler.post { onFailed() }
                 }
             }
-            // Load the embed page DIRECTLY (not a raw <iframe> inside loadData):
-            // a real navigation to youtube.com gives the player a genuine
-            // youtube.com origin + referer, which avoids the embedded-player
-            // "Error code: 150/152" that an opaque/null origin triggers. Send a
-            // matching Referer too, belt-and-suspenders.
-            loadUrl(
-                "https://www.youtube.com/embed/$videoId?autoplay=1&playsinline=1&fs=1&rel=0",
-                mapOf("Referer" to "https://www.youtube.com"),
+            addJavascriptInterface(
+                object {
+                    @android.webkit.JavascriptInterface
+                    fun playerStateChange(state: Int) {
+                        // 1 = playing, 3 = buffering — both mean the video works.
+                        if (state == 1 || state == 3) mainHandler.post { playing = true; onPlaying() }
+                    }
+
+                    @android.webkit.JavascriptInterface
+                    fun playerError(code: Int) {
+                        android.util.Log.w("YouTubeEmbed", "player error $code for $videoId")
+                        mainHandler.post { onFailed() }
+                    }
+                },
+                "Clear30Bridge",
+            )
+            loadDataWithBaseURL(
+                "https://www.youtube.com",
+                """
+                <!DOCTYPE html><html><head>
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <style>html,body{margin:0;padding:0;background:#000;height:100%;overflow:hidden}
+                #player{position:absolute;top:0;left:0;width:100%;height:100%}</style>
+                </head><body><div id="player"></div>
+                <script src="https://www.youtube.com/iframe_api"></script>
+                <script>
+                function onYouTubeIframeAPIReady() {
+                  new YT.Player('player', {
+                    videoId: '$videoId',
+                    playerVars: {autoplay: 1, playsinline: 1, fs: 1, rel: 0},
+                    events: {
+                      onReady: function(e) { e.target.playVideo(); },
+                      onStateChange: function(e) { Clear30Bridge.playerStateChange(e.data); },
+                      onError: function(e) { Clear30Bridge.playerError(e.data); }
+                    }
+                  });
+                }
+                </script></body></html>
+                """.trimIndent(),
+                "text/html",
+                "utf-8",
+                null,
             )
         }
     }
     DisposableEffect(webView) { onDispose { webView.destroy() } }
+    AndroidView(factory = { webView }, modifier = modifier)
+}
+
+/**
+ * Thumbnail + play badge that swaps to the embedded YouTube player IN PLACE on
+ * tap — the feed-card equivalent of iOS's inline `YouTubeViewer(inline: true)`.
+ * On an embed failure it swaps to a "Watch on YouTube" fallback in the same
+ * 16:9 frame.
+ */
+@Composable
+fun InlineYouTubePlayer(
+    videoId: String,
+    modifier: Modifier = Modifier,
+    onStart: (() -> Unit)? = null,
+) {
+    val context = LocalContext.current
+    var playing by remember(videoId) { mutableStateOf(false) }
+    var failed by remember(videoId) { mutableStateOf(false) }
+    val frame = modifier
+        .fillMaxWidth()
+        .aspectRatio(16f / 9f)
+        .clip(RoundedCornerShape(Dimens.cornerRadius))
+        .background(Color.Black)
+    when {
+        !playing -> VideoThumbnail(
+            "https://i.ytimg.com/vi/$videoId/hqdefault.jpg",
+            modifier,
+        ) { playing = true; onStart?.invoke() }
+        failed -> Box(frame, contentAlignment = Alignment.Center) {
+            androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                SmallText("This video can't play in-app.", color = Color.White)
+                androidx.compose.foundation.layout.Spacer(Modifier.size(Dimens.cardSpacing))
+                StretchedButton("Watch on YouTube", gradient = Clear30Gradients.youtube) {
+                    openYouTubeExternally(context, videoId)
+                }
+            }
+        }
+        else -> Box(frame) {
+            // Thumbnail underneath so the tapped frame stays visible while the
+            // embed loads; the WebView draws over it once ready.
+            AsyncImage(
+                model = "https://i.ytimg.com/vi/$videoId/hqdefault.jpg",
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+            YouTubeEmbedPlayer(
+                videoId = videoId,
+                onFailed = { failed = true },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+/** Full-screen embedded YouTube player (in-app, no external jump). */
+@Composable
+fun YouTubeDialog(videoId: String, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    var loading by remember(videoId) { mutableStateOf(true) }
+    var failed by remember(videoId) { mutableStateOf(false) }
+
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().popEntrance().background(Color.Black)) {
             // Show the thumbnail INSTANTLY behind the player so tapping gives an
@@ -194,8 +309,10 @@ fun YouTubeDialog(videoId: String, onDismiss: () -> Unit) {
                 )
             }
             if (!failed) {
-                AndroidView(
-                    factory = { webView },
+                YouTubeEmbedPlayer(
+                    videoId = videoId,
+                    onPlaying = { loading = false },
+                    onFailed = { failed = true; loading = false },
                     modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).align(Alignment.Center),
                 )
             }
@@ -206,7 +323,7 @@ fun YouTubeDialog(videoId: String, onDismiss: () -> Unit) {
                 ) {
                     SmallText("This video can't play in-app.", color = Color.White)
                     androidx.compose.foundation.layout.Spacer(Modifier.size(Dimens.cardSpacing))
-                    StretchedButton("Watch on YouTube", gradient = Clear30Gradients.youtube) { openExternally() }
+                    StretchedButton("Watch on YouTube", gradient = Clear30Gradients.youtube) { openYouTubeExternally(context, videoId) }
                 }
                 loading -> androidx.compose.material3.CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.Center),
@@ -223,7 +340,7 @@ fun YouTubeDialog(videoId: String, onDismiss: () -> Unit) {
                     sfSymbol("arrow.up.right.square"),
                     contentDescription = "Open in YouTube",
                     tint = Color.White,
-                    modifier = Modifier.size(28.dp).pressScale { openExternally() }.padding(4.dp),
+                    modifier = Modifier.size(28.dp).pressScale { openYouTubeExternally(context, videoId) }.padding(4.dp),
                 )
             }
             CloseButton(onDismiss)

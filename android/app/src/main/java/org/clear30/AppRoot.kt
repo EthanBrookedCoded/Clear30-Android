@@ -69,6 +69,7 @@ fun AppRoot(viewModel: AppRootViewModel = viewModel()) {
             is org.clear30.data.DeepLinkRoute.Group -> AppState.requestTab("GROUPS")
             is org.clear30.data.DeepLinkRoute.Support,
             is org.clear30.data.DeepLinkRoute.Meditation,
+            is org.clear30.data.DeepLinkRoute.Messages,
             is org.clear30.data.DeepLinkRoute.Claire,
             is org.clear30.data.DeepLinkRoute.DrFred -> AppState.requestTab("SUPPORT")
             is org.clear30.data.DeepLinkRoute.Settings -> AppState.requestTab("PROFILE")
@@ -81,6 +82,7 @@ fun AppRoot(viewModel: AppRootViewModel = viewModel()) {
             is org.clear30.data.DeepLinkRoute.Post,
             is org.clear30.data.DeepLinkRoute.Group,
             is org.clear30.data.DeepLinkRoute.Meditation,
+            is org.clear30.data.DeepLinkRoute.Messages,
             is org.clear30.data.DeepLinkRoute.Claire,
             is org.clear30.data.DeepLinkRoute.DrFred -> AppState.requestSubRoute(route)
             else -> Unit

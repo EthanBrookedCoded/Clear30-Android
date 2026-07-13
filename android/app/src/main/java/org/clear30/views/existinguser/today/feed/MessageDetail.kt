@@ -1,27 +1,25 @@
 package org.clear30.views.existinguser.today
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.pager.VerticalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,10 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import org.clear30.data.Clear30Store
 import org.clear30.data.LogEventExtraDataType
@@ -44,6 +39,7 @@ import org.clear30.data.LogEventType
 import org.clear30.data.Logger
 import org.clear30.data.model.JournalEntries
 import org.clear30.data.model.JournalEntry
+import org.clear30.data.model.PlainDate
 import org.clear30.data.model.Program
 import org.clear30.data.model.ProgramClairePrompt
 import org.clear30.data.model.ProgramMeditation
@@ -53,32 +49,33 @@ import org.clear30.data.model.ProgramResource
 import org.clear30.data.model.UserInfo
 import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.updateContentInfo
+import org.clear30.util.now
 import org.clear30.views.components.Clear30Card
-import org.clear30.views.components.DefaultButton
-import org.clear30.views.components.Heading1
-import org.clear30.views.components.Heading3
+import org.clear30.views.components.ElectricProgressBar
 import org.clear30.views.components.IconButton
-import org.clear30.views.components.InlineVideoPlayer
+import org.clear30.views.components.RedditDialog
 import org.clear30.views.components.SmallText
 import org.clear30.views.components.TinyText
-import org.clear30.views.components.VideoThumbnail
-import org.clear30.views.components.RedditDialog
 import org.clear30.views.components.WebViewDialog
-import org.clear30.views.components.YouTubeDialog
+import org.clear30.views.components.scrollStackItem
+import org.clear30.views.components.pressScale
 import org.clear30.views.components.sfSymbol
-import org.clear30.views.components.youTubeId
-import org.clear30.views.existinguser.support.MeditationPlayer
-import org.clear30.util.now
 import org.clear30.views.theme.Clear30Colors
 import org.clear30.views.theme.Clear30Gradients
 import org.clear30.views.theme.Dimens
+import org.clear30.views.theme.Haptics
 
 /**
- * MessageDetail — opens a single [ProgramMessage] full-bleed. Renders the body,
- * the page-info pages (intro / how-to / why-it-matters style — flattened to a
- * vertical stack rather than the iOS pager since vertical reading is the
- * dominant Android idiom), and any Reddit/YouTube/Meditation/Claire-prompt
- * cross-links from `allResources` — each opens in the system browser.
+ * MessageDetail — the full-screen paged message viewer (port of iOS
+ * `ProgramMessagesView`/`SingleMessageView`). One vertical-pager page per
+ * content part, in the iOS order: topic card, video, message, carousel,
+ * guide pages, meditation, each reddit, each youtube, each member perk, each
+ * Claire prompt, journal prompts, then the feed-end celebration.
+ *
+ * The 70dp header swaps between back-button + favorite heart (page 0) and the
+ * topic + progress bar (later pages, tap to return to the top), mirroring the
+ * iOS `showProgressBar` header. Paging writes the day's `ContentInfo.progress`
+ * as `index / (count - 1)`.
  *
  * Marks the message visited on first open and fires `openedMessage`.
  */
@@ -92,18 +89,13 @@ fun MessageDetail(
     journalEntries: JournalEntries? = null,
     onBack: () -> Unit,
 ) {
-    val uriHandler = LocalUriHandler.current
     val scope = rememberCoroutineScope()
-    // YouTube links play in an embedded in-app IFrame instead of opening the
-    // browser/YouTube app — set the id to open the overlay.
-    var youTubeVideoId by remember { mutableStateOf<String?>(null) }
-    // Reddit threads / other links open in the in-app web viewer.
+    // In-app overlays opened from the content pages.
     var webUrl by remember { mutableStateOf<String?>(null) }
     var redditUrl by remember { mutableStateOf<String?>(null) }
-    // Meditation plays inline in-app (auto-plays) instead of opening externally.
-    var playingMeditation by remember { mutableStateOf<ProgramMeditation?>(null) }
-    // Tapping a "Journal on this" prompt opens a composer seeded with the prompt.
     var journalPrompt by remember { mutableStateOf<String?>(null) }
+    // Rev bumps re-read `favorited` after the heart toggles (it's a plain var).
+    var favoriteRev by remember { mutableStateOf(0) }
 
     LaunchedEffect(message) {
         if (!message.visited) {
@@ -123,120 +115,132 @@ fun MessageDetail(
         )
     }
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
-        verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-            IconButton("chevron.backward", onClick = onBack)
-            Heading1(message.topicTitle)
+    // One page per content part (iOS `generateFeedItems`).
+    val pages = remember(message) {
+        buildList {
+            add(ViewerPage.Topic)
+            if (!message.videoURL.isNullOrBlank()) add(ViewerPage.Video)
+            add(ViewerPage.Body)
+            message.carouselImages?.takeIf { it.isNotEmpty() }?.let { add(ViewerPage.Carousel(it)) }
+            if (message.programPageInfo.isNotEmpty()) add(ViewerPage.Guides)
+            message.meditation?.let { add(ViewerPage.Meditation(it)) }
+            message.reddits.forEach { add(ViewerPage.Reddit(it)) }
+            message.youTubes.forEach { add(ViewerPage.YouTube(it)) }
+            if (message.hasOnlyResources) add(ViewerPage.Resources(message.onlyResources))
+            message.memberPerks?.forEach { add(ViewerPage.Perk(it)) }
+            message.clairePrompts.forEach { add(ViewerPage.Claire(it)) }
+            message.journalPrompts?.takeIf { it.isNotEmpty() }?.let { add(ViewerPage.Journal(it)) }
+            add(ViewerPage.FeedEnd)
         }
-        if (message.subtitle.isNotBlank()) {
-            SmallText(message.subtitle, color = Clear30Colors.text.copy(alpha = 0.5f))
-        }
-        // Lead video — plays in-app. Direct files (.mp4/.mov, Supabase storage)
-        // play inline via ExoPlayer; a YouTube URL opens the embedded player.
-        message.videoURL?.let { url ->
-            val ytId = youTubeId(url)
-            if (ytId != null) {
-                VideoThumbnail(message.thumbnailURL, Modifier.fillMaxWidth()) {
-                    Logger.logEvent(userInfo.loggingID, LogEventType.openedContent, mapOf(LogEventExtraDataType.URL to url))
-                    youTubeVideoId = ytId
-                }
-            } else {
-                InlineVideoPlayer(url, message.thumbnailURL, Modifier.fillMaxWidth()) {
-                    Logger.logEvent(userInfo.loggingID, LogEventType.openedContent, mapOf(LogEventExtraDataType.URL to url))
-                }
-            }
-        }
+    }
+    val pagerState = rememberPagerState(pageCount = { pages.size })
+    val contentDay = remember(message) { PlainDate.from(message.unlockOn) }
 
-        if (message.message.isNotBlank()) {
-            Clear30Card(modifier = Modifier.fillMaxWidth()) { SmallText(message.message) }
-        }
+    // Progress write-back as the user pages (iOS `updateFeedProgress`) —
+    // in-memory only per page turn; persisted when the end page completes.
+    LaunchedEffect(pagerState.settledPage) {
+        val denom = (pages.size - 1).coerceAtLeast(1)
+        program.contentInfo[contentDay]?.updateProgress(pagerState.settledPage.toDouble() / denom)
+    }
 
-        // Image carousel — horizontally scrollable (iOS carousel_images).
-        message.carouselImages?.takeIf { it.isNotEmpty() }?.let { images -> ImageCarousel(images) }
-
-        // Page info — collapsed to a vertical sequence of cards (iOS used a
-        // horizontal pager; vertical is the better fit for read-then-scroll
-        // on Android).
-        message.programPageInfo.forEach { page ->
-            Clear30Card(modifier = Modifier.fillMaxWidth()) {
-                Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 4)) {
-                    Heading3(page.title)
-                    SmallText(page.body)
-                }
-            }
-        }
-
-        if (message.hasReddits) {
-            Heading3("Stories on Reddit")
-            message.reddits.forEach { res -> LinkRow(res, uriHandler, userInfo, LogEventType.openedRedditThread, onOpen = { redditUrl = it }) }
-        }
-        if (message.hasYouTubes) {
-            Heading3("Watch")
-            message.youTubes.forEach { res ->
-                val ytId = youTubeId(res.url)
-                if (ytId != null) {
-                    YouTubeRow(res) {
-                        Logger.logEvent(userInfo.loggingID, LogEventType.openedYouTubeVideo, mapOf(LogEventExtraDataType.URL to res.url))
-                        youTubeVideoId = ytId
+    Column(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding)) {
+        // ── Header: back + heart ↔ topic + progress (iOS :262-383) ──────────
+        Box(Modifier.fillMaxWidth().height(70.dp), contentAlignment = Alignment.CenterStart) {
+            val showProgressHeader = pagerState.currentPage > 0
+            Crossfade(targetState = showProgressHeader, animationSpec = tween(160), label = "viewerHeader") { progressHeader ->
+                if (progressHeader) {
+                    Column(
+                        Modifier.fillMaxWidth().clickable { scope.launch { pagerState.animateScrollToPage(0) } },
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        SmallText(listOfNotNull(message.topicEmoji, message.topicTitle).joinToString(" "), maxLines = 1)
+                        Spacer(Modifier.size(Dimens.cardSpacing))
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+                            Box(Modifier.weight(1f)) {
+                                ElectricProgressBar(current = pagerState.currentPage, max = (pages.size - 1).coerceAtLeast(1))
+                            }
+                            Icon(
+                                sfSymbol("chevron.up"),
+                                contentDescription = "Back to top",
+                                tint = Clear30Colors.text,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(7.dp))
+                                    .background(Clear30Colors.opacityGray)
+                                    .clickable { scope.launch { pagerState.animateScrollToPage(0) } }
+                                    .padding(horizontal = 11.dp, vertical = 6.dp)
+                                    .size(10.dp),
+                            )
+                        }
                     }
                 } else {
-                    LinkRow(res, uriHandler, userInfo, LogEventType.openedYouTubeVideo, onOpen = { webUrl = it })
-                }
-            }
-        }
-        message.meditation?.let { med ->
-            Heading3("Meditation")
-            if (playingMeditation?.url == med.url) {
-                // In-app player — auto-plays through ExoPlayer (no external jump).
-                MeditationPlayer(med, program, onClose = { playingMeditation = null })
-            } else {
-                Clear30Card(
-                    modifier = Modifier.fillMaxWidth().clickable {
-                        Logger.logEvent(
-                            userInfo.loggingID,
-                            LogEventType.listenedToMeditation,
-                            mapOf(LogEventExtraDataType.MEDITATION_NAME to med.name),
-                        )
-                        playingMeditation = med
-                    },
-                    gradient = Clear30Gradients.meditation,
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-                        Icon(sfSymbol("play.fill"), contentDescription = null)
-                        SmallText(med.name)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton("chevron.backward", onClick = onBack)
+                        Spacer(Modifier.weight(1f))
+                        @Suppress("UNUSED_EXPRESSION") favoriteRev
+                        FavoriteHeart(favorited = message.favorited) {
+                            message.favorited = !message.favorited
+                            favoriteRev++
+                            if (message.favorited) Haptics.successLight() else Haptics.successHeavy()
+                            scope.launch {
+                                Clear30Store.save(program)
+                                SupabaseController.updateContentInfo(program.contentInfo)
+                            }
+                        }
                     }
                 }
             }
         }
-        if (message.hasOnlyResources) {
-            Heading3("Resources")
-            message.onlyResources.forEach { res -> LinkRow(res, uriHandler, userInfo, LogEventType.openedContent, onOpen = { webUrl = it }) }
-        }
 
-        // Claire prompts — tap to open Claire (cross-tab via the deep-link route).
-        if (message.clairePrompts.isNotEmpty()) {
-            Heading3("Talk it through with Claire")
-            message.clairePrompts.forEach { prompt -> ClairePromptCard(prompt, userInfo) }
-        }
-
-        // Journal prompts — tap to write a journal entry seeded with the prompt.
-        message.journalPrompts?.takeIf { it.isNotEmpty() }?.let { prompts ->
-            Heading3("Journal on this")
-            prompts.forEach { p -> JournalPromptCard(p) { journalPrompt = p } }
-        }
-
-        // Member perks — premium CTAs (open link, or jump to a known section).
-        message.memberPerks?.takeIf { it.isNotEmpty() }?.let { perks ->
-            perks.forEach { perk -> MemberPerkCard(perk, uriHandler) }
+        // ── Pager (same receding-deck treatment as the Today feed) ─────────
+        VerticalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(vertical = Dimens.cardSpacing * 2.5f),
+            pageSpacing = Dimens.cardSpacing,
+        ) { page ->
+            val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
+            val focused = page == pagerState.settledPage
+            val glow = if (focused) Clear30Gradients.clear30 else null
+            Box(
+                Modifier.fillMaxSize().scrollStackItem(pageOffset, baseScale = 0.92f),
+                contentAlignment = Alignment.Center,
+            ) {
+                when (val item = pages.getOrNull(page)) {
+                    ViewerPage.Topic -> TopicProgressCard(
+                        emoji = message.topicEmoji,
+                        title = message.topicTitle,
+                        badge = program.getBadgeInfo(message.unlockOn).let { (subtitle, title) -> subtitle to title },
+                        progress = program.contentInfo[contentDay]?.progress?.toFloat(),
+                    )
+                    ViewerPage.Video -> VideoFeedCard(message, userInfo)
+                    ViewerPage.Body -> MessageContentCard(message, program, userInfo, glow = glow)
+                    is ViewerPage.Carousel -> CarouselFeedCard(item.images, glow = glow)
+                    ViewerPage.Guides -> GuidesFeedCard(message, glow = glow)
+                    is ViewerPage.Meditation -> MeditationFeedCard(item.med, program, glow = glow?.let { Clear30Gradients.meditation })
+                    is ViewerPage.Reddit -> RedditFeedCard(item.res, userInfo, glow = glow?.let { Clear30Gradients.reddit }, onOpen = { redditUrl = it })
+                    is ViewerPage.YouTube -> YouTubeFeedCard(item.res, userInfo, glow = glow?.let { Clear30Gradients.youtube }, onOpenWeb = { webUrl = it })
+                    is ViewerPage.Resources -> ResourcesCard(item.resources, userInfo, onOpen = { webUrl = it })
+                    is ViewerPage.Perk -> MemberPerkFeedCard(item.perk, glow = glow?.let { Clear30Gradients.supplements }, onOpenWeb = { webUrl = it })
+                    is ViewerPage.Claire -> ClairePromptFeedCard(item.prompt, userInfo, glow = glow?.let { Clear30Gradients.claire })
+                    is ViewerPage.Journal -> JournalPromptsFeedCard(item.prompts, glow = glow?.let { Clear30Gradients.journals }, onJournal = { journalPrompt = it })
+                    ViewerPage.FeedEnd -> FeedEndCelebration(
+                        message = message,
+                        focused = focused,
+                        alreadyComplete = (program.contentInfo[contentDay]?.progress ?: 0.0) >= 1.0,
+                        showCta = false,
+                        onScrollToTop = { scope.launch { pagerState.animateScrollToPage(0) } },
+                        onCompleted = {
+                            program.contentInfo[contentDay]?.updateProgress(1.0)
+                            scope.launch { Clear30Store.save(program) }
+                        },
+                    )
+                    null -> {}
+                }
+            }
         }
     }
 
-    // In-app overlays (kept outside the scroll so they cover the screen).
-    youTubeVideoId?.let { id -> YouTubeDialog(id, onDismiss = { youTubeVideoId = null }) }
+    // In-app overlays (kept outside the pager so they cover the screen).
     webUrl?.let { u -> WebViewDialog(u, onDismiss = { webUrl = null }) }
     redditUrl?.let { u -> RedditDialog(u, onDismiss = { redditUrl = null }) }
     journalPrompt?.let { prompt ->
@@ -259,121 +263,62 @@ fun MessageDetail(
     }
 }
 
-// JournalOnTopicDialog is shared from feed/FeedContentCards.kt (same package).
+/** One vertical-pager page of the viewer (iOS `ProgramMessageItem`). */
+private sealed interface ViewerPage {
+    data object Topic : ViewerPage
+    data object Video : ViewerPage
+    data object Body : ViewerPage
+    data class Carousel(val images: List<String>) : ViewerPage
+    data object Guides : ViewerPage
+    data class Meditation(val med: ProgramMeditation) : ViewerPage
+    data class Reddit(val res: ProgramResource) : ViewerPage
+    data class YouTube(val res: ProgramResource) : ViewerPage
+    data class Resources(val resources: List<ProgramResource>) : ViewerPage
+    data class Perk(val perk: ProgramMemberPerk) : ViewerPage
+    data class Claire(val prompt: ProgramClairePrompt) : ViewerPage
+    data class Journal(val prompts: List<String>) : ViewerPage
+    data object FeedEnd : ViewerPage
+}
 
-/** A "Watch" link that opens the in-app YouTube player instead of the browser. */
+/**
+ * The favorite heart (iOS `ProgramMessagesView` header :319-348): a gradient
+ * disc when favorited, a dim gray heart when not.
+ */
 @Composable
-private fun YouTubeRow(res: ProgramResource, onClick: () -> Unit) {
-    Clear30Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-            Icon(sfSymbol("play.fill"), contentDescription = null, tint = Clear30Colors.red1)
-            Column(Modifier.weight(1f)) {
-                SmallText(res.title)
-                TinyText(res.url, color = Clear30Colors.text.copy(alpha = 0.5f))
-            }
+private fun FavoriteHeart(favorited: Boolean, onToggle: () -> Unit) {
+    if (favorited) {
+        Box(
+            Modifier.size(40.dp).clip(CircleShape).background(Clear30Gradients.clear30).pressScale { onToggle() },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(sfSymbol("heart.fill"), contentDescription = "Unfavorite", tint = Color.White, modifier = Modifier.size(18.dp))
         }
+    } else {
+        IconButton("heart.fill", tint = Clear30Colors.text.copy(alpha = 0.25f), onClick = onToggle)
     }
 }
 
-/** Horizontally scrollable image carousel (iOS carousel_images). */
+/** Non reddit/youtube cross-links, one page (each opens the in-app web viewer). */
 @Composable
-private fun ImageCarousel(images: List<String>) {
-    Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
-    ) {
-        images.forEach { url ->
-            AsyncImage(
-                model = url,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.height(180.dp).width(260.dp).clip(RoundedCornerShape(Dimens.cornerRadius)),
-            )
-        }
-    }
-}
-
-/** A Claire conversation starter; tapping opens Claire pre-seeded with the prompt. */
-@Composable
-private fun ClairePromptCard(prompt: ProgramClairePrompt, userInfo: UserInfo) {
-    Clear30Card(
-        modifier = Modifier.fillMaxWidth().clickable {
-            Logger.logEvent(userInfo.loggingID, LogEventType.openedContent, mapOf(LogEventExtraDataType.EXTRA to prompt.title))
-            org.clear30.AppState.requestSubRoute(org.clear30.data.DeepLinkRoute.Claire(prompt.prompt))
-            org.clear30.AppState.requestTab("SUPPORT")
-        },
-        gradient = Clear30Gradients.claire,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-            Icon(sfSymbol("bubble.left.fill"), contentDescription = null, tint = Color.White)
-            Column(Modifier.weight(1f)) {
-                SmallText(prompt.title, color = Color.White)
-                (prompt.displayPrompt ?: prompt.prompt).takeIf { it.isNotBlank() }?.let {
-                    TinyText(it, color = Color.White.copy(alpha = 0.75f))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun JournalPromptCard(prompt: String, onClick: () -> Unit) {
-    Clear30Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-            Icon(sfSymbol("square.and.pencil"), contentDescription = null, tint = Clear30Colors.text.copy(alpha = 0.5f))
-            SmallText(prompt, Modifier.weight(1f))
-        }
-    }
-}
-
-/** Premium perk CTA — opens its link if present, else jumps to a known section. */
-@Composable
-private fun MemberPerkCard(perk: ProgramMemberPerk, uri: androidx.compose.ui.platform.UriHandler) {
-    Clear30Card(modifier = Modifier.fillMaxWidth(), gradient = Clear30Gradients.clear30) {
+private fun ResourcesCard(resources: List<ProgramResource>, userInfo: UserInfo, onOpen: (String) -> Unit) {
+    Clear30Card(modifier = Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-            perk.imageURL?.let { img ->
-                AsyncImage(
-                    model = img, contentDescription = null, contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxWidth().height(140.dp).clip(RoundedCornerShape(Dimens.cornerRadius)),
-                )
-            }
-            perk.title?.let { SmallText(it, color = Color.White) }
-            perk.subtitle?.let { TinyText(it, color = Color.White.copy(alpha = 0.75f)) }
-            DefaultButton(perk.buttonText, gradient = Clear30Gradients.button) {
-                perk.buttonLink?.let { uri.openUri(it) }
-                    ?: when (perk.sheetType) {
-                        "groups", "group" -> org.clear30.AppState.requestTab("GROUPS")
-                        "claire" -> { org.clear30.AppState.requestSubRoute(org.clear30.data.DeepLinkRoute.Claire()); org.clear30.AppState.requestTab("SUPPORT") }
-                        "community" -> org.clear30.AppState.requestTab("COMMUNITY")
-                        else -> {}
+            SmallText("Resources", color = Clear30Colors.text.copy(alpha = 0.5f))
+            resources.forEach { res ->
+                Row(
+                    Modifier.fillMaxWidth().clickable {
+                        Logger.logEvent(userInfo.loggingID, LogEventType.openedContent, mapOf(LogEventExtraDataType.URL to res.url))
+                        onOpen(res.url)
+                    }.padding(vertical = Dimens.cardSpacing / 3),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+                ) {
+                    Icon(sfSymbol("arrow.up.right"), contentDescription = null, tint = Clear30Colors.text)
+                    Column(Modifier.weight(1f)) {
+                        SmallText(res.title)
+                        TinyText(res.url, color = Clear30Colors.text.copy(alpha = 0.5f))
                     }
-            }
-        }
-    }
-}
-
-@Composable
-private fun LinkRow(
-    res: ProgramResource,
-    uri: androidx.compose.ui.platform.UriHandler,
-    userInfo: UserInfo,
-    event: LogEventType,
-    onOpen: ((String) -> Unit)? = null,
-) {
-    Clear30Card(modifier = Modifier.fillMaxWidth().clickable {
-        Logger.logEvent(
-            userInfo.loggingID, event,
-            mapOf(LogEventExtraDataType.URL to res.url),
-        )
-        // Open in-app when a handler is supplied (Reddit / resources), else fall
-        // back to the system browser.
-        if (onOpen != null) onOpen(res.url) else uri.openUri(res.url)
-    }) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-            Icon(sfSymbol("arrow.up.right"), contentDescription = null)
-            Column(Modifier.weight(1f)) {
-                SmallText(res.title)
-                TinyText(res.url, color = Clear30Colors.text.copy(alpha = 0.5f))
+                }
             }
         }
     }

@@ -57,9 +57,10 @@ import org.clear30.views.theme.Dimens
 /**
  * SupportTab — ported from Support2.swift (the support hub). Sections, in order:
  * Immediate support (Cravings / Sleep / Claire), Human support (Dr. Fred / Gerad),
- * a content library (Meditations / YouTube / Reddit / Claire Prompts), Extras, and
+ * a content library (Meditations / YouTube / Reddit / Claire Prompts), and
  * Help & Feedback. Sub-screens (Claire, Dr Fred, Meditations, Reddit, YouTube,
- * Messages, Journal prompts) are reached through the local [SupportRoute] nav.
+ * Messages, Claire prompts) are reached through a real [SupportRoute] BACK STACK,
+ * so back from a nested screen (symptom → Claire) returns to where you were.
  */
 private sealed interface SupportRoute {
     data object Hub : SupportRoute
@@ -72,9 +73,8 @@ private sealed interface SupportRoute {
     data object Reddits : SupportRoute
     data object YouTubes : SupportRoute
     data object Messages : SupportRoute
-    data object JournalPrompts : SupportRoute
+    data object AllPrompts : SupportRoute
     data object Wishlist : SupportRoute
-    data object Therapy : SupportRoute
     data class Feedback(
         val config: org.clear30.data.model.RemoteFeedbackConfig? = null,
         val forceFreeForm: Boolean = false,
@@ -85,20 +85,29 @@ private sealed interface SupportRoute {
 
 @Composable
 fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30.data.model.JournalEntries) {
-    var route by remember { mutableStateOf<SupportRoute>(SupportRoute.Hub) }
-    val back = { route = SupportRoute.Hub }
+    // Real back stack (iOS NavigationPath) — back pops one level instead of
+    // jumping to the hub, so symptom → Claire → back lands on the symptom page.
+    val backStack = remember { androidx.compose.runtime.mutableStateListOf<SupportRoute>(SupportRoute.Hub) }
+    val route = backStack.last()
+    val push: (SupportRoute) -> Unit = { backStack.add(it) }
+    val back: () -> Unit = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) }
 
     // The `feedback-method` experiment payload drives the feedback card + sheet
     // (iOS Support2.feedbackMonster). Loaded from the persisted controller —
-    // refreshExperiments keeps it current on app load.
+    // refreshExperiments keeps it current on app load. `feedbackLoaded` gates
+    // the card so the default monster doesn't flash before the async load lands.
     var feedbackConfig by remember { mutableStateOf<org.clear30.data.model.RemoteFeedbackConfig?>(null) }
+    var feedbackLoaded by remember { mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(Unit) {
         val experiments = org.clear30.data.Clear30Store.loadExperimentController()
         if (experiments.showFeature(org.clear30.data.model.ExperimentKey.feedbackMethod)) {
             feedbackConfig = experiments.getFeature(org.clear30.data.model.ExperimentKey.feedbackMethod)
                 ?.payload?.decodeTo<org.clear30.data.model.RemoteFeedbackConfig>()
         }
+        feedbackLoaded = true
     }
+    // Meditation tapped on the hub's library rail — opens the standard sheet.
+    var meditationSheet by remember { mutableStateOf<org.clear30.data.model.ProgramMeditation?>(null) }
 
     // Pull the program's messages from Supabase so the library rails populate even
     // if the user opens Support before the Today tab (mirrors TodayTab's fetch).
@@ -123,9 +132,10 @@ fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30
     val sub by org.clear30.AppState.pendingSubRoute.collectAsStateWithLifecycle()
     androidx.compose.runtime.LaunchedEffect(sub) {
         when (sub) {
-            is org.clear30.data.DeepLinkRoute.Claire -> route = SupportRoute.Claire((sub as org.clear30.data.DeepLinkRoute.Claire).prompt)
-            is org.clear30.data.DeepLinkRoute.DrFred -> route = SupportRoute.DrFred
-            is org.clear30.data.DeepLinkRoute.Meditation -> route = SupportRoute.Meditations
+            is org.clear30.data.DeepLinkRoute.Claire -> push(SupportRoute.Claire((sub as org.clear30.data.DeepLinkRoute.Claire).prompt))
+            is org.clear30.data.DeepLinkRoute.DrFred -> push(SupportRoute.DrFred)
+            is org.clear30.data.DeepLinkRoute.Meditation -> push(SupportRoute.Meditations)
+            is org.clear30.data.DeepLinkRoute.Messages -> push(SupportRoute.Messages)
             else -> return@LaunchedEffect
         }
         org.clear30.AppState.requestSubRoute(null)
@@ -141,9 +151,9 @@ fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30
             event?.let { Logger.logEvent(userInfo.loggingID, it) }
         }
     }
-    androidx.activity.compose.BackHandler(enabled = route !is SupportRoute.Hub) { back() }
+    androidx.activity.compose.BackHandler(enabled = backStack.size > 1) { back() }
     when (route) {
-        is SupportRoute.Claire -> { ClaireChat(onBack = back, userInfo = userInfo, program = program, initialInput = (route as SupportRoute.Claire).initialInput); return }
+        is SupportRoute.Claire -> { ClaireChat(onBack = back, userInfo = userInfo, program = program, initialInput = route.initialInput); return }
         is SupportRoute.Cravings -> { CravingHub(program, userInfo, onBack = back); return }
         is SupportRoute.Sleep -> { CravingResources(program, userInfo, MeditationResourceKind.SLEEP, onBack = back); return }
         is SupportRoute.DrFred -> { DrFredChat(userInfo, onBack = back); return }
@@ -152,23 +162,22 @@ fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30
         is SupportRoute.Reddits -> { ResourcesScreen(program, kind = ResourceKind.REDDIT, onBack = back); return }
         is SupportRoute.YouTubes -> { ResourcesScreen(program, kind = ResourceKind.YOUTUBE, onBack = back); return }
         is SupportRoute.Messages -> { MessagesLibraryScreen(program, userInfo, journalEntries, onBack = back); return }
-        is SupportRoute.JournalPrompts -> { JournalPromptsScreen(program, journalEntries, userInfo, onBack = back); return }
+        is SupportRoute.AllPrompts -> {
+            AllPromptsScreen(program, onBack = back, onOpenPrompt = { push(SupportRoute.Claire(it.prompt)) }); return
+        }
         is SupportRoute.Wishlist -> { FeatureWishlist(userInfo, onBack = back); return }
-        is SupportRoute.Therapy -> { BetterHelp(onBack = back); return }
         is SupportRoute.Feedback -> {
-            val r = route as SupportRoute.Feedback
-            FeedbackScreen(userInfo, config = r.config, forceFreeForm = r.forceFreeForm, onBack = back)
+            FeedbackScreen(userInfo, config = route.config, forceFreeForm = route.forceFreeForm, onBack = back)
             return
         }
         is SupportRoute.Symptom -> {
-            val r = route as SupportRoute.Symptom
             org.clear30.views.existinguser.profile.SymptomDetailScreen(
-                r.key, r.info, userInfo, onBack = back,
-                onAskClaire = { prompt -> route = SupportRoute.Claire(prompt) },
+                route.key, route.info, userInfo, onBack = back,
+                onAskClaire = { prompt -> push(SupportRoute.Claire(prompt)) },
             ); return
         }
         is SupportRoute.OpenMessage -> {
-            org.clear30.views.existinguser.today.MessageDetail(program, (route as SupportRoute.OpenMessage).message, userInfo, journalEntries, onBack = back); return
+            org.clear30.views.existinguser.today.MessageDetail(program, route.message, userInfo, journalEntries, onBack = back); return
         }
         is SupportRoute.Hub -> Unit
     }
@@ -199,23 +208,23 @@ fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30
         // iOS sheet's "Talk it out" activity offers Claire as a destination too.
         SectionLabel("Immediate support")
         SupportHero("leaf.fill", "Slip up?", "A moment of support", Clear30Gradients.slipped, Clear30Colors.slipped1) {
-            route = SupportRoute.Claire("Claire, I slipped up and could use a moment of support.")
+            push(SupportRoute.Claire("Claire, I slipped up and could use a moment of support."))
         }
-        SupportHero("flame.fill", "Cravings?", "Help is here", Clear30Gradients.red, Clear30Colors.red2) { route = SupportRoute.Cravings }
-        SupportHero("moon.fill", "Trouble Sleeping?", "Wind down", Clear30Gradients.sleep, Clear30Colors.sleep1) { route = SupportRoute.Sleep }
-        ClaireCompact { seed -> route = SupportRoute.Claire(seed) }
+        SupportHero("flame.fill", "Cravings?", "Help is here", Clear30Gradients.red, Clear30Colors.red2) { push(SupportRoute.Cravings) }
+        SupportHero("moon.fill", "Trouble Sleeping?", "Wind down", Clear30Gradients.sleep, Clear30Colors.sleep1) { push(SupportRoute.Sleep) }
+        ClaireCompact { seed -> push(SupportRoute.Claire(seed)) }
 
         // Human support
         Spacer(Modifier.height(Dimens.cardSpacing))
         SectionLabel("Human support")
-        HumanSupportRow("Dr. Fred", "Addiction specialist", "Tap to chat", Clear30Gradients.fred, org.clear30.R.drawable.fred) { route = SupportRoute.DrFred }
-        HumanSupportRow("Gerad", "Your accountability buddy", "Tap to chat", Clear30Gradients.buddy, org.clear30.R.drawable.gerad) { route = SupportRoute.PeerSupport }
+        HumanSupportRow("Dr. Fred", "Addiction specialist", "Tap to chat", Clear30Gradients.fred, org.clear30.R.drawable.fred) { push(SupportRoute.DrFred) }
+        HumanSupportRow("Gerad", "Your accountability buddy", "Tap to chat", Clear30Gradients.buddy, org.clear30.R.drawable.gerad) { push(SupportRoute.PeerSupport) }
 
         // Symptom support — horizontal carousel of symptom cards (iOS symptomSupportSection).
         symptomInfos?.takeIf { it.symptomInfos.isNotEmpty() }?.let { infos ->
             Spacer(Modifier.height(Dimens.cardSpacing))
             SectionLabel("Symptom support")
-            SymptomSupportSection(infos, program) { key, info -> route = SupportRoute.Symptom(key, info) }
+            SymptomSupportSection(infos, program) { key, info -> push(SupportRoute.Symptom(key, info)) }
         }
 
         SectionDivider()
@@ -230,27 +239,21 @@ fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30
         // on unlocked content (so they're hidden until that content unlocks).
         DailyTopicsSection(
             program,
-            onOpen = { msg -> route = SupportRoute.OpenMessage(msg) },
-            onSeeAll = { route = SupportRoute.Messages },
+            onOpen = { msg -> push(SupportRoute.OpenMessage(msg)) },
+            onSeeAll = { push(SupportRoute.Messages) },
         )
         LibrarySection(
             program = program,
-            onViewAllMeditations = { route = SupportRoute.Meditations },
-            onViewAllYouTubes = { route = SupportRoute.YouTubes },
-            onViewAllReddits = { route = SupportRoute.Reddits },
-            onViewAllClairePrompts = { route = SupportRoute.Claire() },
-            onPlayMeditation = { _ -> route = SupportRoute.Meditations },
+            onViewAllMeditations = { push(SupportRoute.Meditations) },
+            onViewAllYouTubes = { push(SupportRoute.YouTubes) },
+            onViewAllReddits = { push(SupportRoute.Reddits) },
+            onViewAllClairePrompts = { push(SupportRoute.AllPrompts) },
+            onPlayMeditation = { msg -> msg.meditation?.let { meditationSheet = it } },
             onOpenResource = openResource,
-            onOpenPrompt = { prompt -> route = SupportRoute.Claire(prompt.prompt) },
+            onOpenPrompt = { prompt -> push(SupportRoute.Claire(prompt.prompt)) },
         )
 
         SectionDivider()
-
-        // Extras
-        Spacer(Modifier.height(Dimens.cardSpacing))
-        SectionLabel("Extras")
-        GradientActionButton(iconName = "pencil.and.outline", gradient = Clear30Gradients.journals, title = "Journal Prompts") { route = SupportRoute.JournalPrompts }
-        GradientActionButton(iconName = "doc.text.fill", gradient = Clear30Gradients.clear30, title = "Is Therapy For Me?") { route = SupportRoute.Therapy }
 
         // Help & Feedback
         Spacer(Modifier.height(Dimens.cardSpacing))
@@ -261,29 +264,37 @@ fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30
             }
         }
         GradientActionButton(iconName = "checklist.checked", gradient = Clear30Gradients.symptomCard, title = "Feature Wishlist") {
-            route = SupportRoute.Wishlist
+            push(SupportRoute.Wishlist)
         }
         // iOS Support2.feedbackMonster: experiment-config card when the
         // `feedback-method` experiment is live, else the default monster card.
+        // Gated on feedbackLoaded so the wrong card never flashes while the
+        // async experiment load is in flight.
         // Submitted-state is device-local (comms.feedback SELECT is admin-only).
         val fc = feedbackConfig
-        if (fc != null) {
-            val submitted = userInfo.getCachedBool(fc.cacheKey) ||
-                (fc.type == "text" && userInfo.gaveFeedback == true) // legacy flag
-            val completionConfig = fc.completion
-            when {
-                submitted && completionConfig != null -> FeedbackConfigCard(completionConfig, Clear30Gradients.journals) {
-                    route = SupportRoute.Feedback(completionConfig)
-                }
-                submitted -> FeedbackMonsterCard(gaveFeedback = true) { route = SupportRoute.Feedback() }
-                else -> FeedbackConfigCard(fc, Clear30Gradients.reddit) {
-                    route = SupportRoute.Feedback(fc, forceFreeForm = true)
+        when {
+            !feedbackLoaded -> Unit
+            fc != null -> {
+                val submitted = userInfo.getCachedBool(fc.cacheKey) ||
+                    (fc.type == "text" && userInfo.gaveFeedback == true) // legacy flag
+                val completionConfig = fc.completion
+                when {
+                    submitted && completionConfig != null -> FeedbackConfigCard(completionConfig, Clear30Gradients.journals) {
+                        push(SupportRoute.Feedback(completionConfig))
+                    }
+                    submitted -> FeedbackMonsterCard(gaveFeedback = true) { push(SupportRoute.Feedback()) }
+                    else -> FeedbackConfigCard(fc, Clear30Gradients.reddit) {
+                        push(SupportRoute.Feedback(fc, forceFreeForm = true))
+                    }
                 }
             }
-        } else {
-            FeedbackMonsterCard(gaveFeedback = userInfo.gaveFeedback == true) { route = SupportRoute.Feedback() }
+            else -> FeedbackMonsterCard(gaveFeedback = userInfo.gaveFeedback == true) { push(SupportRoute.Feedback()) }
         }
         Spacer(Modifier.height(Dimens.cardSpacing))
+    }
+
+    meditationSheet?.let { med ->
+        MeditationPage(meditation = med, program = program, onDismiss = { meditationSheet = null })
     }
 }
 
@@ -445,19 +456,25 @@ private fun drawableByAssetName(context: android.content.Context, name: String):
     return context.resources.getIdentifier(normalized, "drawable", context.packageName)
 }
 
-/** Feedback Monster card — playful yellow card. (Insert image) marks the monster art. */
+/**
+ * Feedback Monster card. Unfed = ORANGE with the sad/hungry monster (nobody fed
+ * it — decision §17-Q10); fed = yellow/journals with the full monster.
+ */
 @Composable
 private fun FeedbackMonsterCard(gaveFeedback: Boolean, onClick: () -> Unit) {
-    Clear30Card(modifier = Modifier.fillMaxWidth().pressScale { onClick() }, gradient = Clear30Gradients.journals) {
+    Clear30Card(
+        modifier = Modifier.fillMaxWidth().pressScale { onClick() },
+        gradient = if (gaveFeedback) Clear30Gradients.journals else Clear30Gradients.reddit,
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             SmallText(
-                if (gaveFeedback) "The Feedback Monster\nis full — thank you! 💛" else "The Feedback Monster\nLoves You!",
+                if (gaveFeedback) "The Feedback Monster\nis full — thank you! 💛" else "The Feedback Monster\nis hungry — feed it!",
                 color = Color.White,
                 modifier = Modifier.weight(1f),
             )
             androidx.compose.foundation.Image(
                 painter = androidx.compose.ui.res.painterResource(
-                    if (gaveFeedback) org.clear30.R.drawable.feedback_monster_full_cutoff else org.clear30.R.drawable.feedback_monster,
+                    if (gaveFeedback) org.clear30.R.drawable.feedback_monster_full_cutoff else org.clear30.R.drawable.feedback_monster_hungry_cutoff,
                 ),
                 contentDescription = null,
                 contentScale = androidx.compose.ui.layout.ContentScale.Fit,

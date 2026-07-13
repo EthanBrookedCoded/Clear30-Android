@@ -213,15 +213,14 @@ fun PeerSupportChat(userInfo: UserInfo, onBack: () -> Unit) {
                 }
             }
 
-            // Compose bar
-            Row(
-                Modifier.fillMaxWidth().padding(top = Dimens.cardSpacing / 2),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
-            ) {
-                OutlinedTextField(input, { input = it }, modifier = Modifier.weight(1f), enabled = !sending)
-                IconButton("arrow.right") { send() }
-            }
+            // Compose bar — the shared Claire-style composer (off-white input +
+            // gradient send disc), per-chat gradient.
+            org.clear30.views.components.ChatComposer(
+                input = input,
+                onInputChange = { input = it },
+                sendBrush = buddyGradient,
+                modifier = Modifier.padding(top = Dimens.cardSpacing / 2),
+            ) { send() }
         }
 
         if (showProfile) {
@@ -297,21 +296,9 @@ private fun DateSeparator(label: String) {
 }
 
 /** A single message bubble; long-press a user bubble to delete it. */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Bubble(message: PeerMessage, onDelete: () -> Unit) {
-    val isUser = message.isUser
-    Box(Modifier.fillMaxWidth(), contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart) {
-        Box(
-            Modifier.widthIn(max = 280.dp).clip(RoundedCornerShape(Dimens.cornerRadius))
-                .then(if (isUser) Modifier.background(buddyGradient) else Modifier.background(Clear30Colors.opacityGrayFlattened))
-                .then(if (isUser) Modifier.combinedClickable(onClick = {}, onLongClick = onDelete) else Modifier)
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-        ) {
-            SmallText(message.text, color = if (isUser) Color.White else Clear30Colors.text)
-        }
-    }
-}
+private fun Bubble(message: PeerMessage, onDelete: () -> Unit) =
+    org.clear30.views.components.ChatBubble(message.text, message.isUser, buddyGradient, onLongPressUser = onDelete)
 
 // MARK: - Day grouping helpers
 

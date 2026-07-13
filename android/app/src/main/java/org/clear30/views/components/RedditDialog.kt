@@ -43,9 +43,8 @@ import org.clear30.util.now
 /**
  * RedditDialog — the in-app Reddit viewer (port of iOS `RedditViewer`). Fetches
  * the thread JSON via [RedditScraper] and renders the post + nested comments
- * natively instead of loading reddit.com in a WebView. If the fetch fails (Reddit
- * occasionally blocks non-proxied clients — iOS routes through a `reddit_proxy`
- * edge function that isn't deployed in this backend), it falls back to
+ * natively instead of loading reddit.com in a WebView. If the fetch fails (e.g.
+ * a share link the `reddit_proxy` edge function can't parse), it falls back to
  * [WebViewDialog] so the thread is always reachable.
  */
 @Composable
@@ -89,12 +88,12 @@ private fun RedditTopBar(onClose: () -> Unit, onOpenWeb: String) {
         Modifier.fillMaxWidth().background(Clear30Gradients.reddit).padding(Dimens.cardSpacing),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(28.dp).clip(RoundedCornerShape(8.dp)).pressScale { onClose() }) {
-            Icon(sfSymbol("xmark"), contentDescription = "Close", tint = Color.White)
-        }
-        SmallText("Reddit", color = Color.White, modifier = Modifier.padding(start = Dimens.cardSpacing / 2))
+        SmallText("Reddit", color = Color.White)
         Spacer(Modifier.weight(1f))
         SmallText("Open ↗", color = Color.White, modifier = Modifier.pressScale { uri.openUri(onOpenWeb) })
+        Box(Modifier.padding(start = Dimens.cardSpacing).size(28.dp).clip(RoundedCornerShape(8.dp)).pressScale { onClose() }) {
+            Icon(sfSymbol("xmark"), contentDescription = "Close", tint = Color.White)
+        }
     }
 }
 

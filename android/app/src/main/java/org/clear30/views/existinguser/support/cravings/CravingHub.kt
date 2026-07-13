@@ -156,7 +156,7 @@ fun CravingHub(program: Program, userInfo: UserInfo, onBack: () -> Unit) {
     }
 
     playing?.let { med ->
-        org.clear30.views.existinguser.support.MeditationPlayer(meditation = med, program = program, onClose = { playing = null })
+        org.clear30.views.existinguser.support.MeditationPage(meditation = med, program = program, onDismiss = { playing = null })
     }
 }
 

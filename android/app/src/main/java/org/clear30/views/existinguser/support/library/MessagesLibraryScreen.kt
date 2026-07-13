@@ -104,15 +104,7 @@ fun MessagesLibraryScreen(
             tab.sections.forEach { section ->
                 StageHeaderCard(section.stage, Clear30Gradients.clear30)
                 section.items.forEach { msg ->
-                    MessageRow(
-                        msg = msg,
-                        onOpen = { open = msg },
-                        onToggleFavorite = {
-                            msg.favorited = !msg.favorited
-                            scope.launch { Clear30Store.save(program) }
-                            rev++
-                        },
-                    )
+                    MessageRow(msg = msg, onOpen = { open = msg })
                 }
             }
         }
@@ -123,8 +115,9 @@ fun MessagesLibraryScreen(
 private fun MessageRow(
     msg: ProgramMessage,
     onOpen: () -> Unit,
-    onToggleFavorite: () -> Unit,
 ) {
+    // No per-row favorite control — iOS favorites via the heart inside the
+    // opened message (ProgramMessagesView), which the viewer now provides.
     Clear30Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
             msg.topicEmoji?.let { SmallText(it) }
@@ -137,13 +130,6 @@ private fun MessageRow(
                     TinyText("New", color = Clear30Colors.green)
                 }
             }
-            // Standalone star button (separate clickable from the row open).
-            Icon(
-                if (msg.favorited) Icons.Rounded.Star else Icons.Rounded.StarBorder,
-                contentDescription = if (msg.favorited) "Unfavorite" else "Favorite",
-                tint = if (msg.favorited) Clear30Colors.green else Clear30Colors.text.copy(alpha = 0.5f),
-                modifier = Modifier.clickable(onClick = onToggleFavorite).padding(8.dp),
-            )
         }
     }
 }

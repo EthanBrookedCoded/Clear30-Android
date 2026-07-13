@@ -24,6 +24,8 @@ sealed interface DeepLinkRoute {
     data class Post(val id: String) : DeepLinkRoute
     data class Group(val code: String) : DeepLinkRoute
     data class Meditation(val url: String) : DeepLinkRoute
+    /** The all-messages library on the Support tab (feed-end "All Messages" CTA). */
+    data object Messages : DeepLinkRoute
     /** Optional [prompt] pre-fills Claire's composer (Claire prompt cards). */
     data class Claire(val prompt: String = "") : DeepLinkRoute
     data object DrFred : DeepLinkRoute

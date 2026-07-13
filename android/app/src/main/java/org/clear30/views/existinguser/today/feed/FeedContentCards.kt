@@ -11,8 +11,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,6 +65,7 @@ import org.clear30.views.components.DefaultButton
 import org.clear30.views.components.Heading3
 import org.clear30.views.components.HighlightedTextFormat
 import org.clear30.views.components.InlineVideoPlayer
+import org.clear30.views.components.InlineYouTubePlayer
 import org.clear30.views.components.pressScale
 import org.clear30.views.components.SmallText
 import org.clear30.views.components.SmallTextHighlighted
@@ -69,7 +73,6 @@ import org.clear30.views.components.TinyText
 import org.clear30.views.components.VideoThumbnail
 import org.clear30.views.components.sfSymbol
 import org.clear30.views.components.youTubeId
-import org.clear30.views.existinguser.support.MeditationPlayer
 import org.clear30.views.theme.Clear30Colors
 import org.clear30.views.theme.Clear30Gradients
 import org.clear30.views.theme.Dimens
@@ -80,27 +83,115 @@ import org.clear30.views.theme.Dimens
  * page IS the content (no tap-to-detail); interactive containers (reddit /
  * youtube / meditation / claire / journal) act in-app from the card itself.
  *
- * A long lesson's text scrolls inside its card; the cap is a fraction of the
- * screen height so the deck still pages cleanly above/below it.
+ * A long lesson takes the full page height (the pager page's constraint caps
+ * the card naturally); overflowing text is clipped behind a fade with a
+ * "Tap to read more" affordance that opens a full-screen reader — cards never
+ * scroll internally (iOS parity: FeedView pages are the content).
  *
  * Each card takes an optional `glow` brush — the iOS feed-focus halo
  * (CardStyle glowGradient, TodayFeedViews.swift): the pager passes the card
  * type's content gradient while the card is the focused page.
  */
-@Composable
-private fun textScrollMaxHeight(): androidx.compose.ui.unit.Dp =
-    (LocalConfiguration.current.screenHeightDp * 0.62f).dp
 
-/** The lesson's video — plays in-app (direct file inline, YouTube embedded). */
+/**
+ * Card whose content grows to the page height and clips (never inner-scrolls).
+ * The disabled scroll state is a measurement trick: it lets the content lay out
+ * at full height so `maxValue > 0` detects overflow, while the parent
+ * constraint clips what's visible. On overflow a bottom fade + [tapHint]
+ * appear; tapping opens [onTapOverride] if given (e.g. the Reddit viewer),
+ * else a full-screen reader with the same [content].
+ */
 @Composable
-internal fun VideoFeedCard(msg: ProgramMessage, onOpenYouTube: (String) -> Unit) {
+internal fun ExpandingFeedCard(
+    glow: Brush? = null,
+    tapHint: String = "Tap to read more",
+    onTapOverride: (() -> Unit)? = null,
+    content: @Composable () -> Unit,
+) {
+    var readerOpen by remember { mutableStateOf(false) }
+    val clipState = rememberScrollState()
+    val overflows by remember { derivedStateOf { clipState.maxValue > 0 } }
+    val onTap: (() -> Unit)? = onTapOverride ?: if (overflows) ({ readerOpen = true }) else null
+    Clear30Card(
+        modifier = Modifier.fillMaxWidth().then(
+            if (onTap != null) Modifier.pressScale { onTap() } else Modifier,
+        ),
+        glowGradient = glow,
+    ) {
+        androidx.compose.foundation.layout.Box {
+            Column(
+                Modifier.verticalScroll(clipState, enabled = false),
+                verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+            ) { content() }
+            if (overflows) {
+                Column(
+                    Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Spacer(
+                        Modifier.fillMaxWidth().height(Dimens.cardSpacing * 3).background(
+                            Brush.verticalGradient(listOf(Color.Transparent, Clear30Colors.button)),
+                        ),
+                    )
+                    Row(
+                        Modifier.fillMaxWidth().background(Clear30Colors.button),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        TinyText(tapHint, color = Clear30Colors.text.copy(alpha = 0.5f))
+                        Spacer(Modifier.width(Dimens.cardSpacing / 4))
+                        Icon(
+                            sfSymbol("arrow.up.left.and.arrow.down.right"),
+                            contentDescription = null,
+                            tint = Clear30Colors.text.copy(alpha = 0.5f),
+                            modifier = Modifier.size(11.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
+    if (readerOpen) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { readerOpen = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            androidx.compose.material3.Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = Clear30Colors.background,
+            ) {
+                Column(Modifier.fillMaxSize()) {
+                    Row(
+                        Modifier.fillMaxWidth().statusBarsPadding()
+                            .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.cardSpacing / 2),
+                    ) {
+                        Spacer(Modifier.weight(1f))
+                        org.clear30.views.components.IconButton("xmark", onClick = { readerOpen = false })
+                    }
+                    Column(
+                        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                            .padding(horizontal = Dimens.horizontalPadding)
+                            .padding(bottom = Dimens.cardSpacing * 2),
+                        verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+                    ) { content() }
+                }
+            }
+        }
+    }
+}
+
+/** The lesson's video — plays in-app (direct file inline, YouTube embedded in place). */
+@Composable
+internal fun VideoFeedCard(msg: ProgramMessage, userInfo: UserInfo) {
     val url = msg.videoURL ?: return
     Clear30Card(modifier = Modifier.fillMaxWidth(), shadowColor = Clear30Colors.green.copy(alpha = 0.5f)) {
         Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
             SmallTextHighlighted(formats = listOf(HighlightedTextFormat("Video", highlighted = true)))
             val ytId = youTubeId(url)
             if (ytId != null) {
-                VideoThumbnail(msg.thumbnailURL, Modifier.fillMaxWidth()) { onOpenYouTube(ytId) }
+                InlineYouTubePlayer(ytId, Modifier.fillMaxWidth()) {
+                    Logger.logEvent(userInfo.loggingID, LogEventType.openedContent, mapOf(LogEventExtraDataType.URL to url))
+                }
             } else {
                 InlineVideoPlayer(url, msg.thumbnailURL, Modifier.fillMaxWidth())
             }
@@ -127,18 +218,13 @@ internal fun MessageContentCard(msg: ProgramMessage, program: Program, userInfo:
             )
         }
     }
-    Clear30Card(modifier = Modifier.fillMaxWidth(), glowGradient = glow) {
-        Column(
-            Modifier.heightIn(max = textScrollMaxHeight()).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
-        ) {
-            SmallTextHighlighted(formats = listOf(HighlightedTextFormat("Message", highlighted = true)))
-            TopicRow(msg)
-            // iOS content-opacity hierarchy (TodayFeedViews.swift:125-129):
-            // subtitle at 0.75, body at 0.5.
-            if (msg.subtitle.isNotBlank()) SmallText(msg.subtitle, color = Clear30Colors.text.copy(alpha = 0.75f))
-            if (msg.message.isNotBlank()) SmallText(msg.message, color = Clear30Colors.text.copy(alpha = 0.5f))
-        }
+    ExpandingFeedCard(glow = glow) {
+        SmallTextHighlighted(formats = listOf(HighlightedTextFormat("Message", highlighted = true)))
+        TopicRow(msg)
+        // iOS content-opacity hierarchy (TodayFeedViews.swift:125-129):
+        // subtitle at 0.75, body at 0.5.
+        if (msg.subtitle.isNotBlank()) SmallText(msg.subtitle, color = Clear30Colors.text.copy(alpha = 0.75f))
+        if (msg.message.isNotBlank()) SmallText(msg.message, color = Clear30Colors.text.copy(alpha = 0.5f))
     }
 }
 
@@ -165,41 +251,29 @@ internal fun CarouselFeedCard(images: List<String>, glow: Brush? = null) {
     }
 }
 
-/** The lesson's guide pages (intro / how-to / why-it-matters), stacked + scrollable. */
+/** The lesson's guide pages (intro / how-to / why-it-matters), stacked; overflow expands. */
 @Composable
 internal fun GuidesFeedCard(msg: ProgramMessage, glow: Brush? = null) {
-    Clear30Card(modifier = Modifier.fillMaxWidth(), glowGradient = glow) {
-        Column(
-            Modifier.heightIn(max = textScrollMaxHeight()).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
-        ) {
-            msg.programPageInfo.forEach { page ->
-                Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 4)) {
-                    Heading3(page.title)
-                    SmallText(page.body)
-                }
+    ExpandingFeedCard(glow = glow) {
+        msg.programPageInfo.forEach { page ->
+            Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 4)) {
+                Heading3(page.title)
+                SmallText(page.body)
             }
         }
     }
 }
 
-/** Meditation — taps to play inline (auto-plays through ExoPlayer). */
+/** Meditation — the inline MeditationPage player on a gradient card (iOS
+ *  `MeditationFeedView` = `MeditationPage(inlineType:)`). */
 @Composable
 internal fun MeditationFeedCard(med: ProgramMeditation, program: Program, glow: Brush? = null) {
-    var playing by remember(med.url) { mutableStateOf(false) }
-    if (playing) {
-        MeditationPlayer(med, program, onClose = { playing = false })
-    } else {
-        Clear30Card(
-            modifier = Modifier.fillMaxWidth().pressScale { playing = true },
-            gradient = Clear30Gradients.meditation,
-            glowGradient = glow,
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-                Icon(sfSymbol("play.fill"), contentDescription = null, tint = Color.White)
-                SmallText(med.name, color = Color.White)
-            }
-        }
+    Clear30Card(
+        modifier = Modifier.fillMaxWidth(),
+        gradient = Clear30Gradients.meditation,
+        glowGradient = glow,
+    ) {
+        org.clear30.views.existinguser.support.MeditationPageInline(med, program)
     }
 }
 
@@ -214,32 +288,31 @@ internal fun MeditationFeedCard(med: ProgramMeditation, program: Program, glow: 
 internal fun RedditFeedCard(res: ProgramResource, userInfo: UserInfo, glow: Brush? = null, onOpen: (String) -> Unit) {
     var thread by remember(res.url) { mutableStateOf<RedditThread?>(null) }
     LaunchedEffect(res.url) { thread = RedditScraper.fetch(res.url) }
-    Clear30Card(
-        modifier = Modifier.fillMaxWidth().heightIn(max = textScrollMaxHeight()).pressScale {
+    ExpandingFeedCard(
+        glow = glow,
+        tapHint = "Tap to see more",
+        onTapOverride = {
             Logger.logEvent(userInfo.loggingID, LogEventType.openedRedditThread, mapOf(LogEventExtraDataType.URL to res.url))
             onOpen(res.url)
         },
-        glowGradient = glow,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-            SmallTextHighlighted(
-                formats = listOf(HighlightedTextFormat("Reddit Thread", highlighted = true)),
-                highlightBrush = Clear30Gradients.reddit,
-            )
-            val t = thread
-            Heading3(t?.post?.title ?: res.title)
-            val preview = t?.post?.body?.let { redditInlinePreview(it) }.orEmpty()
-            if (preview.isNotBlank()) {
-                SmallText(preview, color = Clear30Colors.text.copy(alpha = 0.5f), maxLines = 12)
+        SmallTextHighlighted(
+            formats = listOf(HighlightedTextFormat("Reddit Thread", highlighted = true)),
+            highlightBrush = Clear30Gradients.reddit,
+        )
+        val t = thread
+        Heading3(t?.post?.title ?: res.title)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
+            t?.post?.let { post ->
+                RedditStat(if (post.score >= 0) "chevron.up" else "chevron.down", kotlin.math.abs(post.score))
+                RedditStat("text.bubble.fill", post.numComments)
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-                t?.post?.let { post ->
-                    RedditStat(if (post.score >= 0) "chevron.up" else "chevron.down", kotlin.math.abs(post.score))
-                    RedditStat("text.bubble.fill", post.numComments)
-                }
-                Spacer(Modifier.weight(1f))
-                TinyText("Tap to see more", color = Clear30Colors.text.copy(alpha = 0.5f))
-            }
+            Spacer(Modifier.weight(1f))
+            TinyText("Tap to see more", color = Clear30Colors.text.copy(alpha = 0.5f))
+        }
+        val preview = t?.post?.body?.let { redditInlinePreview(it) }.orEmpty()
+        if (preview.isNotBlank()) {
+            SmallText(preview, color = Clear30Colors.text.copy(alpha = 0.5f))
         }
     }
 }
@@ -253,32 +326,35 @@ private fun RedditStat(symbol: String, number: Int) {
     }
 }
 
-/** A YouTube video — opens the embedded in-app player. */
+/** A YouTube video — plays inline in the card via the embedded player. */
 @Composable
 internal fun YouTubeFeedCard(
     res: ProgramResource,
     userInfo: UserInfo,
     glow: Brush? = null,
-    onOpenYouTube: (String) -> Unit,
     onOpenWeb: (String) -> Unit,
 ) {
+    val id = youTubeId(res.url)
     Clear30Card(
-        modifier = Modifier.fillMaxWidth().pressScale {
-            Logger.logEvent(userInfo.loggingID, LogEventType.openedYouTubeVideo, mapOf(LogEventExtraDataType.URL to res.url))
-            val id = youTubeId(res.url)
-            if (id != null) onOpenYouTube(id) else onOpenWeb(res.url)
-        },
+        modifier = Modifier.fillMaxWidth().then(
+            // Non-parsable URLs (no video id) fall back to the in-app web viewer.
+            if (id == null) {
+                Modifier.pressScale {
+                    Logger.logEvent(userInfo.loggingID, LogEventType.openedYouTubeVideo, mapOf(LogEventExtraDataType.URL to res.url))
+                    onOpenWeb(res.url)
+                }
+            } else {
+                Modifier
+            },
+        ),
         gradient = Clear30Gradients.youtube,
         glowGradient = glow,
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-            youTubeId(res.url)?.let { id ->
-                AsyncImage(
-                    model = "https://i.ytimg.com/vi/$id/hqdefault.jpg",
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(Dimens.cornerRadius)),
-                )
+            if (id != null) {
+                InlineYouTubePlayer(id, Modifier.fillMaxWidth()) {
+                    Logger.logEvent(userInfo.loggingID, LogEventType.openedYouTubeVideo, mapOf(LogEventExtraDataType.URL to res.url))
+                }
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
                 Icon(sfSymbol("play.fill"), contentDescription = null, tint = Color.White)

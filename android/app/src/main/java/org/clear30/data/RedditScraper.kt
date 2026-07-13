@@ -39,8 +39,9 @@ object RedditScraper {
 
     /** Fetch + parse [url]; null on any network/parse failure (caller falls back to the web view). */
     suspend fun fetch(url: String): RedditThread? = runCatching {
-        // Prefer the server-side proxy (Reddit 403s direct app/datacenter fetches);
-        // fall back to a direct fetch, then null → the caller shows the web view.
+        // The proxy (with its server-side library.reddit_threads cache) is the
+        // primary path, as on iOS — Reddit 403s direct app/datacenter fetches.
+        // The direct fetch is a residential-IP fallback iOS doesn't need.
         val body = SupabaseController.fetchRedditJson(url) ?: directFetch(url) ?: return@runCatching null
 
         val root = json.parseToJsonElement(body).jsonArray
@@ -76,7 +77,7 @@ object RedditScraper {
 
     private fun parsePost(d: JsonObject) = RedditPost(
         title = d.str("title"),
-        body = d.str("selftext"),
+        body = decodeHtmlEntities(d.str("selftext")),
         author = d.str("author"),
         score = d.int("ups"),
         numComments = d.int("num_comments"),
@@ -93,7 +94,7 @@ object RedditScraper {
             if (obj["kind"]?.jsonPrimitive?.content != "t1") return@mapNotNull null
             val d = obj["data"]?.jsonObject ?: return@mapNotNull null
             val author = d.str("author")
-            val body = d.str("body")
+            val body = decodeHtmlEntities(d.str("body"))
             if (author.isBlank() || body.isBlank() || body == "[deleted]" || body == "[removed]") return@mapNotNull null
 
             val repliesEl = d["replies"]
@@ -112,6 +113,27 @@ object RedditScraper {
                 depth = depth,
                 replies = replies,
             )
+        }
+    }
+
+    // Reddit HTML-escapes selftext/body even with raw_json=1 on cached payloads;
+    // iOS decodes entities at parse time (String+HTMLEntities) — mirror that.
+    private val NAMED_ENTITIES = mapOf(
+        "&amp;" to "&", "&lt;" to "<", "&gt;" to ">", "&quot;" to "\"", "&apos;" to "'",
+        "&nbsp;" to " ", "&ndash;" to "–", "&mdash;" to "—", "&lsquo;" to "'", "&rsquo;" to "'",
+        "&ldquo;" to "“", "&rdquo;" to "”", "&hellip;" to "…", "&copy;" to "©",
+        "&reg;" to "®", "&trade;" to "™",
+    )
+    private val NUMERIC_ENTITY = Regex("""&#(x[0-9a-fA-F]+|\d+);""")
+
+    private fun decodeHtmlEntities(text: String): String {
+        if ('&' !in text) return text
+        var out = text
+        NAMED_ENTITIES.forEach { (entity, char) -> out = out.replace(entity, char) }
+        return NUMERIC_ENTITY.replace(out) { m ->
+            val v = m.groupValues[1]
+            val code = if (v.startsWith("x")) v.drop(1).toIntOrNull(16) else v.toIntOrNull()
+            code?.let { runCatching { String(Character.toChars(it)) }.getOrNull() } ?: m.value
         }
     }
 

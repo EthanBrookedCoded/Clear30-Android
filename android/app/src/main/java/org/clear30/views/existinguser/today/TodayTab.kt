@@ -84,7 +84,6 @@ import org.clear30.views.components.HighlightedTextFormat
 import org.clear30.views.components.InlineVideoPlayer
 import org.clear30.views.components.MiniText
 import org.clear30.views.components.VideoThumbnail
-import org.clear30.views.components.YouTubeDialog
 import org.clear30.views.components.youTubeId
 import org.clear30.views.components.ElectricProgressBar
 import org.clear30.views.components.SmallText
@@ -127,8 +126,8 @@ fun TodayTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30.d
     var showCheckInSheet by remember { mutableStateOf(false) }
     var dayDetail by remember { mutableStateOf<PlainDate?>(null) }
     var showMultiCheckIn by remember { mutableStateOf(false) }
-    // In-app overlays opened from the inlined content cards.
-    var youTubeVideoId by remember { mutableStateOf<String?>(null) }
+    // In-app overlays opened from the inlined content cards (YouTube now plays
+    // inline within its card).
     var webUrl by remember { mutableStateOf<String?>(null) }
     var redditUrl by remember { mutableStateOf<String?>(null) }
     var journalPrompt by remember { mutableStateOf<String?>(null) }
@@ -200,6 +199,9 @@ fun TodayTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30.d
                 m.memberPerks?.forEach { add(FeedItem.Perk(it)) }
                 m.journalPrompts?.takeIf { it.isNotEmpty() }?.let { add(FeedItem.Journal(it)) }
             }
+            // iOS TodayFeedViewModel appends a feedEnd celebration after the day's
+            // messages; the community carousel follows as bonus browsing.
+            if (messages.isNotEmpty()) add(FeedItem.FeedEnd)
             if (hasCommunity) add(FeedItem.Community)
         }
     }
@@ -297,16 +299,33 @@ fun TodayTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30.d
                                 showStreak = selectedDay == today,
                                 onCheckIn = { showCheckInSheet = true },
                             )
-                            is FeedItem.Video -> VideoFeedCard(item.msg, onOpenYouTube = { youTubeVideoId = it })
+                            is FeedItem.Video -> VideoFeedCard(item.msg, userInfo)
                             is FeedItem.Message -> MessageContentCard(item.msg, program, userInfo, glow = glow)
                             is FeedItem.Carousel -> CarouselFeedCard(item.images, glow = glow)
                             is FeedItem.Guides -> GuidesFeedCard(item.msg, glow = glow)
                             is FeedItem.Meditation -> MeditationFeedCard(item.med, program, glow = glow?.let { Clear30Gradients.meditation })
                             is FeedItem.Reddit -> RedditFeedCard(item.res, userInfo, glow = glow?.let { Clear30Gradients.reddit }, onOpen = { redditUrl = it })
-                            is FeedItem.YouTube -> YouTubeFeedCard(item.res, userInfo, glow = glow?.let { Clear30Gradients.youtube }, onOpenYouTube = { youTubeVideoId = it }, onOpenWeb = { webUrl = it })
+                            is FeedItem.YouTube -> YouTubeFeedCard(item.res, userInfo, glow = glow?.let { Clear30Gradients.youtube }, onOpenWeb = { webUrl = it })
                             is FeedItem.Claire -> ClairePromptFeedCard(item.prompt, userInfo, glow = glow?.let { Clear30Gradients.claire })
                             is FeedItem.Perk -> MemberPerkFeedCard(item.perk, glow = glow?.let { Clear30Gradients.supplements }, onOpenWeb = { webUrl = it })
                             is FeedItem.Journal -> JournalPromptsFeedCard(item.prompts, glow = glow?.let { Clear30Gradients.journals }, onJournal = { journalPrompt = it })
+                            FeedItem.FeedEnd -> FeedEndCelebration(
+                                message = messages.firstOrNull(),
+                                focused = page == pagerState.settledPage,
+                                alreadyComplete = (program.contentInfo[selectedDay]?.progress ?: 0.0) >= 1.0,
+                                showCta = true,
+                                unreadMessages = messages.count { !it.visited },
+                                onAllMessages = {
+                                    org.clear30.AppState.requestSubRoute(org.clear30.data.DeepLinkRoute.Messages)
+                                    org.clear30.AppState.requestTab("SUPPORT")
+                                },
+                                onCommunity = { org.clear30.AppState.requestTab("COMMUNITY") },
+                                onScrollToTop = { scope.launch { pagerState.animateScrollToPage(0) } },
+                                onCompleted = {
+                                    program.contentInfo[selectedDay]?.updateProgress(1.0)
+                                    scope.launch { Clear30Store.save(program) }
+                                },
+                            )
                             FeedItem.Community -> CommunityCarouselCard(
                                 posts = communityPosts,
                                 onOpenCommunity = { org.clear30.AppState.requestTab("COMMUNITY") },
@@ -369,7 +388,6 @@ fun TodayTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30.d
     }
 
     // In-app overlays opened from the inlined content cards.
-    youTubeVideoId?.let { id -> YouTubeDialog(id, onDismiss = { youTubeVideoId = null }) }
     webUrl?.let { u -> org.clear30.views.components.WebViewDialog(u, onDismiss = { webUrl = null }) }
     redditUrl?.let { u -> org.clear30.views.components.RedditDialog(u, onDismiss = { redditUrl = null }) }
     journalPrompt?.let { prompt ->
@@ -732,6 +750,7 @@ private sealed interface FeedItem {
     data class Claire(val prompt: org.clear30.data.model.ProgramClairePrompt) : FeedItem
     data class Perk(val perk: org.clear30.data.model.ProgramMemberPerk) : FeedItem
     data class Journal(val prompts: List<String>) : FeedItem
+    data object FeedEnd : FeedItem
     data object Community : FeedItem
 }
 
