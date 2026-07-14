@@ -66,6 +66,11 @@ from iOS) · `env` (local/dev environment task).
    B5+P8 (remove start-date picker + settings overhaul) → T9 (Today tab
    parity) → O5 (social-proof sheets) → S13 (symptom carousel) → A1 (verify
    only) → N3 (verify iOS timing first) → X9, A3, O9-styling as polish.
+   *(done 2026-07-14, 3f171e9 — all items landed + verified on-device except the noted
+   halves (T9c autoplay + N3 fire time verified by port only). Extra fixes on
+   the way: `arrow.down` / `calendar.badge.checkmark` sfSymbol mappings were
+   falling back to a circle glyph; break mutations moved to an app-lifetime
+   scope (see B6 note).)*
 
 ---
 
@@ -147,7 +152,16 @@ from iOS) · `env` (local/dev environment task).
   (e.g. `Settings.Secure.ANDROID_ID`).~~ **CLOSED — won't fix (Thatcher
   2026-07-14, §17-Q15).**
 
-- [ ] **X10 · P2 · bug — Unintended reduced opacity on card content app-wide**
+- [x] (done 2026-07-14, 3f171e9 — the suspected root cause was exactly right: the
+  `graphicsLayer { alpha = outlineOpacity }` sat before `.border` in the chain,
+  dimming the border AND everything drawn after it — including all card
+  content. 22 call sites pass `outlineOpacity < 1` (reward/health/achievement/
+  day/school cards), which is the app-wide wash. Fixed centrally: the stroke is
+  now drawn manually via `drawWithContent` with per-draw `alpha`, exactly iOS's
+  stroke-only `.opacity` (Cards.swift:650,657). Verified on-device: topic-card
+  break badge, health `hasNew` gradient cards, and Day badges all render
+  full-opacity content with a dimmed outline.) **X10 · P2 · bug — Unintended
+  reduced opacity on card content app-wide**
   (Thatcher, 2026-07-14, post-Wave-7). "A lot of the cards in the app seem to
   have decreased opacity which is not intended. Like the text on them and
   stuff." Suspect a shared modifier — audit `CardStyle`/`Clear30Card`
@@ -161,7 +175,14 @@ from iOS) · `env` (local/dev environment task).
   cards, health cards, school cards). Do this FIRST in Wave 8 — it likely
   explains part of T9's "off" look.
 
-- [ ] **X9 · P3 · divergent — Lifecycle hooks stubbed:** no content-info flush /
+- [x] (done 2026-07-14, 3f171e9 — MainActivity relays onStart/onStop into a new
+  `AppState.foregrounded` flow; `AppRootViewModel.observeScenePhase` handles it
+  (it owns the loaded models): foreground → session append + `openedApp`;
+  background → `Clear30Store.save(program)` (the iOS `flushContentInfo`
+  equivalent — captures in-place message.visited/progress edits) +
+  `endedSession` + `StatsWidget().updateAll` (iOS `reloadAllTimelines`). The
+  launch transition is skipped — patchUserInfo already records it.)
+  **X9 · P3 · divergent — Lifecycle hooks stubbed:** no content-info flush /
   `endedSession` on background, no `openedApp` on start
   (`A/MainActivity.kt:58,63` TODOs).
 
@@ -171,15 +192,25 @@ from iOS) · `env` (local/dev environment task).
 lookup, no client-minted IDs. Restore pipeline verified faithful except X6.
 Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
 
-- [ ] **A1 · P1 · missing — Email OTP verify fallback.** iOS tries `signup` then
+- [x] (VERIFIED no code needed, 2026-07-14 — signed in on-device with the
+  already-registered `wave2test@example.com` against the local DB: GoTrue sent
+  the magiclink-template OTP (the existing-user path iOS's fallback exists
+  for) and Android's single `OtpType.Email.EMAIL` verify succeeded, restoring
+  the account. `EMAIL` is the broad type covering signup + magiclink, so the
+  iOS `signup`→`email` retry is unnecessary. Closed per §17-Q14.)
+  **A1 · P1 · missing — Email OTP verify fallback.** iOS tries `signup` then
   `.email` types (`iOS/Data/Supabase/SupabaseFunctions.swift:105-119`); Android
   single type (`A/data/supabase/SupabaseAuth.kt:28-30`) → existing email users
   may fail to verify. **Decision (§17-Q14): likely fine given how Supabase
   handles OTP types — VERIFY, don't assume: sign in on Android with an
   already-registered email account (local DB) and confirm the verify succeeds;
   only port the fallback if it fails.**
-- [ ] **A3 · P3 · partial — Phone entry:** no E164 normalization; region picker
-  hardcoded `+1` (`A/views/newuser/signup/AllSignUp.kt:99,282-294`).
+- [x] (done 2026-07-14, 3f171e9 — the prefix chip is now a DropdownMenu over iOS's
+  `PhoneNumberRegionView.prefixes` NANP list (sorted, selection updates the
+  chip). "E164 normalization" on iOS is just `prefix + digits`, which Android's
+  `fullContact()` already did.) **A3 · P3 · partial — Phone entry:** no E164
+  normalization; region picker hardcoded `+1`
+  (`A/views/newuser/signup/AllSignUp.kt:99,282-294`).
 - [ ] ~~**A4 · P3 · partial — Attribution:** `appstack_id` never populated,
   `appstack_attribution` field absent (`A/data/supabase/SupabaseUser.kt:41-42`).~~
   **CLOSED — won't fix, appstack not needed (Thatcher 2026-07-14, §17-Q16).**
@@ -224,7 +255,14 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   sign-up (see X2), call `program_get_feedback`, store on the break (X7), insert
   the `Feedback` screen after `SignUp`.
 
-- [ ] **O5 · P2 · missing — Social-proof cards should open detail sheets** (review /
+- [x] (done 2026-07-14, 3f171e9 — testimonial cards now open ModalBottomSheet details
+  (post: community pill + title + body; review: 20dp gradient-star header +
+  title + body — iOS DetailViewWrapper), and CommunityPostTestimonialCard
+  live-fetches via `getCommunityPostById(postId)`, keeping the inlined copy as
+  the loading/failure fallback so the card is never blank (deliberate softening
+  of iOS's empty state). Sheets exercised in code review; local stack lacks the
+  seeded prod post ids so the fallback path is what renders locally.)
+  **O5 · P2 · missing — Social-proof cards should open detail sheets** (review /
   community post), incl. live `getCommunityPostById` fetch. Android only inline-
   expands (`A/views/newuser/assessment/AssessmentSocialProof.kt:517-603`); iOS
   sheets at `AssessmentSocialProof.swift:124-173`.
@@ -249,7 +287,14 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   75pt with 80pt frame (`AssessmentSpectrum.swift:47-61`). Note the branch
   semantics are also swapped vs iOS (large-emoji belongs to `showDots==true`).
 
-- [ ] **O9 · P3 · divergent — Reviews slide:** ~~static placeholder reviews (should
+- [x] (styling half done 2026-07-14, 3f171e9 — Play In-App Review on appear (new
+  `review-ktx` dependency; silently no-ops without Play, like StoreKit),
+  `fadeOutEdges(10.dp)` DstIn mask on the scroll (iOS `.fadeOut(fadeLength:
+  10)`), stars tinted with the journals gradient via a SrcAtop `gradientTint`
+  (iOS `foregroundStyle(journalsGradient)`), and the leading 🌿 mirrored so the
+  pair wraps the stars like the iOS wreath (no laurel drawable exists — unicode
+  stays, per the IntroScreen precedent). Verified on-device.)
+  **O9 · P3 · divergent — Reviews slide:** ~~static placeholder reviews (should
   fetch `getReviews` like iOS `OnboardingReviews.swift:129-139`)~~ **(fetch
   dropped — static reviews are fine, Thatcher 2026-07-14, §17-Q16)**, no Play
   In-App Review prompt (iOS `requestReview()` `:71`), no edge fade, unicode 🌿
@@ -306,13 +351,27 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   shift at payment) — implement together with X2. (done 2026-07-13, 3a63877 —
   `AssessmentSubmissionHandler.verifyProgramSetup`, called from handlePayment;
   submission time stamped via the iOS `initialAssessmentSubmission` cache key)
-- [ ] **B5 · P2 · bug — Settings `ProgramStartDatePicker` writes `program.startDate`
+- [x] (done 2026-07-14 with P8, 3f171e9 — `ProgramStartDatePicker.kt` deleted outright,
+  per §17-Q18; it was dangerous dead weight that desynced the timeline.)
+  **B5 · P2 · bug — Settings `ProgramStartDatePicker` writes `program.startDate`
   directly** with no content/break shift
   (`A/views/existinguser/profile/ProgramStartDatePicker.kt:71-78`) — desyncs the
   timeline; not a port of any iOS behavior. **Decision (§17-Q18): REMOVE it**
   (don't route through `adjustBreakTime`) — implement together with the P8
   settings overhaul.
-- [ ] **B6 · P1 · bug — Life mode toggle doesn't call `switchCore`.** Profile
+- [x] (done 2026-07-14, 3f171e9 — confirm now runs `ProgramTimelineHandler.switchCore`
+  under `LoadingCoordinator.tracked` with errors to the master AlertHandler,
+  like iOS. VERIFIED on-device: Moderation → "Switch to weed free" → badge
+  flips to Weed free and a `life-short` row with `LO-Use-State: ["I want to
+  stop entirely"]` lands in `programs.program_assessment_responses`.
+  HARDENING found on the way: `ProfileBreakOptions` used
+  `rememberCoroutineScope`, but `endBreak` nulls `currentBreak` in place
+  BEFORE its network work finishes, so the composable leaves composition
+  mid-flight and cancels its own scope (observed: a cancelled
+  `program_submit_assessment_response_v2` POST + the profile stuck on
+  Moderation after End break). Break mutations now run on a new app-lifetime
+  `Clear30Application.appScope`.) **B6 · P1 · bug — Life mode toggle doesn't
+  call `switchCore`.** Profile
   toggle flips `coreModeration` + saves locally
   (`A/views/existinguser/profile/ProfileTab.kt:324-329`); never re-fetches Life
   content. `switchCore` exists and is faithful
@@ -375,7 +434,23 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   still clip the fill independently. Apply the same pattern: clip the
   container once; fill = left-aligned plain rect.
 
-- [ ] **T9 · P2 · divergent — Today tab visual parity pass** (Thatcher,
+- [x] (done 2026-07-14, 3f171e9 — (a) the first pager page now carries
+  `TopicProgressCard` under the check-in card (iOS TodayFeedCardRouter), with
+  the iOS bottom CTA added: "Dive In" (no progress) / progress bar + "Continue"
+  / tappable "100% Completed 🥹", all scrolling to page 1; verified on-device.
+  (b) the pager (a clipping scroll container) had ZERO breathing room — cards
+  met its bounds exactly, so every soft shadow was cut at the left/right edge;
+  applied the repo's scrollShadowFix pattern (column keeps horizontalPadding −
+  scrollShadowFix, non-pager children pad the difference, pager pages get
+  scrollShadowFix contentPadding) so card width is unchanged but shadows get
+  20dp of room; verified. (c) `InlineYouTubePlayer` gained an `autoplay` param
+  driven by `page == settledPage` — mounts+plays on focus, unmounts (stops) on
+  focus loss, mirroring iOS `isFeedFocused`; wired in the Today feed AND the S6
+  message viewer. Not exercised on-device (no YT card in the test account's
+  current day). (d) audited every feed card: all already `fillMaxWidth` and
+  render full-width on-device — the "narrower" look was X10's dimming +
+  the clipped shadows; re-eyeball vs the iOS simulator once X10/T9b soak.)
+  **T9 · P2 · divergent — Today tab visual parity pass** (Thatcher,
   2026-07-14, post-Wave-7). Match the iOS Today feed as closely as possible.
   Known gaps: (a) **no daily-topic card on the first slide** — iOS's first
   feed page carries the topic card (see iOS `TodayFeedViews.swift` /
@@ -458,7 +533,14 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   `iOS/Views/Existing User/Support/Slipped/` (also writes userWhy —
   `SlippedActivities.swift:517`). Pairs with X6.
 
-- [ ] **S13 · P3 · divergent — Symptom cards should be a carousel on the
+- [x] (done 2026-07-14, 3f171e9 — iOS verified first: `SymptomCarouselView`
+  (SymptomCardsView.swift:215) presents through FeedView (horizontal paging,
+  height 220, page dots), NOT a free-scroll row. Rebuilt as a full-width
+  HorizontalPager: one card per snapping page, neighbors at 0.9 scale / 0.5
+  opacity, dot indicator, light haptic on page change — same treatment as the
+  assessment testimonials rail. Card itself unchanged (glass emoji circle +
+  "N tips" pill). VERIFIED on-device: Insomnia leads, 12 dots.)
+  **S13 · P3 · divergent — Symptom cards should be a carousel on the
   Support tab** (Thatcher, 2026-07-14, post-Wave-7). The "Symptom support"
   section currently renders as a horizontally-scrolled card row; wanted: a
   paged carousel. Verify the exact iOS presentation before building
@@ -525,7 +607,19 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   `HealthTimelineSection`/`HealthCard` and the detail views under
   `iOS/Views/Existing User/Profile/`).
 
-- [ ] **P8 · P2 · divergent — Settings page overhaul** (Thatcher, 2026-07-14,
+- [x] (done 2026-07-14, 3f171e9 — full row-by-row audit vs iOS SettingsView.swift, then
+  rebuilt to the iOS structure: Options (Name, Emoji, notification toggles
+  inline [simpler than iOS's pushed SettingsToggleView pages, per "or make it
+  more simple"], Text-messages toggles, Custom Check In) → Info (Rate us!,
+  Manage Subscription — both now use `context.packageName` instead of the
+  wrong hardcoded `org.clear30`) → Account (red centered Sign Out + Delete
+  Account and Data with the iOS alert copy, dim userID) → centered footer
+  links (Privacy Policy / Terms and Conditions / Clear30.org, iOS URLs).
+  REMOVED Android-only inventions: SymptomsSection, ProgramStartDatePicker
+  (B5), ShareCalendarRow — files deleted. Deliberately not ported: "Show
+  Tutorial" (tutorials cut §17-Q4), "Clear30 widgets" showcase (only
+  StatsWidget exists), 10-tap influencer mode (§15). VERIFIED on-device.)
+  **P8 · P2 · divergent — Settings page overhaul** (Thatcher, 2026-07-14,
   post-Wave-7, §17-Q18). "The whole entire settings page is out of whack. Keep
   it how we have it in the iOS app or make it more simple — there's some extra
   stuff in this one we don't need." Audit
@@ -537,7 +631,17 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   counterpart). Same playbook as G3: list every row on both platforms first,
   then cut/rebuild.
 
-- [ ] **P9 · P1 · bug — Profile tab doesn't reload after break mutations**
+- [x] (done 2026-07-14, 3f171e9 — threaded ProfileTab's `refresh` counter as a
+  genuinely-read `revision` param (T4 pattern) into ProgramCard (remember key),
+  ProfileSnakeCalendar, ProfileBreakOptions, HealthCardsRow AND each
+  HealthGaugeCard (the per-card `hp` is also mutated in place). Stat cards take
+  primitives recomputed in the parent (which reads `refresh`), and
+  DopamineTimer self-heals via its 1s tick, so neither needed threading.
+  VERIFIED on-device: Change start date → 7 days ago updated the Day badge
+  (1→8), snake calendar, and health gauges (0%→28/39/43% + hasNew) in place;
+  End break flipped the section to Your Program/Life + Roman calendar in
+  place. No app restart, no tab switch.) **P9 · P1 · bug — Profile tab doesn't
+  reload after break mutations**
   (Thatcher, 2026-07-14, post-Wave-7). After Restart break / Change start
   date / End break, the profile UI (break card day badge, snake calendar,
   stats) keeps showing stale state — "right now I have to close the app."
@@ -627,7 +731,19 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   a pop-in *cancel* tag at `:189`); silent-push payload is stored
   (`AppState.setNotification`) but never consumed. iOS:
   `NotificationHandlerHealth.swift`, pop-in scheduling, `NotificationHandlerSilent`.
-- [ ] **N3 · P3 · divergent — Content notification details:** fires at `unlockOn`
+- [x] (done 2026-07-14, 3f171e9 — iOS timing re-derived from source per §17-Q20, and
+  the source wins: `smokeTimeBasedDate` fires on the message's unlock DAY at a
+  random minute in the hour BEFORE the assessment smoke time ("4:20 PM" from
+  the break's Smoke-Time answer); with no smoke time, `randomDate` = unlockOn
+  ± up to 1h. (Not "~23h off smoke time" — the −1h..0 window before the
+  smoke-time-of-day is the mechanism.) Full port: smoke time parsed once
+  (iOS `parseTimeString` incl. 12 AM/PM edge cases), copy falls back
+  `notificationTitle→title` / `notificationBody→subtitle` with `_CLIENTNAME_`
+  substitution, same-day de-dupe (assessment-response messages win their day),
+  school messages excluded, 50-cap. `scheduleContent` now takes `program`.
+  Not exercised on-device — WorkManager fire-time verification needs a
+  day-scale wait; logic is a line-for-line port.) **N3 · P3 · divergent —
+  Content notification details:** fires at `unlockOn`
   (10:00) vs iOS smoke-time (`iOS/.../NotificationHandlerContent.swift:64-72`);
   skips messages lacking notification copy instead of falling back to
   title/subtitle (`A/data/NotificationHandler.kt:95-96`); no same-day de-dupe or
