@@ -286,11 +286,11 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
 
 ## 5. Today tab & check-in
 
-- [ ] **T2 · P3 · bug — Check-in slider screen background** uses the brand
+- [x] (done 2026-07-13, c6b3055 — verified on-device: slide phase on plain background, gray skip pill) **T2 · P3 · bug — Check-in slider screen background** uses the brand
   gradient (`A/views/existinguser/today/checkin/CheckInSheet.kt:139`); iOS uses
   plain `clear30Background` (`iOS/.../CheckIn.swift:66-68`). One-line. (Slider
   track/handle already match iOS.)
-- [ ] **T3 · P2 · missing — Rewards engine parity.** Android is a self-described
+- [x] (done 2026-07-13, c6b3055 — full 15-type generator port incl. rigged day-0/1/2; `CheckInRewardViews.kt` with animated counters, live 1s-ticking WeedFreeTimer, per-reward confetti; SmokedStats renders; iOS sequencing (static-first sober on the gradient screen, variable-first slips). Verified on-device: sober flow → gradient screen, staggered ticking timer bars, variable reward pops in after. Known divergences noted in code: emoji pig, no overrideRewardType/group rows/3s auto-advance. Slip-side reward rendering not yet exercised on-device.) **T3 · P2 · missing — Rewards engine parity.** Android is a self-described
   "faithful subset": 10/18 variable types
   (`A/data/CheckInRewardVariableGenerator.kt:15-26,31-42`; `calendarFillAnimation`
   filtered out at `:91`), flat non-animated views inlined in
@@ -299,7 +299,7 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   (`CheckInSheet.kt:516-519`); no per-reward confetti/animated counters.
   iOS reference: `CheckInRewardViews.swift` (19 animated views),
   `CheckInRewardVariableContainer.swift`, `CheckInRewardStaticContainer.swift`.
-- [ ] **T4 · P2 · missing — Check-in card states.** Android card = 3 static
+- [x] (done 2026-07-13, c6b3055 — stateful card: per-method rows, remove/smoked-again, amount stepper, slip timestamps + drag-to-scrub hour detail editor; `onCheckInChange` = iOS updateCheckIn(old:new:). Verified on-device: sober log + X-remove round-trip incl. DataStore. IMPORTANT fix folded in: `program` is mutated in place, so strong skipping left the card/day-pills stale after edits — a `revision` counter is now threaded through TodayTopSection/WeekStrip/MonthGrid/DayNode/CheckInDayCard and must be genuinely READ in each leaf (unused params are excluded from the skip comparison). Slip timestamp rows/detail editor not yet exercised on-device.) **T4 · P2 · missing — Check-in card states.** Android card = 3 static
   states + one button (`A/views/existinguser/today/checkin/CheckInDayCard.kt:57-138`);
   iOS shows per-method `CheckInStatus` rows with remove (`xmark.circle.fill`),
   "smoked again" (+), inline amount picker, timestamps, and a detail editor
@@ -399,34 +399,34 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
 
 ## 7. Profile
 
-- [ ] **P1 · P1 · bug — "Your why" never synced to DB.** Save handler is
+- [x] (done 2026-07-13, c6b3055 — verified: saved why lands in local `users.your_why`) **P1 · P1 · bug — "Your why" never synced to DB.** Save handler is
   local-only (`A/views/existinguser/profile/ProfileTab.kt:280-284`);
   `SupabaseController.updateYourWhy` exists with zero callers
   (`A/data/supabase/SupabaseFunctions.kt:66-67`). iOS: `ProfileCards.swift:102`.
   One-line wire-up.
-- [ ] **P2 · P2 · missing — Snake calendar for in-break users.** Android always
+- [x] (done 2026-07-13, c6b3055 — `ProfileSnakeCalendar.kt` port (snake grid, iOS day-mapping tables, connector masks, today-glow, staggered pop-in); branch on `currentBreak != null`, section label flips to "Your Break". Verified rendering on-device (day-0 break); connector highlight rules vs iOS with a mid-break account still worth an eyeball) **P2 · P2 · missing — Snake calendar for in-break users.** Android always
   renders the Roman calendar (`A/.../ProfileCalendar.kt`, used unconditionally at
   `ProfileTab.kt:119`); iOS branches: in-break → `ProfileSnakeCalendar(height:275)`
   (`iOS/.../Profile.swift:144`), Life → Roman (`:193`). Port
   `ProfileSnakeCalendar.swift` and branch on `program.currentBreak != null`.
-- [ ] **P3 · P3 · bug — Timer bar corner radii distort on short fills.** Fill Box
+- [x] (done 2026-07-13, c6b3055 — container clipped once, fill = plain rect; verified visually on narrow fills) **P3 · P3 · bug — Timer bar corner radii distort on short fills.** Fill Box
   clipped independently with the full 14dp shape
   (`A/views/existinguser/profile/DopamineTimer.kt:250,278-280`) → radii shrink
   when the fill is narrow. iOS masks the whole composited bar once
   (`iOS/.../DopamineTimer.swift:422-425`). **Fix:** clip the container once;
   fill = left-aligned plain rect.
-- [ ] **P4 · P3 · bug — "in X hours" badge on every health card.** Badge renders
+- [x] (done 2026-07-13, c6b3055 — verified on-device: exactly one badge, on the soonest gauge) **P4 · P3 · bug — "in X hours" badge on every health card.** Badge renders
   per gauge (`A/.../health/HealthGaugeCards.kt:153`); iOS shows it only for the
   single soonest-updating category (`iOS/.../Profile.swift:263-265`;
   `nextIncreaseCategory` = min by nextStepDate,
   `ProgramHealthProgress.swift:193-195`). Compute the earliest `nextIncrease` in
   `HealthCardsRow` and pass a `showTimeLeft` flag.
-- [ ] **P5 · P3 · missing — Health cards not clickable.** No click handler at all
+- [x] (done 2026-07-13, c6b3055 — cards tappable at any %, open a new `HealthTimelinePage` overlay (combined milestone timeline; Android has no per-category detail screen yet). Verified on-device) **P5 · P3 · missing — Health cards not clickable.** No click handler at all
   (`HealthGaugeCards.kt:132-163`); iOS cards are always tappable — even at 0% —
   navigating to the health timeline detail (`iOS/.../HealthCard.swift:26`,
   `Profile.swift:380-388`). Route to `HealthTimelineSection`/detail regardless
   of percentage.
-- [ ] **P6 · P2 · missing — Journal UX.** Text entry = cramped AlertDialog
+- [x] (done 2026-07-13, c6b3055 — full-screen `TextEntryEditor` (title field, auto-focus, commit-on-close, delete confirm, share-to-community via `createCommunityPost` w/ program tag); video entries get a naming dialog with unlocked-prompt suggestions. Verified on-device: create→back commits and lists the entry; video naming + share flow untested (camera / needs auth session)) **P6 · P2 · missing — Journal UX.** Text entry = cramped AlertDialog
   (`A/.../journal/JournalSection.kt:202-218`); video title hardcoded
   "Video journal" (`:98`). iOS: full-screen `TextEntry` editor with title field +
   share-to-community (`iOS/.../TextEntry.swift:61,70,73,113`); video entries
@@ -435,24 +435,24 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
 
 ## 8. Community
 
-- [ ] **C1 · P2 · missing — Pinned-post behavior.** `is_pinned` parsed but never
+- [x] (done 2026-07-13, c6b3055 — `opened_pinned_<id>` cache tracking + Newest-mode hiding + program-tag feed seeding (feed verified opening scoped to the Clear30 tag; CreatePostScreen forced tag switched to `communityProgramTagName` to match). Pinned hide/return flow not exercised on-device — no pinned row seeded locally; check `get_filtered_posts` returns pinned rows without an explicit `exclude_pinned` arg) **C1 · P2 · missing — Pinned-post behavior.** `is_pinned` parsed but never
   read (`A/data/model/Post.kt:22`; `CommunityTab.kt:259-272` renders all posts
   flat). Port iOS: `opened_pinned_<id>` visited tracking cached on UserInfo,
   hide opened pinned posts in Newest mode, and auto-seed the feed's tag filter
   from the current program's tag
   (`iOS/.../CommunityFeedViewModel.swift:186,406-416`;
   `CommunityFeed.swift:225,264-265,340-352`).
-- [ ] **C2 · P3 · decided — Remove the prompt card at the top of the feed**
+- [x] (done 2026-07-13, c6b3055 — verified on-device: no prompt card) **C2 · P3 · decided — Remove the prompt card at the top of the feed**
   (hardcoded random local string — `A/views/existinguser/community/CommunityTab.kt:240-243,290-320`).
   Part of §17-Q4's "remove tutorial popups, same with community and such."
-- [ ] **C3 · P2 · missing — Community depth:** activity/notifications inbox
+- [x] (done 2026-07-13, c6b3055 — activity/notifications inbox (paged `get_activity_feed`, unread dots, tap = mark-read + open post — verified incl. `is_read` flip in local DB), `EditPostScreen` (verified: edit → "Post updated!" → row updated in `community.posts`), owner Edit/Delete + report un-stubbed w/ bucket cleanup via new `removePublicFile`; SocialUserView skipped per item (TODO(port) marker). Delete + report flows not exercised on-device) **C3 · P2 · missing — Community depth:** activity/notifications inbox
   (currently a stub — `A/.../CommunityHeader.kt:161`), edit post, owner actions
   + flagging un-stub (`CommunityTab.kt:520-562`). Per-user profile view (iOS
   `SocialUserView`) is nice-to-have.
 
 ## 9. Groups
 
-- [ ] **G1 · P2 · divergent — Header overhaul.** Android wraps the header in a
+- [x] (done 2026-07-13, c6b3055 — verified on-device after creating a group: dim group name over section Heading1, small top-right "+" (fires the share Intent directly — iOS's intermediate share sheet intentionally skipped), no card/subtitle/InviteChip) **G1 · P2 · divergent — Header overhaul.** Android wraps the header in a
   full gradient card (3 text lines incl. "X members · Y days clear together") +
   full-width InviteChip (`A/views/existinguser/groups/GroupsTab.kt:335-354`);
   iOS is plain text — dim group name over `Heading1` section title — with a
@@ -629,7 +629,10 @@ Google Sign-In (phone/email OTP is enough) · SMS/Twilio.
   (b) reward generator invoked twice, mutating `program.dayInfo` during
   composition (`A/.../CheckInSheet.kt:510-512` vs `CheckInLogger.kt:56`).
   Cheap hardening (try/catch the coroutine; hoist the generator out of
-  composition) is safe to fold into T3/T4 work.
+  composition) is safe to fold into T3/T4 work. *(2026-07-13, c6b3055: both
+  hardenings landed with T3/T4 — the persist pipeline is step-isolated
+  try/catch, and the generator now runs once inside `logCheckIns` (returned,
+  never invoked from composition). The crash itself remains unreproduced.)*
 - **D2 — Old-Android-app user migration (~3.1k users, empty program state).**
   Goal: the old app's users seamlessly land on the new app — ideally migrate
   the OLD app's local data and push it to the backend so the new app restores
