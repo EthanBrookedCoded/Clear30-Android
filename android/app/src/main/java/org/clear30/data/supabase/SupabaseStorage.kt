@@ -23,3 +23,15 @@ suspend fun SupabaseController.uploadPublicFile(
     api.upload(path, bytes) { upsert = true }
     api.publicUrl(path)
 }.onFailure { android.util.Log.w("SupabaseStorage", "upload $bucket/$path failed: ${it.message}") }
+
+/**
+ * Delete a file given its public URL (Swift `removeFileFromSupabase`): the
+ * bucket-relative path is whatever follows "<bucket>/" in the URL. Used when a
+ * video post is deleted so its clip + thumbnail don't orphan in storage.
+ */
+suspend fun SupabaseController.removePublicFile(bucket: String, publicUrl: String) {
+    val path = publicUrl.substringAfter("$bucket/", missingDelimiterValue = "")
+    if (path.isEmpty()) return
+    runCatching { client.storage.from(bucket).delete(listOf(path)) }
+        .onFailure { android.util.Log.w("SupabaseStorage", "remove $bucket/$path failed: ${it.message}") }
+}

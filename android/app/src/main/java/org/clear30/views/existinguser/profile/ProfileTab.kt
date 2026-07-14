@@ -44,6 +44,8 @@ import org.clear30.data.model.AppMode
 import org.clear30.data.model.JournalEntries
 import org.clear30.data.model.Program
 import org.clear30.data.model.UserInfo
+import org.clear30.data.supabase.SupabaseController
+import org.clear30.data.supabase.updateYourWhy
 import org.clear30.views.components.Clear30Card
 import org.clear30.views.components.Heading1
 import org.clear30.views.components.Heading2
@@ -82,6 +84,7 @@ fun ProfileTab(
     var showJournal by remember { mutableStateOf(false) }
     var showPreviousBreaks by remember { mutableStateOf(false) }
     var showNewBreak by remember { mutableStateOf(false) }
+    var showHealthTimeline by remember { mutableStateOf(false) }
     // Bumped after a program mutation (new break) so the cards below recompute —
     // `program` is a plain model, not observable.
     var refresh by remember { mutableIntStateOf(0) }
@@ -108,15 +111,21 @@ fun ProfileTab(
             SectionLabel("Overall Progress")
             UserWhyCard(userInfo)
             DopamineTimer(program, userInfo)
-            HealthCardsRow(program, userInfo)
+            HealthCardsRow(program, userInfo) { showHealthTimeline = true }
             AchievementsSection(userInfo)
 
-            // ===== Your Program =====
-            SectionLabel("Your Program")
+            // ===== Your Program / Your Break =====
+            val calendarBreak = program.currentBreak
+            SectionLabel(if (calendarBreak != null) "Your Break" else "Your Program")
             ProgramCard(program, userInfo)
-            // Calendar of sober days — sits above the stats, matching iOS lifeLayout
-            // (ProfileRomanCalendar between the program card and the stat cards).
-            ProfileCalendar(program)
+            // Calendar — iOS branches: in-break → the 30-day snake calendar
+            // (Profile.swift programBreakLayout), Life → the Roman month calendar
+            // (lifeLayout). Both sit between the program card and the stat cards.
+            if (calendarBreak != null) {
+                ProfileSnakeCalendar(height = 275.dp, program = program, programBreak = calendarBreak)
+            } else {
+                ProfileCalendar(program)
+            }
             // iOS: if a started break has computable savings, show Days + Money saved
             // with a full-width New Break button below; otherwise Days + New Break.
             val lastBreak = program.lastBreak
@@ -173,10 +182,15 @@ fun ProfileTab(
             ProfileSettingsOverlay(userInfo, program, onSignOut) { showSettings = false }
         }
         PageOverlay(showJournal) {
-            JournalSection(journalEntries, userInfo) { showJournal = false }
+            JournalSection(journalEntries, userInfo, program) { showJournal = false }
         }
         PageOverlay(showPreviousBreaks) {
             PreviousBreaksSection(program) { showPreviousBreaks = false }
+        }
+        // Health card tap → the health timeline detail (iOS pushes
+        // NavigationDestination.healthProgressTimeline).
+        PageOverlay(showHealthTimeline) {
+            HealthTimelinePage(program, userInfo) { showHealthTimeline = false }
         }
     }
 }
@@ -281,7 +295,12 @@ private fun UserWhyCard(userInfo: UserInfo) {
                     val trimmed = draft.trim()
                     userInfo.userWhy = trimmed.ifBlank { null }
                     why = userInfo.userWhy
-                    scope.launch { Clear30Store.save(userInfo) }
+                    scope.launch {
+                        Clear30Store.save(userInfo)
+                        // Sync to backend (iOS ProfileCards.swift `updateYourWhy`) —
+                        // iOS sends the raw text, empty string included, on clear.
+                        SupabaseController.updateYourWhy(trimmed)
+                    }
                     showEditor = false
                 }) { Text("Save") }
             },

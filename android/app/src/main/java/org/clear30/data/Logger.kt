@@ -93,6 +93,14 @@ value class LogEventType(val rawValue: String) {
         val createdCommunityPost = LogEventType("created_community_post")
         val reactedToCommunityPost = LogEventType("reacted_to_community_post")
         val commentedOnCommunityPost = LogEventType("commented_on_community_post")
+        val openedEditCommunityPost = LogEventType("opened_edit_community_post")
+        val editedCommunityPost = LogEventType("edited_community_post")
+        val reportedCommunityPost = LogEventType("reported_community_post")
+        val deletedCommunityPost = LogEventType("deleted_community_post")
+        val openedCommunityActivity = LogEventType("opened_community_activity")
+        val openedCommunityNotifications = LogEventType("opened_community_notifications")
+        val openedCommunityMyPosts = LogEventType("opened_community_my_posts")
+        val editedCommunityFeedFilters = LogEventType("edited_community_feed_filters")
 
         // Groups
         val createdGroup = LogEventType("created_group")

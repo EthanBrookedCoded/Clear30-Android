@@ -268,16 +268,21 @@ private fun TimerBar(
                 Clear30Colors.shadow.copy(alpha = Clear30Colors.shadow.alpha * 0.75f),
                 cornerRadius = 14.dp,
                 blurRadius = 5.dp,
-            ),
+            )
+            // iOS masks the whole composited bar ONCE (DopamineTimer.swift
+            // `.mask(RoundedRectangle(...))`), so the fill is a plain left-aligned
+            // rect under the container clip — clipping the fill independently made
+            // its corner radii collapse on narrow fills.
+            .clip(shape),
     ) {
         val full = maxWidth
         val fillW = full * fraction
         val widthPx = constraints.maxWidth.toFloat()
 
         // Track
-        Box(Modifier.fillMaxSize().clip(shape).background(Color.White.copy(alpha = 0.25f)))
-        // Fill
-        Box(Modifier.width(fillW).fillMaxHeight().clip(shape).background(Color.White))
+        Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.25f)))
+        // Fill — plain rect; the container clip rounds its outer corners.
+        Box(Modifier.width(fillW).fillMaxHeight().background(Color.White))
 
         // White label over the translucent track. No ellipsis / no wrap — the bar
         // is full-width so the text always fits; forcing `Visible` + single line

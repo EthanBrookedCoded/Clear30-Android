@@ -37,9 +37,11 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.checkCommunityActivity
 import org.clear30.data.supabase.createCommunityPost
+import org.clear30.data.supabase.deleteCommunityPost
 import org.clear30.data.supabase.getCommunityFeed
+import org.clear30.data.supabase.getCommunityPostById
 import org.clear30.data.supabase.getCommunityTags
-import org.clear30.data.supabase.getUserID
+import org.clear30.data.supabase.removePublicFile
 import org.clear30.data.supabase.uploadPublicFile
 import org.clear30.util.adding
 import org.clear30.util.now
@@ -81,8 +83,15 @@ fun CommunityTab(program: org.clear30.data.model.Program, userInfo: org.clear30.
     var range by remember { mutableStateOf(DateRange.ALL) }
     var selectedTags by remember { mutableStateOf<Set<String>>(emptySet()) }
     var allTags by remember { mutableStateOf<List<org.clear30.data.model.PostTag.Tag>>(emptyList()) }
+    // The feed waits for the tag load so the first query is already scoped to
+    // the seeded program tag (iOS setupTags loads tags before the first page).
+    var tagsReady by remember { mutableStateOf(false) }
+    var edit by remember { mutableStateOf<Post?>(null) }
+    // Bumped when a pinned post is marked opened so the Newest feed re-filters.
+    var pinnedVersion by remember { androidx.compose.runtime.mutableIntStateOf(0) }
 
-    LaunchedEffect(reload, sortMode, range, selectedTags) {
+    LaunchedEffect(reload, sortMode, range, selectedTags, tagsReady) {
+        if (!tagsReady) return@LaunchedEffect
         // "Top" applies the time window (min_date); Newest ignores it.
         val minDate = if (sortMode == SortMode.TOP) range.days?.let {
             now().adding(days = -it).toLocalDateTime(TimeZone.UTC).toString()
@@ -103,7 +112,14 @@ fun CommunityTab(program: org.clear30.data.model.Program, userInfo: org.clear30.
     }
 
     LaunchedEffect(Unit) {
-        SupabaseController.getCommunityTags().onSuccess { t -> allTags = t.filter { it.type != "day" && it.type != "lobby" } }
+        SupabaseController.getCommunityTags().onSuccess { t ->
+            allTags = t.filter { it.type != "day" && it.type != "lobby" }
+            // iOS CommunityFeed.setupTags: seed the filter with the current
+            // program's tag so the feed opens scoped to the user's program.
+            t.firstOrNull { it.type == "program" && it.name == program.communityProgramTagName }
+                ?.let { selectedTags = setOf(it.id) }
+        }
+        tagsReady = true
     }
 
     // Unread-activity dot on the bell (iOS checkActivity) — re-check on feed
@@ -135,16 +151,52 @@ fun CommunityTab(program: org.clear30.data.model.Program, userInfo: org.clear30.
         org.clear30.AppState.requestSubRoute(null)
     }
 
+    // Owner edit flow (iOS EditPostView sheet) — rendered above the detail so
+    // "Edit" from the detail's menu opens on top and returns to it on close.
+    edit?.let { editing ->
+        androidx.activity.compose.BackHandler { edit = null }
+        EditPostScreen(
+            post = editing,
+            userInfo = userInfo,
+            onClose = { edit = null },
+            onSaved = {
+                edit = null
+                reload++
+                // Refresh an open detail so the edited title/body show at once.
+                if (detail?.id == editing.id) {
+                    scope.launch {
+                        SupabaseController.getCommunityPostById(editing.id).onSuccess { detail = it }
+                    }
+                }
+            },
+        )
+        return
+    }
+
     detail?.let { selected ->
         // System back closes the detail instead of exiting the app.
         androidx.activity.compose.BackHandler { detail = null }
-        PostDetail(selected, userInfo, onBack = { detail = null })
+        PostDetail(
+            selected,
+            userInfo,
+            onBack = { detail = null },
+            onEdit = { edit = it },
+            onDeleted = { detail = null; reload++ },
+        )
         return
     }
 
     if (showActivity) {
         androidx.activity.compose.BackHandler { showActivity = false }
-        ActivityScreen(userInfo, onBack = { showActivity = false }, onOpenPost = { showActivity = false; detail = it })
+        ActivityScreen(
+            userInfo,
+            onBack = { showActivity = false },
+            // Detail/edit render above this block, so the Activity screen stays
+            // underneath (iOS presents them as sheets over ActivityView).
+            onOpenPost = { detail = it },
+            onEditPost = { edit = it },
+            onPostsChanged = { reload++ },
+        )
         return
     }
 
@@ -213,60 +265,77 @@ fun CommunityTab(program: org.clear30.data.model.Program, userInfo: org.clear30.
                 Heading1("Community", Modifier.padding(top = Dimens.headingTopPadding, bottom = Dimens.cardSpacing))
                 androidx.compose.material3.CircularProgressIndicator()
             }
-            else -> PullToRefreshBox(
-                isRefreshing = refreshing,
-                onRefresh = { refreshing = true; reload++ },
-                modifier = Modifier.fillMaxSize().padding(padding),
-            ) {
-                LazyColumn(
-                    Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding),
-                    verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+            else -> {
+                // iOS shouldHidePost: in Newest mode, pinned posts the user has
+                // already opened (cached `opened_pinned_<id>` on UserInfo) drop
+                // out of the feed. (Computed here — LazyListScope isn't
+                // composable, so no remember inside the LazyColumn block.)
+                val visible = remember(p, sortMode, pinnedVersion) {
+                    p.filter { post ->
+                        !(
+                            sortMode == SortMode.NEWEST && post.isPinned &&
+                                userInfo.getCachedBool(OPENED_PINNED_PREFIX + post.id)
+                            )
+                    }
+                }
+                PullToRefreshBox(
+                    isRefreshing = refreshing,
+                    onRefresh = { refreshing = true; reload++ },
+                    modifier = Modifier.fillMaxSize().padding(padding),
                 ) {
-                    item {
-                        CommunityHeader(
-                            sortMode = sortMode, onSort = { sortMode = it },
-                            range = range, onRange = { range = it },
-                            unreadActivity = unreadActivity,
-                            onFilter = { showFilter = true },
-                            onActivity = { showActivity = true },
-                            onCreate = { showCreate = true },
-                        )
-                    }
-                    // Prompt card — iOS CommunityPromptCard (a PopupCard with a
-                    // lightbulb on the community gradient) shown above the feed;
-                    // opening it routes to the create-post sheet. iOS shows one
-                    // prompt at a time, so we pick one from the hardcoded list
-                    // (dynamic Supabase prompts are still a data-layer TODO).
-                    item {
-                        val prompt = remember { COMMUNITY_PROMPTS.random() }
-                        CommunityPromptCard(prompt) { showCreate = true }
-                    }
-                    if (p.isEmpty()) {
+                    LazyColumn(
+                        Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding),
+                        verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+                    ) {
                         item {
-                            val err = error
-                            if (err != null) {
-                                Clear30Card(modifier = Modifier.fillMaxWidth().padding(top = Dimens.cardSpacing)) {
-                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Heading3("Couldn't load community")
-                                        SmallText(err, color = Clear30Colors.red1)
-                                    }
-                                }
-                            } else {
-                                EmptyCommunityState(onRefresh = { reload++ })
-                            }
+                            CommunityHeader(
+                                sortMode = sortMode, onSort = { sortMode = it },
+                                range = range, onRange = { range = it },
+                                unreadActivity = unreadActivity,
+                                onFilter = { showFilter = true },
+                                onActivity = { showActivity = true },
+                                onCreate = { showCreate = true },
+                            )
                         }
-                    } else {
-                        items(p, key = { it.id }) { post ->
-                            // animateItem() smooths inserts/reorders when the feed
-                            // reloads on a sort/filter/refresh change.
-                            Box(Modifier.animateItem()) {
-                                PostCard(post) {
-                                    detail = post
-                                    org.clear30.data.Logger.logEvent(
-                                        userInfo.loggingID,
-                                        org.clear30.data.LogEventType.openedCommunityPost,
-                                        mapOf(org.clear30.data.LogEventExtraDataType.ID to post.id),
-                                    )
+                        if (p.isEmpty()) {
+                            item {
+                                val err = error
+                                if (err != null) {
+                                    Clear30Card(modifier = Modifier.fillMaxWidth().padding(top = Dimens.cardSpacing)) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Heading3("Couldn't load community")
+                                            SmallText(err, color = Clear30Colors.red1)
+                                        }
+                                    }
+                                } else {
+                                    EmptyCommunityState(onRefresh = { reload++ })
+                                }
+                            }
+                        } else {
+                            items(visible, key = { it.id }) { post ->
+                                // animateItem() smooths inserts/reorders when the feed
+                                // reloads on a sort/filter/refresh change.
+                                Box(Modifier.animateItem()) {
+                                    PostCard(
+                                        post,
+                                        userInfo = userInfo,
+                                        onEdit = { edit = it },
+                                        onDeleted = { reload++ },
+                                    ) {
+                                        // iOS markPinnedPostOpened: opening a pinned
+                                        // post hides it from Newest on return.
+                                        if (post.isPinned) {
+                                            userInfo.setCacheBool(OPENED_PINNED_PREFIX + post.id, true)
+                                            scope.launch { org.clear30.data.Clear30Store.save(userInfo) }
+                                            pinnedVersion++
+                                        }
+                                        detail = post
+                                        org.clear30.data.Logger.logEvent(
+                                            userInfo.loggingID,
+                                            org.clear30.data.LogEventType.openedCommunityPost,
+                                            mapOf(org.clear30.data.LogEventExtraDataType.ID to post.id),
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -277,45 +346,42 @@ fun CommunityTab(program: org.clear30.data.model.Program, userInfo: org.clear30.
     }
 
     if (showFilter) {
+        // iOS handleTagPickerDismiss logs a filter edit when the selection
+        // actually changed while the sheet was up.
+        val tagsBeforeSheet = remember { selectedTags }
+        val closeFilter = {
+            showFilter = false
+            if (selectedTags != tagsBeforeSheet) {
+                org.clear30.data.Logger.logEvent(
+                    userInfo.loggingID,
+                    org.clear30.data.LogEventType.editedCommunityFeedFilters,
+                )
+            }
+        }
         TagFilterSheet(
             tags = allTags,
             selected = selectedTags,
             onToggle = { id -> selectedTags = if (id in selectedTags) selectedTags - id else selectedTags + id },
-            onDone = { showFilter = false },
-            onDismiss = { showFilter = false },
+            onDone = closeFilter,
+            onDismiss = closeFilter,
         )
     }
 }
 
-/** Short list of conversation-starter prompts shown above the feed. */
-private val COMMUNITY_PROMPTS = listOf(
-    "Why are you here?",
-    "Hardest part of today",
-    "A small win",
-    "What's working",
-    "What's not",
-    "Looking for advice",
-)
+/** UserInfo cache-key prefix for opened pinned posts (iOS `openedPinnedPrefix`). */
+internal const val OPENED_PINNED_PREFIX = "opened_pinned_"
 
-/** iOS `CommunityPromptCard` → `PopupCard`: prompt text + a half-opacity lightbulb on a gradient card. */
-@Composable
-private fun CommunityPromptCard(prompt: String, onClick: () -> Unit) {
-    Clear30Card(
-        modifier = Modifier.fillMaxWidth().pressScale(onClick = onClick),
-        gradient = org.clear30.views.theme.Clear30Gradients.community,
-    ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            SmallText(prompt)
-            Spacer(Modifier.weight(1f))
-            androidx.compose.material3.Icon(
-                sfSymbol("lightbulb.max.fill"),
-                contentDescription = null,
-                tint = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.5f),
-                modifier = Modifier.size(13.dp),
-            )
-        }
+/**
+ * The community tag name for the user's current program — iOS
+ * `Program.communityProgramTagName` (TagModel.swift): "Clear30" during a break,
+ * "Clear30 Preparation" during start-soon, otherwise the core program name.
+ */
+internal val org.clear30.data.model.Program.communityProgramTagName: String
+    get() = when (currentBreak?.type) {
+        org.clear30.data.model.ProgramBreakType.CLEAR30 -> "Clear30"
+        org.clear30.data.model.ProgramBreakType.CLEAR30_START_SOON -> "Clear30 Preparation"
+        null -> coreProgramName
     }
-}
 
 /** iOS empty feed: centered "No posts, yet..." + a TinyTextButton "Refresh". */
 @Composable
@@ -355,7 +421,13 @@ private fun EmptyCommunityState(onRefresh: () -> Unit) {
 }
 
 @Composable
-internal fun PostCard(post: Post, onClick: () -> Unit) {
+internal fun PostCard(
+    post: Post,
+    userInfo: org.clear30.data.model.UserInfo,
+    onEdit: (Post) -> Unit = {},
+    onDeleted: () -> Unit = {},
+    onClick: () -> Unit,
+) {
     // Author label sourced from the shared UserDirectory cache (batched
     // public.users lookup). The cache returns a stable "User #abc123" handle
     // on cold-miss so the row never renders blank; the real display name
@@ -377,7 +449,9 @@ internal fun PostCard(post: Post, onClick: () -> Unit) {
                 )
                 TinyText(" · ${relativeTime(post.createdAt)}", color = Clear30Colors.text.copy(alpha = 0.25f))
                 androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
-                PostOverflowMenu(post)
+                if (!post.isPinned) {
+                    PostOverflowMenu(post, userInfo, onEdit = onEdit, onDeleted = onDeleted)
+                }
             }
 
             // Video posts: show the poster frame + play badge (tap the card to
@@ -496,7 +570,7 @@ internal fun relativeTime(createdAt: String?): String {
  * to compete with the brand gradient and the prompts row above the feed.
  */
 @Composable
-private fun TagPill(tag: org.clear30.data.model.PostTag.Tag) {
+internal fun TagPill(tag: org.clear30.data.model.PostTag.Tag) {
     val accent = tagAccent(tag)
     Box(
         Modifier
@@ -516,15 +590,21 @@ internal fun tagAccent(tag: org.clear30.data.model.PostTag.Tag): androidx.compos
 }
 
 /**
- * PostOverflowMenu — the "⋯" affordance that exposes flag / edit / delete.
- * Owner-only actions (edit, delete) are gated by the local TODO marker — once
- * we thread the current user id into PostCard we can toggle them properly;
- * for now we always show flag/report and disable the owner actions.
+ * PostOverflowMenu — the "⋯" menu from iOS PostDetailView's header, shared by
+ * the feed card and the detail screen. Owners get Edit + Delete (with the iOS
+ * confirm alert); everyone else gets Report. Hidden entirely for pinned posts
+ * (iOS gates the Menu on `!post.isPinned`).
  */
 @Composable
-private fun PostOverflowMenu(post: Post) {
+internal fun PostOverflowMenu(
+    post: Post,
+    userInfo: org.clear30.data.model.UserInfo,
+    onEdit: (Post) -> Unit,
+    onDeleted: () -> Unit,
+) {
     var expanded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val isOwner = post.userId.isNotEmpty() && post.userId == userInfo.userID
     Box {
         androidx.compose.material3.IconButton(onClick = { expanded = true }) {
             androidx.compose.material3.Icon(
@@ -537,46 +617,84 @@ private fun PostOverflowMenu(post: Post) {
             expanded = expanded,
             onDismissRequest = { expanded = false },
         ) {
-            androidx.compose.material3.DropdownMenuItem(
-                text = { androidx.compose.material3.Text("Report") },
-                onClick = {
-                    expanded = false
-                    // File the report against the user's community profile id
-                    // (community.reported_posts, guarded against duplicates server-side).
-                    scope.launch {
-                        val uid = SupabaseController.getUserID()
-                        if (uid != null) SupabaseController.reportPost(uid, post.id)
-                    }
-                    org.clear30.data.AlertHandler.info(
-                        title = "Reported",
-                        message = "Thanks. Our team will review this post.",
-                    )
-                },
-            )
-            androidx.compose.material3.DropdownMenuItem(
-                text = { androidx.compose.material3.Text("Hide for me") },
-                onClick = {
-                    expanded = false
-                    @Suppress("UNUSED_VARIABLE") val id = post.id
-                    // TODO(port): persist per-user hidden ids and filter the
-                    // feed against them; for now we just acknowledge.
-                    org.clear30.data.AlertHandler.info(
-                        title = "Hidden",
-                        message = "You won't see this post again after refresh.",
-                    )
-                },
-            )
-            androidx.compose.material3.DropdownMenuItem(
-                text = { androidx.compose.material3.Text("Edit") },
-                enabled = false,
-                onClick = { expanded = false },
-            )
-            androidx.compose.material3.DropdownMenuItem(
-                text = { androidx.compose.material3.Text("Delete") },
-                enabled = false,
-                onClick = { expanded = false },
-            )
+            if (isOwner) {
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { androidx.compose.material3.Text("Edit") },
+                    onClick = {
+                        expanded = false
+                        onEdit(post)
+                    },
+                )
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { androidx.compose.material3.Text("Delete") },
+                    onClick = {
+                        expanded = false
+                        // iOS handleDelete: yes/no confirm, then delete_post RPC
+                        // + remove the clip/thumbnail from the community bucket.
+                        org.clear30.data.AlertHandler.show(
+                            org.clear30.data.AlertHandler.Alert(
+                                title = "Delete⁉️",
+                                message = "Are you sure you want to delete your post? This action can't be undone.",
+                                primaryLabel = "Yes",
+                                onPrimary = {
+                                    scope.launch { deletePostAndFiles(post, userInfo, onDeleted) }
+                                },
+                                secondaryLabel = "No",
+                            ),
+                        )
+                    },
+                )
+            } else {
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { androidx.compose.material3.Text("Report") },
+                    onClick = {
+                        expanded = false
+                        // iOS reportPost: check-then-insert into
+                        // community.reported_posts; duplicate reports get the
+                        // "already reported" copy.
+                        scope.launch {
+                            val uid = SupabaseController.getUserID() ?: userInfo.userID
+                            val (created, err) = SupabaseController.reportPost(uid, post.id)
+                            org.clear30.data.Logger.logEvent(
+                                userInfo.loggingID,
+                                org.clear30.data.LogEventType.reportedCommunityPost,
+                            )
+                            if (err != null || created != true) {
+                                org.clear30.data.AlertHandler.info("Success 💯", "Post already reported.")
+                            } else {
+                                org.clear30.data.AlertHandler.info("Success 💯", "Post reported.")
+                            }
+                        }
+                    },
+                )
+            }
         }
     }
+}
+
+/**
+ * Delete a post + its uploaded media (iOS PostViewModel.deletePost): the
+ * `community.delete_post` RPC, then best-effort removal of the video/thumbnail
+ * from the community bucket, then the success alert + parent refresh.
+ */
+internal suspend fun deletePostAndFiles(
+    post: Post,
+    userInfo: org.clear30.data.model.UserInfo,
+    onDeleted: () -> Unit,
+) {
+    val err = SupabaseController.deleteCommunityPost(post.id)
+    if (err != null) {
+        org.clear30.data.AlertHandler.error("Error 😞", "Could not delete post. ${err.message}")
+        return
+    }
+    post.videoUrl?.takeIf { it.isNotBlank() }?.let {
+        SupabaseController.removePublicFile(org.clear30.data.supabase.COMMUNITY_BUCKET, it)
+    }
+    post.thumbnailUrl?.takeIf { it.isNotBlank() }?.let {
+        SupabaseController.removePublicFile(org.clear30.data.supabase.COMMUNITY_BUCKET, it)
+    }
+    org.clear30.data.Logger.logEvent(userInfo.loggingID, org.clear30.data.LogEventType.deletedCommunityPost)
+    org.clear30.data.AlertHandler.info("Success 💯", "Post deleted.")
+    onDeleted()
 }
 

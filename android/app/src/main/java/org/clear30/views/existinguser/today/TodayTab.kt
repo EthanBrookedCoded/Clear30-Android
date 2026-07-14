@@ -139,6 +139,22 @@ fun TodayTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30.d
     var showWeekView by remember { mutableStateOf(true) }
     var monthAnchor by remember { mutableStateOf(firstOfMonth(today)) }
 
+    // iOS CheckInViewModel.updateCheckIn(old:new:): remove `old`, append `new`,
+    // re-log the whole day through CheckInLogger (recomputes last-smoked,
+    // rewards, sync). Drives the day card's remove / smoked-again / amount /
+    // detail edits.
+    val onCheckInChange: (org.clear30.data.model.LoggedCheckIn?, org.clear30.data.model.LoggedCheckIn?) -> Unit =
+        { old, new ->
+            if (old != new) {
+                val checkIns = program.dayInfo[selectedDay]?.loggedCheckIns
+                if (checkIns != null) {
+                    val updated = checkIns.filterNot { it == old } + listOfNotNull(new)
+                    logger.logCheckIns(selectedDay.dateObject, updated)
+                    refresh++
+                }
+            }
+        }
+
     LaunchedEffect(Unit) {
         // Refresh message copy in place when the server content revision changed
         // (progress/unlockOn survive); if the timeline was never scheduled
@@ -227,6 +243,7 @@ fun TodayTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30.d
             monthAnchor = monthAnchor,
             showWeekView = showWeekView,
             showProgressBar = showProgressBar,
+            revision = refresh,
             topicOfTheDay = topicOfTheDay,
             currentIndex = currentIndex,
             totalItems = totalFeedItems,
@@ -262,7 +279,9 @@ fun TodayTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30.d
                     selectedDay = selectedDay,
                     program = program,
                     showStreak = selectedDay == today,
+                    revision = refresh,
                     onCheckIn = { showCheckInSheet = true },
+                    onCheckInChange = onCheckInChange,
                 )
             }
         } else {
@@ -278,6 +297,11 @@ fun TodayTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30.d
                     contentPadding = PaddingValues(vertical = Dimens.cardSpacing * 2.5f),
                     pageSpacing = Dimens.cardSpacing,
                 ) { page ->
+                    // Subscribe each page to the mutation counter — `program` is
+                    // mutated in place (same reference), so without this read the
+                    // pager pages are strong-skipped and render stale check-in /
+                    // progress state after refresh++.
+                    @Suppress("UNUSED_EXPRESSION") refresh
                     // ScrollStack-style receding-deck transition (react-bits ScrollStack,
                     // ported in scrollStackItem): the centered card sits forward and
                     // crisp; the card you swipe away scales down, fades, and lingers
@@ -297,7 +321,9 @@ fun TodayTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30.d
                                 selectedDay = selectedDay,
                                 program = program,
                                 showStreak = selectedDay == today,
+                                revision = refresh,
                                 onCheckIn = { showCheckInSheet = true },
+                                onCheckInChange = onCheckInChange,
                             )
                             is FeedItem.Video -> VideoFeedCard(item.msg, userInfo)
                             is FeedItem.Message -> MessageContentCard(item.msg, program, userInfo, glow = glow)
@@ -457,6 +483,11 @@ private fun TodayTopSection(
     monthAnchor: PlainDate,
     showWeekView: Boolean,
     showProgressBar: Boolean,
+    // `program` is mutated in place, so its reference never changes and strong
+    // skipping would leave the day pills stale after a check-in edit. The
+    // revision counter (TodayTab's `refresh`) changes with every mutation and
+    // defeats the skip down through WeekStrip/MonthGrid/DayNode.
+    revision: Int,
     topicOfTheDay: String?,
     currentIndex: Int,
     totalItems: Int,
@@ -505,7 +536,7 @@ private fun TodayTopSection(
                 transitionSpec = { monthSlide(targetState > initialState) },
                 label = "monthGrid",
             ) { anchor ->
-                MonthGrid(program, anchor, today, selectedDay, viewMode, onSelectDay)
+                MonthGrid(program, anchor, today, selectedDay, viewMode, revision, onSelectDay)
             }
             CalendarViewModeSelector(program, viewMode, onSelectViewMode)
         } else {
@@ -532,7 +563,7 @@ private fun TodayTopSection(
                         Column(Modifier.fillMaxWidth()) {
                             WeekdayRow()
                             Spacer(Modifier.size(Dimens.cardSpacing / 2))
-                            WeekStrip(program, today, selectedDay, viewMode, onSelectDay)
+                            WeekStrip(program, today, selectedDay, viewMode, revision, onSelectDay)
                         }
                     }
                 }
@@ -555,17 +586,17 @@ private fun WeekdayRow() {
 
 /** 7-day strip for the week containing [selectedDay] (Sunday-first). */
 @Composable
-private fun WeekStrip(program: Program, today: PlainDate, selectedDay: PlainDate, viewMode: CalendarViewMode, onSelect: (PlainDate) -> Unit) {
+private fun WeekStrip(program: Program, today: PlainDate, selectedDay: PlainDate, viewMode: CalendarViewMode, revision: Int, onSelect: (PlainDate) -> Unit) {
     Row(Modifier.fillMaxWidth()) {
         weekDates(selectedDay).forEach { date ->
-            DayNode(program, date, today, selectedDay, viewMode, Modifier.weight(1f), onSelect)
+            DayNode(program, date, today, selectedDay, viewMode, revision, Modifier.weight(1f), onSelect)
         }
     }
 }
 
 /** Full month grid for [anchor]'s month. */
 @Composable
-private fun MonthGrid(program: Program, anchor: PlainDate, today: PlainDate, selectedDay: PlainDate, viewMode: CalendarViewMode, onSelect: (PlainDate) -> Unit) {
+private fun MonthGrid(program: Program, anchor: PlainDate, today: PlainDate, selectedDay: PlainDate, viewMode: CalendarViewMode, revision: Int, onSelect: (PlainDate) -> Unit) {
     val first = firstOfMonth(anchor)
     val daysInMonth = first.daysTo(first.adding(months = 1))
     val leadingBlanks = LocalDate(first.year, first.month, 1).dayOfWeek.isoDayNumber % 7 // Sunday-first
@@ -576,7 +607,7 @@ private fun MonthGrid(program: Program, anchor: PlainDate, today: PlainDate, sel
                 for (col in 0 until 7) {
                     val dayNum = row * 7 + col - leadingBlanks + 1
                     if (dayNum in 1..daysInMonth) {
-                        DayNode(program, PlainDate(first.year, first.month, dayNum), today, selectedDay, viewMode, Modifier.weight(1f), onSelect)
+                        DayNode(program, PlainDate(first.year, first.month, dayNum), today, selectedDay, viewMode, revision, Modifier.weight(1f), onSelect)
                     } else {
                         Box(Modifier.weight(1f))
                     }
@@ -618,8 +649,16 @@ private fun CalendarViewModeSelector(program: Program, viewMode: CalendarViewMod
     }
 }
 
-/** The day's completion for the active view mode (iOS dayInfo lookup per mode). */
-private fun nodeCompletion(program: Program, date: PlainDate, mode: CalendarViewMode): Boolean? =
+/**
+ * The day's completion for the active view mode (iOS dayInfo lookup per mode).
+ *
+ * `revision` is deliberately threaded in (though unused here): DayNode must
+ * genuinely read its `revision` parameter — the Compose compiler drops unused
+ * params from the skip comparison, which would leave the pills stale after a
+ * check-in edit (program is mutated in place, so no other arg ever changes).
+ */
+@Suppress("UNUSED_PARAMETER")
+private fun nodeCompletion(program: Program, date: PlainDate, mode: CalendarViewMode, revision: Int): Boolean? =
     when (mode) {
         is CalendarViewMode.Weed -> program.dayInfo[date]?.sober
         is CalendarViewMode.Custom ->
@@ -633,10 +672,10 @@ private fun nodeCompletion(program: Program, date: PlainDate, mode: CalendarView
  * underneath when the day falls in a program stage (iOS stage markers).
  */
 @Composable
-private fun DayNode(program: Program, date: PlainDate, today: PlainDate, selectedDay: PlainDate, viewMode: CalendarViewMode, modifier: Modifier, onSelect: (PlainDate) -> Unit) {
+private fun DayNode(program: Program, date: PlainDate, today: PlainDate, selectedDay: PlainDate, viewMode: CalendarViewMode, revision: Int, modifier: Modifier, onSelect: (PlainDate) -> Unit) {
     val isCustom = viewMode is CalendarViewMode.Custom
     val activeGradient = if (viewMode is CalendarViewMode.Custom) viewMode.customCheckIn.gradient else Clear30Gradients.clear30
-    val fill = when (nodeCompletion(program, date, viewMode)) {
+    val fill = when (nodeCompletion(program, date, viewMode, revision)) {
         true -> CalendarNodeFillStyle.Gradient(activeGradient)
         false -> if (isCustom) CalendarNodeFillStyle.GrayFlat else CalendarNodeFillStyle.Gradient(Clear30Gradients.red)
         null -> CalendarNodeFillStyle.Gray

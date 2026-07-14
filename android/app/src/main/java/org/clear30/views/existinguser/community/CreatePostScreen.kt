@@ -70,7 +70,9 @@ internal fun CreatePostScreen(
     var body by remember { mutableStateOf("") }
     var selectedTagIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var showTagPicker by remember { mutableStateOf(false) }
-    val forcedTag = program.coreProgramName
+    // iOS forces the community program tag (getProgramTag → communityProgramTagName),
+    // which is "Clear30"/"Clear30 Preparation" during a break — not coreProgramName.
+    val forcedTag = program.communityProgramTagName
 
     // Recording state — same system-camera pipeline as JournalSection: allocate a
     // destination file under filesDir/videos (FileProvider-mapped), capture into

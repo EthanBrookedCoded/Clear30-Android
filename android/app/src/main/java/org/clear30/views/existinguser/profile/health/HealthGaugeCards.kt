@@ -32,6 +32,7 @@ import org.clear30.views.components.Heading3
 import org.clear30.views.components.MiniText
 import org.clear30.views.components.SmallText
 import org.clear30.views.components.cardStyle
+import org.clear30.views.components.pressScale
 import org.clear30.views.components.sfSymbol
 import org.clear30.views.theme.Clear30Colors
 import org.clear30.views.theme.Dimens
@@ -50,14 +51,24 @@ import androidx.compose.ui.unit.Dp
  * still render Brain / Lungs / Heart so the layout matches iOS visually.
  */
 @Composable
-fun HealthCardsRow(program: Program, userInfo: UserInfo) {
+fun HealthCardsRow(program: Program, userInfo: UserInfo, onOpenTimeline: () -> Unit) {
     val gauges = buildGauges(program)
+    // iOS shows the "in X hours" badge only on the single soonest-updating
+    // category (`nextIncreaseCategory` = min by nextStepDate,
+    // ProgramHealthProgress.swift:193-195) — never one badge per card.
+    val soonest = gauges.take(3).mapNotNull { it.nextIncrease }.minOrNull()
+    val soonestIndex = gauges.take(3).indexOfFirst { it.nextIncrease != null && it.nextIncrease == soonest }
     Row(
         Modifier.fillMaxWidth().padding(vertical = Dimens.cardSpacing / 4),
         horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
     ) {
-        gauges.take(3).forEach { g ->
-            HealthGaugeCard(g, Modifier.weight(1f))
+        gauges.take(3).forEachIndexed { index, g ->
+            HealthGaugeCard(
+                g,
+                showTimeLeft = index == soonestIndex,
+                onClick = onOpenTimeline,
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
@@ -130,8 +141,16 @@ private val memory1 = Color(0xFF9B59E8)
 private val memoryGradient = Brush.linearGradient(listOf(memory1, Color(0xFFB37CF0)))
 
 @Composable
-private fun HealthGaugeCard(gauge: HealthGauge, modifier: Modifier = Modifier) {
-    Box(modifier) {
+private fun HealthGaugeCard(
+    gauge: HealthGauge,
+    showTimeLeft: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // iOS wraps the whole card (badge included) in a Button — always tappable,
+    // even at 0% (HealthCard.swift:26), routing to the health timeline detail.
+    // pressScale fires the same medium-impact haptic as the iOS tap.
+    Box(modifier.pressScale { onClick() }) {
         Clear30Card(modifier = Modifier.fillMaxWidth()) {
             Column(
                 Modifier.fillMaxWidth(),
@@ -149,8 +168,9 @@ private fun HealthGaugeCard(gauge: HealthGauge, modifier: Modifier = Modifier) {
             }
         }
         // Time-to-next-increase badge — iOS `timeBadge` overlay: a gradient pill
-        // rotated -3°, sticking slightly past the bottom-trailing corner.
-        gauge.nextIncrease?.let { next ->
+        // rotated -3°, sticking slightly past the bottom-trailing corner. Only
+        // the soonest-updating category shows it (showTimeLeft).
+        if (showTimeLeft) gauge.nextIncrease?.let { next ->
             TimeBadge(
                 text = relativeFutureString(next),
                 gradient = gauge.gradient,

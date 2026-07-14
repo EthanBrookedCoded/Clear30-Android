@@ -1,17 +1,22 @@
 package org.clear30.views.existinguser.profile
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -27,13 +32,42 @@ import org.clear30.data.model.Program
 import org.clear30.data.model.ProgramHealthProgress
 import org.clear30.data.model.UserInfo
 import org.clear30.views.components.Clear30Card
+import org.clear30.views.components.Heading1
 import org.clear30.views.components.Heading3
+import org.clear30.views.components.IconButton
 import org.clear30.views.components.SmallText
 import org.clear30.views.components.TinyText
 import org.clear30.views.components.sfSymbol
 import org.clear30.views.theme.Clear30Colors
 import org.clear30.views.theme.Clear30Gradients
 import org.clear30.views.theme.Dimens
+
+/**
+ * HealthTimelinePage — full-page host for [HealthTimelineSection], opened by
+ * tapping a health gauge card (iOS pushes
+ * `NavigationDestination.healthProgressTimeline` from Profile.swift).
+ */
+@Composable
+fun HealthTimelinePage(program: Program, userInfo: UserInfo, onBack: () -> Unit) {
+    BackHandler(onBack = onBack)
+    Box(Modifier.fillMaxSize().background(Clear30Colors.background)) {
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                .statusBarsPadding()
+                .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
+            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+            ) {
+                IconButton("chevron.backward", onClick = onBack)
+                Heading1("Health")
+            }
+            HealthTimelineSection(program, userInfo)
+        }
+    }
+}
 
 /**
  * HealthTimelineSection — ported from the Profile health timeline.

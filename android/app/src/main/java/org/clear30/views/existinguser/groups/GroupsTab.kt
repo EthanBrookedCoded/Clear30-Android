@@ -178,7 +178,7 @@ fun GroupsTab(program: org.clear30.data.model.Program, userInfo: UserInfo) {
             Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
         ) {
             GroupHeader(g, userInfo, section)
-            Spacer(Modifier.size(Dimens.cardSpacing))
+            Spacer(Modifier.size(Dimens.cardSpacing / 2))
             GroupSectionPicker(section, g.gradient) { section = it }
             Spacer(Modifier.size(Dimens.cardSpacing))
             Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -331,25 +331,43 @@ private enum class GroupSection(val title: String, val symbol: String) {
     SETTINGS("Settings", "gearshape.fill"),
 }
 
-/** Header card: group name (dim) + the current section title + invite chip. */
+/**
+ * Plain header (iOS GroupAll.swift:59-74): dim group name over the current
+ * section title as a Heading1, with a top-right "+" circle button that fires
+ * the invite share sheet (a link the recipient taps to auto-join via the
+ * GroupsTab sub-route handler).
+ */
 @Composable
 private fun GroupHeader(group: Clear30Group, userInfo: UserInfo, section: GroupSection) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    Clear30Card(modifier = Modifier.fillMaxWidth(), gradient = group.gradient) {
-        Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-            Column {
-                SmallText(group.name ?: "Your Group", color = Color.White.copy(alpha = 0.5f))
-                Heading2(section.title, color = Color.White)
-                TinyText("${group.members.size} members · ${group.daysSober} days clear together", color = Color.White.copy(alpha = 0.75f))
-            }
-            // Invite chip — tapping fires the system share sheet with a
-            // clear30:// deep link the recipient can tap on Android to
-            // auto-join via the GroupsTab sub-route handler.
-            InviteChip(group = group) {
-                shareGroupInvite(context, group)
-                org.clear30.data.Logger.logEvent(userInfo.loggingID, org.clear30.data.LogEventType.sharedGroupCode)
-            }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        Column(Modifier.weight(1f)) {
+            SmallText(group.name ?: "Your Group", color = Clear30Colors.text.copy(alpha = 0.5f))
+            Heading1(section.title)
         }
+        CircleIconButton("plus") {
+            shareGroupInvite(context, group)
+            org.clear30.data.Logger.logEvent(userInfo.loggingID, org.clear30.data.LogEventType.sharedGroupCode)
+        }
+    }
+}
+
+/** Circle icon button (iOS `CircleIconButton`): 37.5 circle, 18 icon, opacity-gray fill. */
+@Composable
+private fun CircleIconButton(icon: String, onClick: () -> Unit) {
+    Box(
+        Modifier.size(37.5.dp)
+            .clip(CircleShape)
+            .background(Clear30Colors.opacityGray)
+            .pressScale { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        androidx.compose.material3.Icon(
+            org.clear30.views.components.sfSymbol(icon),
+            contentDescription = icon,
+            tint = Clear30Colors.text,
+            modifier = Modifier.size(18.dp),
+        )
     }
 }
 
@@ -581,7 +599,7 @@ private fun MonthStatCard(title: String, subtitle: String, gradient: androidx.co
 /**
  * Inner Circle (iOS GroupMembers.swift:120-155): the members whose check-ins the
  * user subscribed to, with an add/edit picker. Hidden while the user is alone in
- * the group (iOS shows the invite button instead — the header's invite chip
+ * the group (iOS shows the invite button instead — the header's "+" button
  * covers that here).
  */
 @Composable
@@ -805,30 +823,6 @@ private fun GroupNameCard(name: String, onChange: (String) -> Unit, onCommit: ()
                 cursorBrush = androidx.compose.ui.graphics.SolidColor(Clear30Colors.text),
             )
         }
-    }
-}
-
-@Composable
-private fun InviteChip(group: Clear30Group, onShare: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(Color.White.copy(alpha = 0.25f), shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        androidx.compose.material3.Icon(
-            org.clear30.views.components.sfSymbol("square.and.arrow.up"),
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(18.dp),
-        )
-        Column(Modifier.weight(1f)) {
-            TinyText("Invite link", color = Color.White.copy(alpha = 0.75f))
-            SmallText("clear30.org/group/${group.id}", color = Color.White)
-        }
-        DefaultButton("Share", gradient = Clear30Gradients.button) { onShare() }
     }
 }
 

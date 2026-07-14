@@ -34,8 +34,8 @@ fun ConfettiOverlay(
     modifier: Modifier = Modifier,
     durationMillis: Int = 1500,
     count: Int = 50,
+    colors: List<Color> = listOf(Clear30Colors.blue, Clear30Colors.green, Clear30Colors.yellow),
 ) {
-    val colors = remember { listOf(Clear30Colors.blue, Clear30Colors.green, Clear30Colors.yellow) }
     val particles = remember {
         List(count) {
             ConfettiParticle(

@@ -62,7 +62,13 @@ private val REACTIONS = listOf("❤️", "🙌", "🔥", "🌱", "👏", "😎",
  * only returns a count). Add a reaction or a comment from the bottom row.
  */
 @Composable
-fun PostDetail(post: Post, userInfo: UserInfo, onBack: () -> Unit) {
+fun PostDetail(
+    post: Post,
+    userInfo: UserInfo,
+    onBack: () -> Unit,
+    onEdit: (Post) -> Unit = {},
+    onDeleted: () -> Unit = {},
+) {
     val scope = rememberCoroutineScope()
     val comments = remember { mutableStateListOf<Comment>() }
     var newComment by remember { mutableStateOf("") }
@@ -79,9 +85,18 @@ fun PostDetail(post: Post, userInfo: UserInfo, onBack: () -> Unit) {
     }
 
     Column(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+        ) {
             IconButton("chevron.backward", onClick = onBack)
-            Heading3(post.title)
+            Heading3(post.title, Modifier.weight(1f))
+            // iOS PostDetailView header: owner sees Edit/Delete, others see
+            // Report; pinned posts get no menu at all.
+            if (!post.isPinned) {
+                PostOverflowMenu(post, userInfo, onEdit = onEdit, onDeleted = onDeleted)
+            }
         }
 
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
@@ -186,6 +201,8 @@ private fun CommentCard(c: Comment) {
     // name at 0.5 (UserNameWithEmoji), then the body.
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 4)) {
         author?.let {
+            // TODO(port): SocialUserView — iOS opens the commenter's profile
+            // sheet on tap; the per-user profile view isn't ported yet.
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 4)) {
                 it.emoji?.let { e -> SmallText(e) }
                 SmallText(it.displayName, color = Clear30Colors.text.copy(alpha = 0.5f))

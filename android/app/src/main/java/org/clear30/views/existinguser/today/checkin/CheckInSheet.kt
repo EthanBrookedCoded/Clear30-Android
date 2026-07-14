@@ -51,11 +51,9 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
 import org.clear30.data.CheckInLogger
-import org.clear30.data.CheckInRewardVariableGenerator
 import org.clear30.data.LogEventType
 import org.clear30.data.Logger
 import org.clear30.data.VariableReward
-import org.clear30.data.VariableRewardData
 import org.clear30.data.model.CheckInDefaults
 import org.clear30.data.model.CheckInMethod
 import org.clear30.data.model.CustomCheckInOption
@@ -63,16 +61,11 @@ import org.clear30.data.model.LoggedCheckIn
 import org.clear30.data.model.PlainDate
 import org.clear30.data.model.Program
 import org.clear30.data.model.UserInfo
-import org.clear30.data.model.weedCheckIn
-import org.clear30.util.adding
-import org.clear30.util.daysTo
 import org.clear30.util.now
-import org.clear30.views.components.Clear30Card
 import org.clear30.views.components.DefaultText
 import org.clear30.views.components.Heading2
 import org.clear30.views.components.SmallText
 import org.clear30.views.components.TinyText
-import org.clear30.views.components.cardStyle
 import org.clear30.views.components.sfSymbol
 import org.clear30.views.theme.Anim
 import org.clear30.views.theme.Clear30Colors
@@ -92,9 +85,12 @@ import kotlin.math.roundToInt
  * per [Program.customCheckIns]. Once the weed check-in *and every custom
  * check-in* are filled, the whole batch is written through
  * [CheckInLogger.logCheckIns] (which records ProgramDayInfo, recomputes
- * last-smoked, stamps the day's variable reward, syncs to Supabase, runs the
- * achievement engine, and fires celebration confetti). A sober check-in then
- * shows the reward recap; a slip dismisses straight back to the feed.
+ * last-smoked, stamps + returns the day's variable reward, syncs to Supabase,
+ * and runs the achievement engine). Every check-in then lands on the animated
+ * reward screen (CheckInRewardViews.kt): sober days get the gradient screen
+ * with the static reward (weed-free timer / money saved) leading, slips get
+ * the smoked-stats cards and an encouraging variable reward. Per-reward
+ * confetti fires inside the reward views.
  */
 @Composable
 fun CheckInSheet(
@@ -104,6 +100,14 @@ fun CheckInSheet(
     onDismiss: () -> Unit,
 ) {
     var phase by remember { mutableStateOf("slide") }
+    // The rewards are generated once, at the moment of check-in (inside the
+    // OnScreenCheckIn callback) — never during composition. The variable
+    // generator mutates program.dayInfo (it stamps the day's reward type), so
+    // invoking it from a `remember` block would re-run side effects on
+    // recomposition (PARITY §18-D1).
+    var variableReward by remember { mutableStateOf<VariableReward?>(null) }
+    var staticReward by remember { mutableStateOf<org.clear30.data.StaticReward?>(null) }
+    var rewardSober by remember { mutableStateOf<Boolean?>(null) }
 
     LaunchedEffect(Unit) {
         Logger.logEvent(userInfo.loggingID, LogEventType.openedCheckInSheet)
@@ -122,21 +126,29 @@ fun CheckInSheet(
             enter = scaleIn(Anim.transitionSpring()) + fadeIn(Anim.transitionSpring()),
             exit = scaleOut(Anim.transitionSpring()) + fadeOut(Anim.transitionSpring()),
         ) {
-        Box(Modifier.fillMaxSize().background(Clear30Colors.background)) {
+        // iOS CheckInFullscreen: a sober check-in flips the reward screen onto
+        // the brand gradient (white content); everything else sits on the plain
+        // background.
+        val gradientScreen = phase == "reward" && rewardSober == true
+        Box(
+            Modifier.fillMaxSize().then(
+                if (gradientScreen) Modifier.background(Clear30Gradients.clear30)
+                else Modifier.background(Clear30Colors.background),
+            ),
+        ) {
             when (phase) {
-                "reward" -> {
-                    CheckInRewardContent(userInfo, program, onContinue = onDismiss)
-                    // Confetti burst over a clear-day recap (iOS `ConfettiCheckIn`):
-                    // sober days celebrate, slips don't. Rendered inside the dialog
-                    // so it always sits on top of the reward content.
-                    if (program.dayInfo[PlainDate.from(now())]?.sober == true) {
-                        org.clear30.views.components.ConfettiOverlay()
-                    }
-                }
+                "reward" -> CheckInRewardContent(
+                    userInfo = userInfo,
+                    staticReward = staticReward,
+                    variableReward = variableReward,
+                    sober = rewardSober,
+                    onContinue = onDismiss,
+                )
                 else -> Column(
-                    // The swiping screen sits on the brand gradient (not white), with
-                    // white content over it (iOS check-in fullscreen).
-                    Modifier.fillMaxSize().background(Clear30Gradients.clear30).statusBarsPadding()
+                    // T2: plain `clear30Background` behind the sliders (iOS
+                    // CheckIn.swift `.background { Color.clear30Background }`) —
+                    // NOT the brand gradient.
+                    Modifier.fillMaxSize().statusBarsPadding()
                         .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
@@ -144,37 +156,41 @@ fun CheckInSheet(
 
                     // "Check in for / Today"
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        SmallText("Check in for", color = Color.White.copy(alpha = 0.75f))
-                        Heading2(relativeCheckInTitle(), color = Color.White)
+                        SmallText("Check in for", color = Clear30Colors.text.copy(alpha = 0.5f))
+                        Heading2(relativeCheckInTitle(), color = Clear30Colors.text)
                     }
 
                     Spacer(Modifier.height(Dimens.cardSpacing * 2))
 
                     // Weed check-in (method + amount) plus one slider per custom check-in.
                     OnScreenCheckIn(program) { checkIns ->
-                        // logCheckIns stamps the day's variable reward; the reward
-                        // screen then renders it. Both sober days (celebratory
-                        // rewards) and slips (encouraging quotes / growth) get one.
-                        logger.logCheckIns(now(), checkIns)
+                        // logCheckIns stamps + returns the day's variable reward;
+                        // the static reward is derived on the spot. Both sober days
+                        // (celebratory rewards) and slips (encouraging quotes /
+                        // growth) get one.
+                        val today = PlainDate.from(now())
+                        variableReward = logger.logCheckIns(now(), checkIns)
+                        staticReward = org.clear30.data.CheckInRewardStaticGenerator.generate(userInfo, program, today)
+                        rewardSober = program.dayInfo[today]?.sober
                         phase = "reward"
                     }
 
                     Spacer(Modifier.weight(1f))
 
-                    // Skip Check In — at the bottom of the swiping, white pill on the gradient.
+                    // Skip Check In — gray pill on the plain background (iOS TinyTextButton).
                     Row(
                         Modifier.clip(RoundedCornerShape(99.dp))
-                            .background(Color.White.copy(alpha = 0.25f))
+                            .background(Clear30Colors.opacityGray)
                             .clickable { onDismiss() }
                             .padding(horizontal = 16.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        SmallText("Skip Check In", color = Color.White)
+                        SmallText("Skip Check In", color = Clear30Colors.text.copy(alpha = 0.5f))
                         Icon(
                             sfSymbol("chevron.right"),
                             contentDescription = null,
-                            tint = Color.White,
+                            tint = Clear30Colors.text.copy(alpha = 0.5f),
                             modifier = Modifier.size(14.dp),
                         )
                     }
@@ -490,39 +506,44 @@ fun SlideToCheckIn(
 }
 
 /**
- * CheckInRewardContent — the post-check-in reward screen. The day's variable
- * reward (chosen + stamped by [CheckInRewardVariableGenerator] during logging)
- * is re-derived deterministically here and rendered by [VariableRewardCard]:
- * sober days get celebratory rewards (streaks, milestones, days-without-weed,
- * weekly recaps, decrease-in-use, personal bests), slips get encouraging ones
- * (motivational quotes, growth). A "$X saved" / "N days without weed" static
- * card follows for sober days.
+ * CheckInRewardContent — the post-check-in reward screen (iOS
+ * `CheckInRewardScreen`). Renders the day's static reward (weed-free timer /
+ * money saved / smoked stats) and variable reward with their full animated
+ * views ([CheckInRewardStaticContainer] / [CheckInRewardVariableContainer],
+ * CheckInRewardViews.kt), sequenced like iOS: the primary reward animates
+ * first, and its completion reveals the secondary. On a sober day the static
+ * reward leads (staticRewardFirst = sober) over the gradient screen; on a slip
+ * the variable reward leads on the plain background. Per-reward confetti fires
+ * inside the reward views themselves.
  */
 @Composable
-private fun CheckInRewardContent(userInfo: UserInfo, program: Program, onContinue: () -> Unit) {
+private fun CheckInRewardContent(
+    userInfo: UserInfo,
+    staticReward: org.clear30.data.StaticReward?,
+    variableReward: VariableReward?,
+    sober: Boolean?,
+    onContinue: () -> Unit,
+) {
     val name = userInfo.name.ifBlank { "friend" }
-    val today = remember { now() }
-    val sober = program.dayInfo[PlainDate.from(today)]?.sober
-    val totalDays = program.lastSmoked.daysTo(today).coerceAtLeast(0)
+    val gradientBackground = sober == true
+    val staticRewardFirst = sober == true
+    val textColor = if (gradientBackground) Color.White else Clear30Colors.text
 
-    // Re-derive the day's variable reward. Deterministic by today's seed, so it
-    // matches the type the logger already stamped onto the day.
-    val reward = remember {
-        CheckInRewardVariableGenerator(userInfo, program).generate(PlainDate.from(today))
-    }
-
-    // Static "money saved" reward (iOS CheckInRewardStaticGenerator).
-    val moneyReward = remember {
-        val r = org.clear30.data.CheckInRewardStaticGenerator.generate(userInfo, program, PlainDate.from(today))
-        (r?.data as? org.clear30.data.StaticRewardData.MoneySaved)?.amount
-            ?: (r?.data as? org.clear30.data.StaticRewardData.TimerAndMoney)?.amount
-    }
+    var showRewards by remember { mutableStateOf(false) }
+    var showSecondaryReward by remember { mutableStateOf(false) }
+    // iOS reveals the rewards 1s after the screen lands.
+    LaunchedEffect(Unit) { delay(1000); showRewards = true }
 
     // Entrance: the recap springs up + fades in (a livelier "done!" moment) —
     // iOS rewardSpringAnimation (response 0.45, dampingFraction 0.75).
     var shown by remember { mutableStateOf(false) }
     val appear by animateFloatAsState(if (shown) 1f else 0f, Anim.rewardSpring(), label = "rewardAppear")
     LaunchedEffect(Unit) { shown = true }
+
+    // The primary reward's completion reveals the secondary (iOS staticFirst /
+    // variableFirst chaining).
+    val hasBoth = staticReward != null && variableReward != null
+    val onPrimaryComplete: () -> Unit = { if (hasBoth) showSecondaryReward = true }
 
     Column(
         Modifier.fillMaxSize().statusBarsPadding()
@@ -535,72 +556,60 @@ private fun CheckInRewardContent(userInfo: UserInfo, program: Program, onContinu
         // Headline — celebratory for a clear day, encouraging for a slip.
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             if (sober == false) {
-                SmallText("Tomorrow's a fresh start, $name", color = Clear30Colors.text.copy(alpha = 0.5f))
-                Heading2("🌅 Every check-in is progress.")
+                SmallText("Tomorrow's a fresh start, $name", color = textColor.copy(alpha = 0.5f))
+                Heading2("🌅 Every check-in is progress.", color = textColor)
             } else {
-                SmallText("You didn't vanish, $name", color = Clear30Colors.text.copy(alpha = 0.5f))
-                Heading2("🙏 Staying present is everything.")
+                SmallText("You didn't vanish, $name", color = textColor.copy(alpha = 0.5f))
+                Heading2("🙏 Staying present is everything.", color = textColor)
             }
         }
 
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.height(Dimens.cardSpacing * 3))
 
-        // Primary: the day's variable reward, rendered by type.
-        reward?.let {
-            VariableRewardCard(it)
-            Spacer(Modifier.height(Dimens.cardSpacing))
-        }
-
-        // Secondary (clear days only): money saved, else the running total.
-        if (sober == true) {
-            val money = moneyReward
-            if (money != null && money > 0) {
-                Box(Modifier.fillMaxWidth().cardStyle(gradient = Clear30Gradients.clear30)) {
-                    Column(
-                        Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 4),
-                    ) {
-                        Heading2("\$$money", color = Color.White)
-                        SmallText("saved so far 💰", color = Color.White.copy(alpha = 0.5f))
+        if (showRewards) {
+            Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
+                if (staticRewardFirst) {
+                    staticReward?.let {
+                        CheckInRewardStaticContainer(it, onCompletion = onPrimaryComplete)
                     }
-                }
-            } else {
-                Clear30Card(modifier = Modifier.fillMaxWidth()) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-                        Box(
-                            Modifier.size(56.dp)
-                                .clip(RoundedCornerShape((Dimens.cornerRadius.value * 0.75f).dp))
-                                .background(Clear30Gradients.clear30),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Heading2("$totalDays", color = Color.White)
+                    if (variableReward != null && (showSecondaryReward || staticReward == null)) {
+                        RewardAppear {
+                            CheckInRewardVariableContainer(
+                                variableReward, gradientBackground = !gradientBackground, userName = userInfo.name,
+                            )
                         }
-                        Column {
-                            SmallText("days")
-                            SmallText("without weed", color = Clear30Colors.text.copy(alpha = 0.5f))
+                    }
+                } else {
+                    variableReward?.let {
+                        CheckInRewardVariableContainer(
+                            it, gradientBackground = !gradientBackground, userName = userInfo.name,
+                            onCompletion = onPrimaryComplete,
+                        )
+                    }
+                    if (staticReward != null && (showSecondaryReward || variableReward == null)) {
+                        RewardAppear {
+                            CheckInRewardStaticContainer(staticReward)
                         }
                     }
                 }
             }
-            Spacer(Modifier.height(Dimens.cardSpacing))
         }
 
         Spacer(Modifier.weight(1f))
 
         Row(
             Modifier.clip(RoundedCornerShape(99.dp))
-                .background(Clear30Colors.opacityGray)
+                .background(if (gradientBackground) Color.White.copy(alpha = 0.25f) else Clear30Colors.opacityGray)
                 .clickable { onContinue() }
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            SmallText("Continue", color = Clear30Colors.text.copy(alpha = 0.5f))
+            SmallText("Continue", color = if (gradientBackground) Color.White else textColor.copy(alpha = 0.5f))
             Icon(
                 sfSymbol("chevron.right"),
                 contentDescription = null,
-                tint = Clear30Colors.text.copy(alpha = 0.5f),
+                tint = if (gradientBackground) Color.White else textColor.copy(alpha = 0.5f),
                 modifier = Modifier.size(14.dp),
             )
         }
@@ -608,169 +617,16 @@ private fun CheckInRewardContent(userInfo: UserInfo, program: Program, onContinu
     }
 }
 
-/**
- * VariableRewardCard — renders the chosen [VariableReward] with type-specific
- * content (iOS CheckInRewardViews). Exhaustive over [VariableRewardData].
- */
+/** Pops its content in with the default transition (iOS `.transition(defaultTransition)`). */
 @Composable
-private fun VariableRewardCard(reward: VariableReward) {
-    when (val d = reward.data) {
-        is VariableRewardData.DaysWithoutWeed ->
-            RewardBigStat("${d.days}", "day${if (d.days == 1) "" else "s"} without weed", d.affirmation)
-        is VariableRewardData.Streak ->
-            RewardBigStat("🔥 ${d.days}", "day streak", d.affirmation)
-        is VariableRewardData.MilestoneCountdown ->
-            RewardBigStat("${d.hoursRemaining}h", "until your ${d.milestoneHours}h milestone", d.affirmation)
-        is VariableRewardData.DecreaseInUse ->
-            RewardBigStat("${d.percentage}%", "less than before 📉", "Keep it up!")
-        is VariableRewardData.BreakProgress ->
-            RewardProgressCard("Day ${d.current} of ${d.max}", d.name, d.current.toFloat() / d.max.coerceAtLeast(1), d.affirmation)
-        is VariableRewardData.PersonalBest ->
-            RewardBigStat("${d.currentDays} / ${d.bestDays}", "getting closer to your best", d.affirmation)
-        is VariableRewardData.WeeklyDays ->
-            RewardWeeklyCard(d.count, d.sober, d.affirmation)
-        is VariableRewardData.ReminderOfWhy ->
-            RewardWhyCard(d.whys, d.affirmation)
-        is VariableRewardData.MotivationalQuote ->
-            RewardQuoteCard(d.emoji, d.quote)
-        is VariableRewardData.Growth ->
-            RewardGrowthCard(d.title, d.subtitle)
-    }
-}
-
-/** A momentum pill — translucent white capsule over a gradient card. */
-@Composable
-private fun MomentumPill(text: String) {
-    Box(
-        Modifier.clip(RoundedCornerShape(99.dp))
-            .background(Color.White.copy(alpha = 0.25f))
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-    ) { SmallText(text, color = Color.White) }
-}
-
-/** Gradient card: a big stat headline, a label, and an optional momentum pill. */
-@Composable
-private fun RewardBigStat(big: String, label: String, affirmation: String?) {
-    Box(Modifier.fillMaxWidth().cardStyle(gradient = Clear30Gradients.clear30)) {
-        Column(
-            Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Heading2(big, color = Color.White)
-                SmallText(label, color = Color.White.copy(alpha = 0.5f))
-            }
-            affirmation?.takeIf { it.isNotBlank() }?.let { MomentumPill(it) }
-        }
-    }
-}
-
-/** Gradient card with a horizontal progress bar (break progress). */
-@Composable
-private fun RewardProgressCard(title: String, subtitle: String, fraction: Float, affirmation: String?) {
-    Box(Modifier.fillMaxWidth().cardStyle(gradient = Clear30Gradients.clear30)) {
-        Column(
-            Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Heading2(title, color = Color.White)
-                SmallText(subtitle, color = Color.White.copy(alpha = 0.5f))
-            }
-            Box(
-                Modifier.fillMaxWidth().height(10.dp)
-                    .clip(RoundedCornerShape(99.dp)).background(Color.White.copy(alpha = 0.25f)),
-            ) {
-                Box(
-                    Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).height(10.dp)
-                        .clip(RoundedCornerShape(99.dp)).background(Color.White),
-                )
-            }
-            affirmation?.takeIf { it.isNotBlank() }?.let { MomentumPill(it) }
-        }
-    }
-}
-
-/** Gradient card with a checkmark per sober/checked-in day this week. */
-@Composable
-private fun RewardWeeklyCard(count: Int, sober: Boolean, affirmation: String?) {
-    Box(Modifier.fillMaxWidth().cardStyle(gradient = Clear30Gradients.clear30)) {
-        Column(
-            Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Heading2("$count Day${if (count == 1) "" else "s"}", color = Color.White)
-                SmallText(if (sober) "without weed this week" else "checked in this week", color = Color.White.copy(alpha = 0.5f))
-            }
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                repeat(count.coerceIn(0, 7)) {
-                    Box(
-                        Modifier.size(28.dp).clip(RoundedCornerShape(percent = 50)).background(Color.White),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(sfSymbol("checkmark"), contentDescription = null, tint = Clear30Colors.green, modifier = Modifier.size(16.dp))
-                    }
-                }
-            }
-            affirmation?.takeIf { it.isNotBlank() }?.let { MomentumPill(it) }
-        }
-    }
-}
-
-/** Gradient card reminding the user of the reasons they took a break. */
-@Composable
-private fun RewardWhyCard(whys: List<String>, affirmation: String?) {
-    Box(Modifier.fillMaxWidth().cardStyle(gradient = Clear30Gradients.clear30)) {
-        Column(
-            Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
-        ) {
-            SmallText("Remember why you started", color = Color.White.copy(alpha = 0.5f))
-            whys.take(3).forEach { DefaultText("\"$it\"", color = Color.White) }
-            affirmation?.takeIf { it.isNotBlank() }?.let {
-                Spacer(Modifier.height(Dimens.cardSpacing / 2))
-                MomentumPill(it)
-            }
-        }
-    }
-}
-
-/** Flat card with an encouraging quote (shown after a slip). */
-@Composable
-private fun RewardQuoteCard(emoji: String, quote: String) {
-    Clear30Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
-        ) {
-            Heading2(emoji)
-            SmallText(quote, color = Clear30Colors.text)
-        }
-    }
-}
-
-/** Flat card framing a slip as non-linear progress. */
-@Composable
-private fun RewardGrowthCard(title: String, subtitle: String) {
-    Clear30Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 4),
-        ) {
-            Heading2(title, color = Clear30Colors.text)
-            SmallText(subtitle, color = Clear30Colors.text.copy(alpha = 0.5f))
-        }
-    }
+private fun RewardAppear(content: @Composable () -> Unit) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+    AnimatedVisibility(
+        visible = visible,
+        enter = scaleIn(Anim.transitionSpring()) + fadeIn(Anim.transitionSpring()),
+        exit = scaleOut(Anim.transitionSpring()) + fadeOut(Anim.transitionSpring()),
+    ) { content() }
 }
 
 /** The day being checked in for — always "Today" in this entry point. */

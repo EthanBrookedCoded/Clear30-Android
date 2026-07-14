@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
@@ -24,19 +25,29 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
+import org.clear30.data.model.Activity
 import org.clear30.data.model.Post
 import org.clear30.data.model.PostTag
 import org.clear30.data.model.UserInfo
 import org.clear30.data.supabase.SupabaseController
+import org.clear30.data.supabase.getCommunityActivity
 import org.clear30.data.supabase.getCommunityFeed
+import org.clear30.data.supabase.getCommunityPostById
+import org.clear30.data.supabase.getUserID
+import org.clear30.data.supabase.setActivityIsRead
+import org.clear30.views.components.Clear30Card
 import org.clear30.views.components.DefaultButton
 import org.clear30.views.components.Heading1
 import org.clear30.views.components.Heading3
@@ -44,6 +55,8 @@ import org.clear30.views.components.IconButton
 import org.clear30.views.components.PillPicker
 import org.clear30.views.components.PillPickerStyle
 import org.clear30.views.components.SmallText
+import org.clear30.views.components.TinyText
+import org.clear30.views.components.pressScale
 import org.clear30.views.components.sfSymbol
 import org.clear30.views.theme.Clear30Colors
 import org.clear30.views.theme.Clear30Gradients
@@ -158,20 +171,121 @@ private fun FilterTagPill(tag: PostTag.Tag, selected: Boolean, onClick: () -> Un
     }
 }
 
-/** Activity — iOS notifications / my-posts. Notifications is a stub for now. */
+/** Activity — iOS ActivityView modes (Notifications is the default tab). */
 internal enum class ActivityMode(val label: String) { NOTIFICATIONS("Notifications"), MY_POSTS("My Posts") }
 
-@Composable
-internal fun ActivityScreen(userInfo: UserInfo, onBack: () -> Unit, onOpenPost: (Post) -> Unit) {
-    var mode by remember { mutableStateOf(ActivityMode.MY_POSTS) }
-    var myPosts by remember { mutableStateOf<List<Post>?>(null) }
+/** iOS ActivityViewModel page sizes: 10 notifications / 5 posts per page. */
+private const val NOTIFICATIONS_PAGE_SIZE = 10
+private const val MY_POSTS_PAGE_SIZE = 5
 
-    LaunchedEffect(mode) {
-        if (mode == ActivityMode.MY_POSTS && myPosts == null) {
-            val loaded = SupabaseController.getCommunityFeed(onlyMyPosts = true).getOrNull() ?: emptyList()
+@Composable
+internal fun ActivityScreen(
+    userInfo: UserInfo,
+    onBack: () -> Unit,
+    onOpenPost: (Post) -> Unit,
+    onEditPost: (Post) -> Unit = {},
+    onPostsChanged: () -> Unit = {},
+) {
+    val scope = rememberCoroutineScope()
+    var mode by remember { mutableStateOf(ActivityMode.NOTIFICATIONS) }
+
+    // Notifications feed (iOS ActivityViewModel.notifications).
+    val notifications = remember { mutableStateListOf<Activity>() }
+    var notificationsPage by remember { mutableIntStateOf(0) }
+    var notificationsEnded by remember { mutableStateOf(false) }
+    var notificationsLoading by remember { mutableStateOf(true) }
+
+    // My posts (iOS ActivityViewModel.myPosts).
+    val myPosts = remember { mutableStateListOf<Post>() }
+    var myPostsPage by remember { mutableIntStateOf(0) }
+    var myPostsEnded by remember { mutableStateOf(false) }
+    var myPostsLoading by remember { mutableStateOf(true) }
+
+    suspend fun loadActivities(showLoading: Boolean) {
+        if (notificationsEnded) return
+        if (showLoading) notificationsLoading = true
+        val start = notificationsPage * NOTIFICATIONS_PAGE_SIZE
+        val loaded = SupabaseController.getCommunityActivity(start, start + NOTIFICATIONS_PAGE_SIZE - 1)
+            .getOrNull()
+        notificationsLoading = false
+        if (loaded == null) {
+            org.clear30.data.AlertHandler.error(message = "Could not get activity.")
+            return
+        }
+        if (loaded.isEmpty()) {
+            notificationsEnded = true
+        } else {
+            // iOS drops rows without a message (nothing to render on the card).
+            notifications.addAll(loaded.filter { a -> a.message != null && notifications.none { it.id == a.id } })
+            notificationsEnded = loaded.size < NOTIFICATIONS_PAGE_SIZE
+            if (!notificationsEnded) notificationsPage++
+        }
+    }
+
+    suspend fun loadMyPosts(showLoading: Boolean) {
+        if (myPostsEnded) return
+        if (showLoading) myPostsLoading = true
+        val start = myPostsPage * MY_POSTS_PAGE_SIZE
+        val loaded = SupabaseController.getCommunityFeed(
+            start = start,
+            end = start + MY_POSTS_PAGE_SIZE - 1,
+            onlyMyPosts = true,
+        ).getOrNull()
+        myPostsLoading = false
+        if (loaded == null) {
+            org.clear30.data.AlertHandler.error(message = "Could not get posts.")
+            return
+        }
+        if (loaded.isEmpty()) {
+            myPostsEnded = true
+        } else {
+            myPosts.addAll(loaded.filter { p -> myPosts.none { it.id == p.id } })
+            myPosts.sortByDescending { it.createdAt }
+            myPostsEnded = loaded.size < MY_POSTS_PAGE_SIZE
+            if (!myPostsEnded) myPostsPage++
             loaded.forEach { org.clear30.data.UserDirectory.lookup(it.userId) }
             org.clear30.data.UserDirectory.flush()
-            myPosts = loaded
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        org.clear30.data.Logger.logEvent(userInfo.loggingID, org.clear30.data.LogEventType.openedCommunityActivity)
+    }
+
+    // iOS ActivityView.reload(mode): switching tabs resets + reloads that tab.
+    LaunchedEffect(mode) {
+        when (mode) {
+            ActivityMode.NOTIFICATIONS -> {
+                org.clear30.data.Logger.logEvent(userInfo.loggingID, org.clear30.data.LogEventType.openedCommunityNotifications)
+                notifications.clear()
+                notificationsPage = 0
+                notificationsEnded = false
+                loadActivities(showLoading = true)
+            }
+            ActivityMode.MY_POSTS -> {
+                org.clear30.data.Logger.logEvent(userInfo.loggingID, org.clear30.data.LogEventType.openedCommunityMyPosts)
+                myPosts.clear()
+                myPostsPage = 0
+                myPostsEnded = false
+                loadMyPosts(showLoading = true)
+            }
+        }
+    }
+
+    // iOS handleOpenActivity: mark read (locally + community.activities), then
+    // resolve the post via get_post_by_id and open its detail.
+    fun openActivity(activity: Activity) {
+        val idx = notifications.indexOfFirst { it.id == activity.id }
+        if (idx >= 0) notifications[idx] = notifications[idx].copy(isRead = true)
+        scope.launch {
+            val uid = SupabaseController.getUserID() ?: userInfo.userID
+            SupabaseController.setActivityIsRead(uid, activity.id)
+        }
+        val postId = activity.postId ?: return
+        scope.launch {
+            SupabaseController.getCommunityPostById(postId)
+                .onSuccess { onOpenPost(it) }
+                .onFailure { org.clear30.data.AlertHandler.error(message = "Could not load post.") }
         }
     }
 
@@ -183,20 +297,89 @@ internal fun ActivityScreen(userInfo: UserInfo, onBack: () -> Unit, onOpenPost: 
         PillPicker(mode, ActivityMode.values().toList(), { it.label }, { mode = it }, style = PillPickerStyle.Primary(Clear30Gradients.community))
 
         when (mode) {
-            ActivityMode.NOTIFICATIONS ->
-                SmallText("No activity, yet…", color = Clear30Colors.text.copy(alpha = 0.5f))
-            ActivityMode.MY_POSTS -> {
-                val mine = myPosts
-                if (mine == null) {
+            ActivityMode.NOTIFICATIONS -> {
+                if (notificationsLoading) {
                     androidx.compose.material3.CircularProgressIndicator()
-                } else if (mine.isEmpty()) {
-                    SmallText("No posts, yet…", color = Clear30Colors.text.copy(alpha = 0.5f))
+                } else if (notifications.isEmpty()) {
+                    SmallText("No activity, yet...", color = Clear30Colors.text.copy(alpha = 0.5f))
                 } else {
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-                        items(mine, key = { it.id }) { post -> PostCard(post) { onOpenPost(post) } }
+                        items(notifications, key = { it.id }) { activity ->
+                            CommunityNotificationCard(activity) { openActivity(activity) }
+                        }
+                        if (!notificationsEnded) {
+                            item {
+                                // Composes when scrolled into view → next page.
+                                LaunchedEffect(notificationsPage) { loadActivities(showLoading = false) }
+                            }
+                        }
                     }
                 }
             }
+            ActivityMode.MY_POSTS -> {
+                if (myPostsLoading) {
+                    androidx.compose.material3.CircularProgressIndicator()
+                } else if (myPosts.isEmpty()) {
+                    SmallText("No posts, yet...", color = Clear30Colors.text.copy(alpha = 0.5f))
+                } else {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
+                        items(myPosts, key = { it.id }) { post ->
+                            PostCard(
+                                post,
+                                userInfo = userInfo,
+                                onEdit = onEditPost,
+                                onDeleted = {
+                                    myPosts.removeAll { it.id == post.id }
+                                    onPostsChanged()
+                                },
+                            ) { onOpenPost(post) }
+                        }
+                        if (!myPostsEnded) {
+                            item {
+                                LaunchedEffect(myPostsPage) { loadMyPosts(showLoading = false) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * CommunityNotificationCard (iOS Cards.swift) — bell + relative time on top,
+ * the activity message below, and an unread dot pinned to the card's
+ * top-trailing corner until it's opened.
+ */
+@Composable
+private fun CommunityNotificationCard(activity: Activity, onClick: () -> Unit) {
+    Box(Modifier.fillMaxWidth()) {
+        Clear30Card(modifier = Modifier.fillMaxWidth().pressScale(onClick = onClick)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 4)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                    // iOS tints the bell with the brand gradient; solid brand
+                    // green is the closest single-color tint here.
+                    Icon(
+                        sfSymbol("bell.fill"),
+                        contentDescription = null,
+                        tint = Clear30Colors.green,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(Modifier.weight(1f))
+                    TinyText(relativeTime(activity.createdAt), color = Clear30Colors.text.copy(alpha = 0.5f))
+                }
+                activity.message?.let { SmallText(it) }
+            }
+        }
+        if (!activity.isRead) {
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = (-2).dp)
+                    .size(9.dp)
+                    .clip(CircleShape)
+                    .background(Clear30Colors.red1),
+            )
         }
     }
 }

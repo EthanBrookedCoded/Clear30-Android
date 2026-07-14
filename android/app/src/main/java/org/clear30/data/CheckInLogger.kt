@@ -34,8 +34,16 @@ class CheckInLogger(
     private val userInfo: UserInfo,
     private val scope: CoroutineScope,
 ) {
-    /** Log [checkIns] for [date], mirroring CheckInLogger.logCheckIns. */
-    fun logCheckIns(date: Instant, checkIns: List<LoggedCheckIn>) {
+    /**
+     * Log [checkIns] for [date], mirroring CheckInLogger.logCheckIns.
+     *
+     * Returns the day's generated [VariableReward] (already stamped onto the
+     * day's `variableRewardType`) so the reward screen can render exactly the
+     * reward that was picked, without re-running the generator during
+     * composition (PARITY §18-D1: the generator mutates `program.dayInfo`, so
+     * it must run exactly once per check-in, here).
+     */
+    fun logCheckIns(date: Instant, checkIns: List<LoggedCheckIn>): VariableReward? {
         val plainDate = PlainDate.from(date)
 
         checkIns.firstNotNullOfOrNull { it.method }?.let { program.latestCheckInMethod = it }
@@ -51,8 +59,8 @@ class CheckInLogger(
 
         // Reward generation: pick + stamp the day's variable reward type (iOS
         // CheckInRewardVariableGenerator.storeRewardType). The static reward is
-        // generated on demand by the reward sheet.
-        CheckInRewardVariableGenerator(userInfo, program).generate(plainDate)
+        // generated on demand by the reward sheet (it doesn't mutate state).
+        val variableReward = CheckInRewardVariableGenerator(userInfo, program).generate(plainDate)
 
         // Analytics: fire a single event per check-in, tagged by outcome. Use the
         // weed check-in's completion specifically (iOS `weedCheckIn?.completion`) —
@@ -69,18 +77,21 @@ class CheckInLogger(
             mapOf(LogEventExtraDataType.SOBER to (sober?.toString() ?: "null")),
         )
 
-        // The confetti celebration is rendered inline on the reward screen
-        // (CheckInSheet → CheckInRewardContent) for a sober check-in — that's the
-        // iOS `ConfettiCheckIn` placement, and it shows reliably inside the
-        // check-in dialog window. We deliberately don't fire a global popup here:
-        // it would render behind the dialog and stack on backdated catch-up logs.
+        // Confetti celebrations fire inside the animated reward views themselves
+        // (CheckInRewardViews.kt — weed-free timer / money saved pops), matching
+        // the iOS per-reward ConfettiPop placement. We deliberately don't fire a
+        // global popup here: it would render behind the check-in dialog and stack
+        // on backdated catch-up logs.
 
         persist(sober)
+
+        return variableReward
     }
 
     /** Convenience for the standard weed check-in (sober = true/false). */
-    fun logWeedCheckIn(sober: Boolean, date: Instant = now()) =
+    fun logWeedCheckIn(sober: Boolean, date: Instant = now()) {
         logCheckIns(date, listOf(LoggedCheckIn(id = CheckInDefaults.weed.id, completion = sober)))
+    }
 
     /**
      * Recompute `program.lastSmoked` from the live dayInfo — port of the iOS
@@ -103,9 +114,19 @@ class CheckInLogger(
 
     private fun persist(sober: Boolean? = null) {
         scope.launch {
+            // The whole async pipeline is defensive (PARITY §18-D1): an uncaught
+            // throw from any step would kill the calling scope (the Today tab's
+            // rememberCoroutineScope) and crash the app after the user already
+            // saw their check-in succeed. Each step is isolated so a failure in
+            // one never blocks the next.
+
             // 1. Persist locally first — this is the source of truth and must
             //    succeed before we attempt the network round-trip.
-            Clear30Store.save(program)
+            try {
+                Clear30Store.save(program)
+            } catch (t: Throwable) {
+                android.util.Log.e("CheckInLogger", "Failed to persist program after check-in", t)
+            }
 
             // 2. Refresh the home-screen widget (iOS WidgetCenter.reloadAllTimelines).
             //    updateAll is an extension on GlanceAppWidget — needs the import
@@ -121,20 +142,33 @@ class CheckInLogger(
             //    failure in one column doesn't roll back the others. We push
             //    only what the check-in actually mutated: day_info and
             //    last_smoked. (`latestCheckInMethod` stays device-local — there
-            //    is no such column on prod `users`.)
-            SupabaseController.updateDayInfo(program.dayInfo)
-            SupabaseController.updateLastSmoked(program.lastSmoked)
+            //    is no such column on prod `users`.) The outer catch guards
+            //    against throws before/around the helpers (e.g. serialization).
+            try {
+                SupabaseController.updateDayInfo(program.dayInfo)
+                SupabaseController.updateLastSmoked(program.lastSmoked)
+            } catch (t: Throwable) {
+                android.util.Log.e("CheckInLogger", "Failed to sync check-in to Supabase", t)
+            }
 
             // 4. Evaluate achievement criteria against the new state and write
             //    any newly-earned achievements to user_achievements. Skips the
             //    network call (and the local append) when nothing was earned.
-            val achievementData = Clear30Store.loadAchievementData()
-            AchievementEngine.syncNewlyEarned(achievementData, userInfo, program)
+            try {
+                val achievementData = Clear30Store.loadAchievementData()
+                AchievementEngine.syncNewlyEarned(achievementData, userInfo, program)
+            } catch (t: Throwable) {
+                android.util.Log.e("CheckInLogger", "Achievement sync failed after check-in", t)
+            }
 
             // 5. If the user is in an accountability group, mirror this check-in into
             //    the group activity feed (groups.add_checkin_activity). Best-effort.
-            if (!userInfo.groupID.isNullOrEmpty()) {
-                SupabaseController.addGroupCheckInActivity(sober)
+            try {
+                if (!userInfo.groupID.isNullOrEmpty()) {
+                    SupabaseController.addGroupCheckInActivity(sober)
+                }
+            } catch (t: Throwable) {
+                android.util.Log.e("CheckInLogger", "Group check-in activity sync failed", t)
             }
         }
     }
