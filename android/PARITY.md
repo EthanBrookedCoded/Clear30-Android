@@ -58,7 +58,8 @@ from iOS) · `env` (local/dev environment task).
    split out as F1b. Backend seeds 40/41 landed in the iOS repo, 3d986e12.)*
 7. **Wave 7 — post-Wave-5 feedback (Thatcher 2026-07-13):** T8 (reward-bar
    radii), P7 (health timeline cards), G3 (Groups UI exact copy), F1b (school
-   Support-tab section).
+   Support-tab section). *(done 2026-07-13, 89941d2 — backend seed 42 landed
+   in the iOS repo, 1e035597.)*
 
 ---
 
@@ -334,7 +335,9 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   `A/data/RedditScraper.kt:41-75`. Root cause of S5's nondeterminism. Requires
   E1 locally.
 
-- [ ] **T8 · P3 · bug — Reward timer/progress bars: corner radii distort on
+- [x] (done 2026-07-13, 89941d2 — also fixed the `RewardThroughBreakSmall`
+  bottom strip, same defect; verified on-device via a re-run check-in)
+  **T8 · P3 · bug — Reward timer/progress bars: corner radii distort on
   short fills** (Thatcher, 2026-07-13, post-Wave-5). P3's fix landed for the
   profile `DopamineTimer`, but the check-in reward views' bars
   (`A/views/existinguser/today/checkin/CheckInRewardViews.kt` — the
@@ -446,11 +449,28 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   named by the selected prompt (`NewVideoEntryViewModel.swift:321`). Minimum:
   full-screen text editor + nameable video entries (prompt picker optional).
 
-- [ ] **P7 · P2 · missing — Health timeline detail cards** (Thatcher,
-  2026-07-13, post-Wave-5). The `HealthTimelinePage` overlay added with P5 is
-  a bare milestone list — "the health timeline doesn't have the actual cards
-  for anything." Copy the iOS health timeline UI exactly (per-milestone cards;
-  see iOS `HealthTimelineSection`/`HealthCard` and the detail views under
+- [x] (done 2026-07-13, 89941d2 — required restructuring the Android health
+  model 1:1 to iOS `ProgramHealthProgress` (per-category `HealthCategory` +
+  `HealthStep` lists with backend percentage/colors/`intro_content`/
+  `fda_disclaimer`, personal-best + lastVisited state); persisted key bumped
+  to `healthProgressV2` so old flattened dev data refetches instead of
+  breaking the Program decode. Gauges are now the iOS `HealthCard` (270° ring,
+  best ghost ring, `hasNew` gradient state + "↑N% ›" badge, per-category tap);
+  `HealthTimelinePage` is the full iOS `HealthTimeline` (liquid-fill ring,
+  highlighted card + confetti, Day-N badges, citations, placeholder skeleton,
+  intro cards, FDA footer; ring's triple glow shadow skipped — noted in code).
+  Timeline-handler call sites upgraded to the faithful iOS health calls
+  (`resetHealthProgress`/`adjustHealthProgressStartDate`/
+  `updateHealthProgressStartDates`); health notifications now fire at the real
+  per-step `nextStepDate`. VERIFIED e2e on-device: break −7d → catch-up
+  check-ins → hasNew badges → ring animation → highlighted list → badge clears
+  after visit. NOTE: local `library.health_categories` has Heart's
+  `long_name='Brain'` — seed-data bug, not app) **P7 · P2 · missing — Health
+  timeline detail cards** (Thatcher, 2026-07-13, post-Wave-5). The
+  `HealthTimelinePage` overlay added with P5 is a bare milestone list — "the
+  health timeline doesn't have the actual cards for anything." Copy the iOS
+  health timeline UI exactly (per-milestone cards; see iOS
+  `HealthTimelineSection`/`HealthCard` and the detail views under
   `iOS/Views/Existing User/Profile/`).
 
 ## 8. Community
@@ -481,7 +501,27 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   compact invite. Section picker/tabs already match.
 - [ ] **G2 · P2 · missing — Groups depth:** create/join/leave flows
   (`add_member`/`remove_member`), group calendar, notes, member detail, pings.
-- [ ] **G3 · P2 · divergent — Copy the iOS Groups UI exactly** (Thatcher,
+  *(2026-07-13, largely superseded by G3: create/leave/remove + notes + pings
+  landed; the iOS audit showed there IS no group calendar or member-detail on
+  iOS — those were Android inventions, now removed. Remaining depth vs iOS:
+  chat scroll-to-top pagination (count RPCs) and iOS's intermediate invite
+  share sheet; re-audit before reopening.)*
+- [x] (done 2026-07-13, 89941d2 — audit corrections vs this item's summary:
+  iOS Notes is a READ-ONLY inbox tab (not notes-on-member-cards; note SENDING
+  hangs off the member-card badges via the GroupSendNote popup), and the hue
+  color picker DOES exist on iOS Settings — Android's Material slider was
+  replaced with the iOS HuePicker card + swatch + 1s-debounced persist.
+  Removed inventions: GroupCalendar, "Recent activity" section, leaderboard
+  podium/ranks, MemberDetailScreen + tap-to-detail, join-with-a-code, chat
+  back button/header. Rebuilt to iOS: member cards w/ 🔥streak + state badges
+  (tap → note/ping, inert on self), Inner Circle / Other members split,
+  inline chat w/ date separators, interleaved group-activity rows (tap →
+  note), name labels + emoji avatars, shared gradient composer; read-only
+  NoteCard inbox; shared PillPicker tabs. VERIFIED on-device: creation
+  screen, members/chat/notes/settings, sent message bubble + joined-activity
+  row. Not exercised: multi-member badge taps/ping RPC, hue round-trip.
+  Known stand-ins kept: 5s poll (no Realtime), system share intent)
+  **G3 · P2 · divergent — Copy the iOS Groups UI exactly** (Thatcher,
   2026-07-13, post-Wave-5). Android has invented sections/behaviors that
   don't exist on iOS — mirror iOS 1:1: remove the extra "Recent activity"
   section; fix the Chat section (no back button top-left, iOS-style message
@@ -527,7 +567,21 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   `iOS/Data/Program/ProgramContent.swift:96,109`). Note: iOS's own sign-in
   email-recovery may be a gap — Android should implement it regardless.
   Android `A/data/model/SchoolData.kt` model exists.
-- [ ] **F1b · P2 · missing — School Support-tab section** (split from F1,
+- [x] (done 2026-07-13, 89941d2 — "Your School" gradient card is the first
+  library item on Support; new `SchoolInfoScreen`
+  (`A/views/existinguser/support/library/school/`): Resources always +
+  Messages/Activities tabs when non-empty, Today / This week / Later buckets,
+  weekly repeats expanded to the next 3 occurrences, 2-col SchoolInfoCard
+  grids; `SchoolInfoDetail` shared by activities/resources — links open
+  EXTERNALLY (dial/mailto/browser, host-shortened labels), no WebView, like
+  iOS. `SchoolDataAbstracted` gained
+  `getTodayActivities`/`getFutureActivities`/`withDate`; local seed
+  `BE/supabase/seeds/42_test_school_activities_resources.sql` (iOS repo
+  1e035597) exercises all three tabs on `test-conduct-u`. VERIFIED on-device
+  via the `?school=` deep link: hub card, tabs, bucketing + weekly expansion
+  (Jul 17/24/31), activity detail incl. sub_links/facilitator. Message-pill
+  progress trim + `calendar.badge.clock` glyph approximated — noted in code)
+  **F1b · P2 · missing — School Support-tab section** (split from F1,
   2026-07-13). iOS school users get a Support-tab school card opening
   `SchoolInfo` (`iOS/Views/Existing User/Support/Library/School/SchoolInfo.swift`):
   school badge/colors, today's + upcoming activities
