@@ -34,6 +34,9 @@ class ProgramHealthProgress(
     @SerialName("setback_days") var setbackDays: Int = 0,
     /** SF Symbol name (mapped through sfSymbol() to a Material icon at render time). */
     var icon: String = "heart.fill",
+    /** Push copy from `library.health_steps` (`_CLIENTNAME_` substituted at schedule time). */
+    @SerialName("notification_title") var notificationTitle: String? = null,
+    @SerialName("notification_body") var notificationBody: String? = null,
 )
 
 /** Health categories — iOS rawValues kept for analytics compat. */
@@ -41,9 +44,16 @@ class ProgramHealthProgress(
 enum class HealthCategory(val rawValue: String) {
     @SerialName("brain") BRAIN("brain"),
     @SerialName("lungs") LUNGS("lungs"),
+    @SerialName("heart") HEART("heart"),
     @SerialName("sleep") SLEEP("sleep"),
     @SerialName("mood") MOOD("mood"),
     @SerialName("energy") ENERGY("energy"),
     @SerialName("memory") MEMORY("memory"),
     @SerialName("other") OTHER("other");
+
+    companion object {
+        /** Backend category name ("Brain"/"Lungs"/"Heart") → enum, unknown → OTHER. */
+        fun fromName(name: String): HealthCategory =
+            entries.firstOrNull { it.rawValue == name.lowercase() } ?: OTHER
+    }
 }

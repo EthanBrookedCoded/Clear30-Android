@@ -116,6 +116,7 @@ private fun buildGauges(program: Program): List<HealthGauge> {
 private fun HealthCategory.toGauge(pct: Int, next: Instant? = null): HealthGauge = when (this) {
     HealthCategory.BRAIN -> HealthGauge("Brain", "brain.head.profile", pct, pinkGradient, pink1, next)
     HealthCategory.LUNGS -> HealthGauge("Lungs", "lungs.fill", pct, salmonGradient, salmon1, next)
+    HealthCategory.HEART -> HealthGauge("Heart", "heart.fill", pct, redGradient, red1, next)
     HealthCategory.SLEEP -> HealthGauge("Sleep", "moon.fill", pct, sleepGradient, sleep1, next)
     HealthCategory.MOOD -> HealthGauge("Mood", "face.smiling", pct, moodGradient, mood1, next)
     HealthCategory.ENERGY -> HealthGauge("Energy", "bolt.fill", pct, energyGradient, energy1, next)

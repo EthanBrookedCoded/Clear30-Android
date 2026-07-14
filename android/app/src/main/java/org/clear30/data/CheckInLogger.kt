@@ -5,12 +5,16 @@ import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Instant
 import org.clear30.data.model.CheckInDefaults
+import org.clear30.data.model.CheckInMethod
+import org.clear30.data.model.DateSpan
 import org.clear30.data.model.LoggedCheckIn
 import org.clear30.data.model.PlainDate
 import org.clear30.data.model.Program
 import org.clear30.data.model.ProgramDayInfo
 import org.clear30.data.model.UserInfo
 import org.clear30.data.model.weedCheckIn
+import org.clear30.util.adding
+import org.clear30.util.daysTo
 import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.addGroupCheckInActivity
 import org.clear30.data.supabase.updateDayInfo
@@ -112,6 +116,83 @@ class CheckInLogger(
         if (latestSmoked != null) program.lastSmoked = latestSmoked
     }
 
+    /**
+     * Back-fill a run of days with generic weed check-ins — port of the iOS
+     * `handleMultiCheckIn(dateSoberPairs:)` (CheckInLogger.swift:260-306). Used
+     * by the onboarding start-date step (O11) to mark past days sober. Unlike
+     * [logCheckIns] it REPLACES only the weed check-in on each day (custom
+     * check-ins survive) and runs no reward generation — matching iOS.
+     */
+    suspend fun handleMultiCheckIn(dateSoberPairs: List<Pair<PlainDate, Boolean>>) {
+        for ((plainDate, sober) in dateSoberPairs) {
+            val existing = program.dayInfo[plainDate] ?: ProgramDayInfo()
+            val checkIns = existing.loggedCheckIns.filterNot { CheckInMethod.isWeedCheckIn(it.id) } +
+                LoggedCheckIn.genericWeedCheckIn(sober)
+            program.updateDayInfo(plainDate, existing.copy(loggedCheckIns = checkIns))
+        }
+
+        // Reset the last-smoked timer off the most recent smoked day: iOS maps it
+        // to `now - dayDiff`, keeping the current time-of-day.
+        dateSoberPairs.filter { !it.second }.maxByOrNull { it.first.dateObject }?.let { (date, _) ->
+            val dayDiff = date.dateObject.daysTo(now())
+            resetLastSmoked(setTo = now().adding(days = -dayDiff), program = program)
+        }
+
+        program.updateHealthSetbackDays()
+
+        try {
+            Clear30Store.save(program)
+        } catch (t: Throwable) {
+            android.util.Log.e("CheckInLogger", "Failed to persist program after multi check-in", t)
+        }
+
+        try {
+            SupabaseController.updateDayInfo(program.dayInfo)
+        } catch (t: Throwable) {
+            android.util.Log.e("CheckInLogger", "Failed to sync multi check-in to Supabase", t)
+        }
+
+        NotificationHandler.scheduleHealthNotifications(userInfo, program)
+
+        Logger.logEvent(
+            userInfo.loggingID,
+            LogEventType.checkedIn,
+            mapOf(
+                LogEventExtraDataType.TYPE to "multi-checkin",
+                LogEventExtraDataType.DATE to dateSoberPairs.joinToString(", ") { it.first.dateString },
+            ),
+        )
+    }
+
+    companion object {
+        /**
+         * Move `program.lastSmoked` to [setTo] — port of the static iOS
+         * `resetLastSmoked(setTo:program:)` (CheckInLogger.swift:312-345). Pushes
+         * the new value, records the elapsed sober span, refreshes the widget.
+         * The CALLER is responsible for `Clear30Store.save(program)`.
+         */
+        suspend fun resetLastSmoked(setTo: Instant, program: Program) {
+            val previous = program.lastSmoked
+            program.lastSmoked = setTo
+
+            try {
+                SupabaseController.updateLastSmoked(setTo)
+            } catch (t: Throwable) {
+                android.util.Log.e("CheckInLogger", "Failed to sync lastSmoked reset", t)
+            }
+
+            if (previous < setTo) {
+                val spans = program.lastSmokedSpans ?: mutableListOf<DateSpan>().also { program.lastSmokedSpans = it }
+                spans.add(DateSpan(startDate = previous, endDate = setTo))
+            }
+
+            runCatching {
+                org.clear30.widget.StatsWidget()
+                    .updateAll(org.clear30.Clear30Application.instance)
+            }
+        }
+    }
+
     private fun persist(sober: Boolean? = null) {
         scope.launch {
             // The whole async pipeline is defensive (PARITY §18-D1): an uncaught
@@ -170,6 +251,10 @@ class CheckInLogger(
             } catch (t: Throwable) {
                 android.util.Log.e("CheckInLogger", "Group check-in activity sync failed", t)
             }
+
+            // 6. Reschedule health milestone notifications — a logged slip pushes
+            //    every milestone back (iOS CheckInLogger.swift:98,294).
+            runCatching { NotificationHandler.scheduleHealthNotifications(userInfo, program) }
         }
     }
 }

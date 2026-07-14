@@ -149,6 +149,7 @@ private fun CategoryIcon(category: HealthCategory, unlocked: Boolean) {
     val symbol = when (category) {
         HealthCategory.BRAIN -> "brain.head.profile"
         HealthCategory.LUNGS -> "lungs.fill"
+        HealthCategory.HEART -> "heart.fill"
         HealthCategory.SLEEP -> "moon.fill"
         HealthCategory.MOOD -> "face.smiling"
         HealthCategory.ENERGY -> "bolt.fill"

@@ -27,6 +27,8 @@ import org.clear30.data.LogEventExtraDataType
 import org.clear30.data.LogEventType
 import org.clear30.data.Logger
 import org.clear30.data.model.UserInfo
+import org.clear30.data.supabase.SupabaseController
+import org.clear30.data.supabase.checkReferralCodeJson
 import org.clear30.views.components.Clear30Card
 import org.clear30.views.components.Heading3
 import org.clear30.views.components.OffWhiteInput
@@ -41,13 +43,18 @@ import org.clear30.views.theme.Dimens
  *
  * Leading VStack(spacing: 0): Heading3 prompt, a half-opacity "You can skip this
  * step." SmallText, a flexible spacer, the `OffWhiteInput` referral field, another
- * spacer, then the white `TextIconButton` ("Next" + trailing arrow). The
- * `SupabaseController.checkReferralCodeJson` round-trip (group-join alert, freeCode
- * flag, Helium init) is a TODO matching the iOS handler; the local persistence +
- * analytics fire here for parity.
+ * spacer, then the white `TextIconButton` ("Next" + trailing arrow). Runs the
+ * iOS `handleReferralCode` round-trip: `checkReferralCodeJson` → free-code
+ * unlock + group-join alert (`onboardingSetup.groupToJoin`). Note the code path
+ * does NOT resolve a school_id — school assignment comes from the email-domain
+ * check or deep link. Helium paywall init stays a TODO(port).
  */
 @Composable
-fun ReferralSlide(userInfo: UserInfo, onNext: () -> Unit) {
+fun ReferralSlide(
+    userInfo: UserInfo,
+    onboardingSetup: org.clear30.data.model.OnboardingSetup,
+    onNext: () -> Unit,
+) {
     var code by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
@@ -81,14 +88,35 @@ fun ReferralSlide(userInfo: UserInfo, onNext: () -> Unit) {
             scope.launch {
                 if (trimmed.isNotEmpty()) {
                     userInfo.referralCode = trimmed
-                    Clear30Store.save(userInfo)
                     Logger.logEvent(
                         userInfo.loggingID,
                         LogEventType.usedReferralCode,
                         mapOf(LogEventExtraDataType.TYPE to trimmed),
                     )
-                    // TODO(port): SupabaseController.checkReferralCodeJson —
-                    // group_id join alert, freeCode flag, Helium init.
+                    // iOS OnboardingReferralCode.handleReferralCode: validate the
+                    // code; a free code unlocks the app, a group code offers the
+                    // group join. TODO(port): Helium paywall re-init on free codes.
+                    val result = SupabaseController.checkReferralCodeJson(trimmed)
+                    if (result?.is_free == true) userInfo.freeCode = trimmed
+                    Clear30Store.save(userInfo)
+                    val groupID = result?.group_id
+                    if (groupID != null) {
+                        org.clear30.data.AlertHandler.show(
+                            org.clear30.data.AlertHandler.Alert(
+                                title = "Join Group?",
+                                message = "This referral code includes access to a group. Would you like to join it?",
+                                primaryLabel = "Yes",
+                                onPrimary = {
+                                    onboardingSetup.groupToJoin = groupID
+                                    scope.launch { Clear30Store.save(onboardingSetup) }
+                                    onNext()
+                                },
+                                secondaryLabel = "No",
+                                onSecondary = { onNext() },
+                            ),
+                        )
+                        return@launch
+                    }
                 }
                 onNext()
             }

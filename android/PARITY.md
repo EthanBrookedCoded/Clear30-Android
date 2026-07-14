@@ -53,9 +53,12 @@ from iOS) · `env` (local/dev environment task).
 4. **Wave 4 — content & viewers:** T7+S5 (reddit), S8 (YouTube), S6, T5, T6,
    S1–S4, S7, S9–S11.
 5. **Wave 5 — check-in / profile / community / groups:** T2–T4, P1–P6, C1–C3, G1.
-6. **Wave 6 — pilot features:** F1–F3, O11, B3, X6, S12, N2.
+6. **Wave 6 — pilot features:** F1–F3, O11, B3, X6, S12, N2. *(done 2026-07-13
+   — N2's pop-in half deferred per §17-Q13; F1's school-library UI split out as
+   F1b.)*
 7. **Wave 7 — post-Wave-5 feedback (Thatcher 2026-07-13):** T8 (reward-bar
-   radii), P7 (health timeline cards), G3 (Groups UI exact copy).
+   radii), P7 (health timeline cards), G3 (Groups UI exact copy), F1b (school
+   Support-tab section).
 
 ---
 
@@ -118,7 +121,7 @@ from iOS) · `env` (local/dev environment task).
   `latest_check_in_method` (`A/data/supabase/SupabaseProgramSync.kt:86-93,110`);
   the column **does not exist in prod** (verified). **Fix:** delete the write.
 
-- [ ] **X6 · P1 · missing — `trigger_responses` (if-then slip plans) never restored or written.**
+- [x] (done 2026-07-13 — `SlipPlan` model + `updateTriggerResponses` + restore mapping in `restoreToModels`; verified: plan saved in the slipped sheet lands in `users.trigger_responses` with the exact iOS wire shape) **X6 · P1 · missing — `trigger_responses` (if-then slip plans) never restored or written.**
   Wire model carries it (`A/data/supabase/SupabaseRestore.kt:121`) but
   `restoreToModels` drops it; no write path exists. iOS:
   `iOS/Data/Program/ProgramRestoreHandler.swift:103-115`. (Pairs with S12.)
@@ -230,7 +233,7 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   and the flows (`A/data/TutorialController.kt:26-45`); also remove the reset
   entry point (`A/.../settings/SettingsSection.kt:130`).
 
-- [ ] **O11 · P2 · decided — Add the start-date step to onboarding** (§17-Q9).
+- [x] (done 2026-07-13 — `NewUserScreen.StartDate` after Notifications, Clear30-only, RESTORED accounts skip it (break-started-today gate — re-picking would shift a real timeline); reuses `StartDateCalendarPicker` (−29/+14, default tomorrow); confirm ports `handleSelection` + `logPastDaysSober` via new `CheckInLogger.handleMultiCheckIn`/`resetLastSmoked`. Fresh-onboarding on-device pass still pending) **O11 · P2 · decided — Add the start-date step to onboarding** (§17-Q9).
   Port iOS `Tutorial2DatePicker` behavior (`iOS/.../Tutorial2/Tutorial2DatePicker.swift`):
   range today−29…today+14, default tomorrow; on confirm compute the Day-0 delta
   and call `adjustBreakTime(days:)` (already ported & verified); past/today
@@ -260,7 +263,7 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   iOS net effect: `coreModeration=false`, submits `LO-Use-State=0`
   (`iOS/.../ProgramTimelineHandler.swift:223-224` + `ProgramMessageHandler.swift:368-420`).
   (done 2026-07-13, 3a63877 — `switchCore(startOn = today, newModeration = false)`)
-- [ ] **B3 · P1 · bug — New Break skips the break assessment.** `NewBreakSheet` is a
+- [x] (done 2026-07-13 — full `BreakAssessmentFlow` (newBreakType + 10 newClear30Questions + affirmations + "Setting up your break" terminal), `AssessmentSubmissionHandler.handleNewBreak`, START_DATE honored in `handleBreaks`; NewBreakSheet deleted. Verified on-device: new `clear30` assessment row + second break with `assessment_response_id` + normative feedback. Found+fixed on the way: Material DatePicker returned UTC-midnight millis → local-TZ conversion stored the picked date one day early at night) **B3 · P1 · bug — New Break skips the break assessment.** `NewBreakSheet` is a
   name-only AlertDialog passing `emptyList()` responses
   (`A/views/existinguser/profile/NewBreakSheet.kt:74-77`). iOS runs the full
   break assessment → `handleNewBreak` (`iOS/.../AssessmentSubmissionHandler.swift:265`,
@@ -401,7 +404,7 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   yellow/journals.** Currently `FeedbackMonsterCard` hardcodes yellow for both
   states (`A/.../SupportTab.kt:451-470`); also fix the async-null experiment
   flash (`:94-101,285-286`). (Config-card colors already match iOS.)
-- [ ] **S12 · P2 · missing — Slip-up sheet.** Android substitutes a canned Claire
+- [x] (done 2026-07-13 — full port under `A/views/existinguser/support/slipped/`: staggered intro, goal-based copy pools, random hero + "All options" swap sheet, and ALL SIX activities (§17-Q11): plan/talk/why/affirmations/testimonials/community. Verified on-device: intro stagger, options sheet, affirmations, plan save (+ solidified cards). Talk/why/testimonial/community activities not individually exercised; testimonials are tap-to-play (iOS autoplays)) **S12 · P2 · missing — Slip-up sheet.** Android substitutes a canned Claire
   prompt (`A/.../SupportTab.kt:198-204`); iOS: `SlippedSheet` /
   `SlippedActivities` / `SlippedContent` under
   `iOS/Views/Existing User/Support/Slipped/` (also writes userWhy —
@@ -503,7 +506,7 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   exists only as a prod Supabase secret (`FIREBASE_SERVICE_ACCOUNT_JSON_B64_ENC`),
   not in either repo — local `notification_send` runs need it added to
   `BE/supabase/functions/.env`.)
-- [ ] **N2 · P2 · missing — Health + pop-in notification scheduling.**
+- [x] (HEALTH HALF done 2026-07-13; POP-IN DEFERRED entirely per Thatcher §17-Q13 — no PopInGenerator, no silent-push consumption, no post-check-in schedulePopInRequest. Health: `HealthDataHandler.ensureHealthData` finally populates `program.healthProgress` from `library.health_categories/health_steps` (was NEVER populated — gauges ran on a synthetic ramp; also feeds P7), `scheduleHealthNotifications` (WorkManager full-replace per category, unlock day @10:00 local, `_CLIENTNAME_` substitution) called from check-ins/multi-check-in/timeline `finish()`/tab load. Verified on-device: real Brain/Lungs/Heart milestones + "in N days" badge. NOTE: iOS's own health pushes never fire (`HealthStep.notificationTitle/Body` are `let …= nil` — decode bug); Android decodes properly, so Android SENDS them. Local seeds added: `BE/supabase/seeds/40_health_steps_notification_copy.sql`) **N2 · P2 · missing — Health + pop-in notification scheduling.**
   `A/data/NotificationHandler.kt` has no `scheduleHealth`/`schedulePopIn` (only
   a pop-in *cancel* tag at `:189`); silent-push payload is stored
   (`AppState.setNotification`) but never consumed. iOS:
@@ -516,7 +519,7 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
 
 ## 11. School / pilot features (all wanted)
 
-- [ ] **F1 · P2 · missing — School mode.** No `get_school_data` call anywhere; no
+- [x] (done 2026-07-13 — feed slice: `SupabaseSchool.kt` (schema-scoped RPC wrappers), `SchoolDataAbstracted.kt` `getMessages` (startDate + day + 10h anchor), AllTabs regeneration, TodayTab feed merge (core-first-within-day), `ReferralCodeHandler.handleEmail` after email OTP (freeCode/schoolId/schoolData/mid-pilot flag), `?school=` deep link, ReferralSlide `checkReferralCodeJson` round-trip. Verified: the "Free 🤩" domain unlock fired on-device for conduct-test.edu; feed cards pending the fresh-signup run. Local seeds: `BE/supabase/seeds/41_test_school_messages.sql` (umich content on `test-conduct-u`; flushes `library.cache`). NOT ported (follow-up **F1b**): the Support-tab school section / `SchoolInfo` library UI (activities + resources) — data decodes but nothing renders it) **F1 · P2 · missing — School mode.** No `get_school_data` call anywhere; no
   email → `schools.school_leads` lookup. Needed at sign-up (referral code →
   school_id) AND sign-in (email recovery), then regenerate school messages into
   the feed anchored to `program.startDate`
@@ -524,10 +527,19 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   `iOS/Data/Program/ProgramContent.swift:96,109`). Note: iOS's own sign-in
   email-recovery may be a gap — Android should implement it regardless.
   Android `A/data/model/SchoolData.kt` model exists.
-- [ ] **F2 · P2 · missing — Mid-pilot assessment.** iOS
+- [ ] **F1b · P2 · missing — School Support-tab section** (split from F1,
+  2026-07-13). iOS school users get a Support-tab school card opening
+  `SchoolInfo` (`iOS/Views/Existing User/Support/Library/School/SchoolInfo.swift`):
+  school badge/colors, today's + upcoming activities
+  (`getTodayActivities`/`getFutureActivities`, incl. weekly repeats), and the
+  sectioned resource library. Android decodes `SchoolData.activities/resources`
+  but renders nothing. Seed umich's `school_activities`/`school_resources` onto
+  `test-conduct-u` locally when building this.
+
+- [x] (done 2026-07-13 — `A/views/existinguser/midpilot/` 8-slide port (wellbeing GradientSliders, helpfulness spectrum, exclusive "not interested" option via new `exclusiveOptionIndices` on `AssessmentMultipleChoice`), submits option STRINGS to `schools.submit_mid_pilot_assessment`; `get_assessment_status` rehydrates the flag on sign-in; triggered from TodayTab at schoolId+≥10 checked-in days, non-dismissable, on-load only (iOS also re-checks post-check-in — noted divergence). On-device pass pending the fresh-signup run) **F2 · P2 · missing — Mid-pilot assessment.** iOS
   `Views/Existing User/MidPilotAssessment/` (3 files incl. wellbeing sliders);
   no Android counterpart.
-- [ ] **F3 · P2 · missing — Post-assessment flow.** iOS
+- [x] (done 2026-07-13 — VERIFIED E2E on-device: auto-open at break day ≥30, intro celebration (snake calendar + confetti), goal-question-per-break-reason, experiment-gated coach-referral slide, LO-Use-State → moderation branch, loading → `life` assessment row + break `post_assessment_completed/response_id` pushed + `coreModeration` set + Life content resumed; `comms.coach_referral_events` rows (shown/skipped) written. Popup cards on Today+Profile route into the same flow. The 3D-coin achievement slide intentionally SKIPPED (§17-Q12); the testimonial after-flow (`VideoTestimonialView`) not ported — slide renders, follow-up sheet skipped) **F3 · P2 · missing — Post-assessment flow.** iOS
   `Views/Existing User/PostAssessment/` (7 files: Intro, Achievement,
   Testimonial, CoachReferral, ViewModel); Android has the experiment keys
   (`A/data/model/ExperimentController.kt:48-50`) but nothing renders them.
@@ -643,6 +655,12 @@ Google Sign-In (phone/email OTP is enough) · SMS/Twilio.
   notification-permission popup.
 - **Q10 (S11):** Default/unfed feedback monster = orange (sad/unfed); fed =
   yellow.
+- **Q11 (S12):** Port ALL SIX slip activities (plan/talk/why/affirmations/
+  testimonials/community), not a subset.
+- **Q12 (F3):** SKIP the 3D-coin achievement slide entirely — no 2D substitute.
+- **Q13 (N2):** Pop-in notifications DEFERRED entirely (no PopInGenerator port,
+  no silent-push consumption, no post-check-in schedulePopInRequest); Wave 6
+  ships only the health half.
 
 ## 18. Deferred / backlog
 

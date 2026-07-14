@@ -8,8 +8,11 @@ import org.clear30.data.model.PlainDate
 import org.clear30.data.model.Program
 import org.clear30.data.model.ProgramAssessmentQuestion
 import org.clear30.data.model.ProgramAssessmentResponse
+import org.clear30.data.model.SlipPlan
 import org.clear30.data.model.SupabaseMessageWithStage
 import org.clear30.data.model.UserInfo
+import org.clear30.data.model.setCacheObject
+import org.clear30.data.model.toSlipPlan
 import org.clear30.data.supabase.SupabaseAssessmentResponse
 import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.SupabaseUserData
@@ -63,6 +66,12 @@ object ProgramRestoreHandler {
 
         // 2. Your why
         userInfo.userWhy = userData.your_why
+
+        // 2b. If-then slip plans (trigger_responses → SlipPlan cache — iOS
+        //     ProgramRestoreHandler.swift:103-115).
+        userData.trigger_responses?.takeIf { it.isNotEmpty() }?.let { responses ->
+            userInfo.setCacheObject(SlipPlan.CACHE_KEY, responses.map { it.toSlipPlan() })
+        }
 
         // 3. Start date — DERIVED, not read from users.start_date (iOS rule):
         //    min(earliest content date, earliest check-in date, earliest break start)

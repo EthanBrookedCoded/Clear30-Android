@@ -96,7 +96,7 @@ class ProgramMessage(
 
 // MARK: - List<ProgramMessage> helpers (ported from `extension [ProgramMessage]`)
 
-/** School messages first, then by unlockOn ascending. */
+/** Core messages first (school messages LAST within a tie), then by unlockOn ascending — matches iOS. */
 val List<ProgramMessage>.sorted: List<ProgramMessage>
     get() = sortedWith(compareBy({ it.isSchoolMessage }, { it.unlockOn }))
 

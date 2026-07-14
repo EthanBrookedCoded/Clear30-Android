@@ -179,6 +179,63 @@ object NotificationHandler {
         wm().enqueue(req)
     }
 
+    // MARK: - Health milestones
+
+    /**
+     * Schedule one notification per health category at its next milestone
+     * unlock (iOS `NotificationHandlerHealth.scheduleHealthNotifications`).
+     * Full replace of any pending health work — idempotent; called after
+     * check-ins, timeline mutations, and on tab load. Fire time = the
+     * milestone's unlock day at 10:00 local (iOS uses the per-category start
+     * time + minute_offset — this anchors on the content-unlock convention
+     * instead; WorkManager is inexact under Doze anyway, day granularity is
+     * the contract).
+     */
+    fun scheduleHealthNotifications(userInfo: UserInfo, program: Program) {
+        val settings = userInfo.notificationSettings ?: return
+        if (!settings.typeEnabled(ToggleSettingsOption.HEALTH)) {
+            wm().cancelAllWorkByTag(NotificationPostWorker.TAG_HEALTH)
+            return
+        }
+        // Health UI isn't visible on/before Day 0 of a break (iOS guard).
+        program.currentBreakNotStartSoon?.let { if (it.currentBreakDay <= 0) return }
+
+        wm().cancelAllWorkByTag(NotificationPostWorker.TAG_HEALTH)
+
+        val currentDay = program.currentDay
+        val tz = TimeZone.currentSystemDefault()
+        val nowMs = System.currentTimeMillis()
+
+        program.healthProgress
+            .filter { it.unlockedOnDay + it.setbackDays > currentDay }
+            .groupBy { it.category }
+            .forEach { (category, milestones) ->
+                val next = milestones.minByOrNull { it.unlockedOnDay + it.setbackDays } ?: return@forEach
+                val title = next.notificationTitle?.replace("_CLIENTNAME_", userInfo.name) ?: return@forEach
+                val body = next.notificationBody?.replace("_CLIENTNAME_", userInfo.name) ?: return@forEach
+
+                // Unlock day at 10:00 local.
+                val daysAhead = (next.unlockedOnDay + next.setbackDays) - currentDay
+                val fireLocal = LocalTime(10, 0).atDate(
+                    Clock.System.now().toLocalDateTime(tz).date.plus(DatePeriod(days = daysAhead)),
+                )
+                val fireAt = fireLocal.toInstant(tz).toEpochMilliseconds()
+                if (fireAt <= nowMs) return@forEach
+
+                val req = OneTimeWorkRequestBuilder<NotificationPostWorker>()
+                    .setInitialDelay(fireAt - nowMs, TimeUnit.MILLISECONDS)
+                    .addTag(NotificationPostWorker.TAG_HEALTH)
+                    .setInputData(workDataOf(
+                        NotificationPostWorker.KEY_CHANNEL to Clear30Application.CHANNEL_HEALTH,
+                        NotificationPostWorker.KEY_TITLE to title,
+                        NotificationPostWorker.KEY_BODY to body,
+                        NotificationPostWorker.KEY_NOTIF_ID to (NOTIF_ID_HEALTH + category.ordinal),
+                    ))
+                    .build()
+                wm().enqueueUniqueWork("health_${category.rawValue}", ExistingWorkPolicy.REPLACE, req)
+            }
+    }
+
     // MARK: - Bulk
 
     /** iOS `UNUserNotificationCenter.removeAllPendingNotificationRequests()`. */
@@ -187,10 +244,12 @@ object NotificationHandler {
         wm().cancelAllWorkByTag(NotificationPostWorker.TAG_CONTENT)
         wm().cancelAllWorkByTag(NotificationPostWorker.TAG_CHECK_IN)
         wm().cancelAllWorkByTag(NotificationPostWorker.TAG_POP_IN)
+        wm().cancelAllWorkByTag(NotificationPostWorker.TAG_HEALTH)
     }
 
     // Stable id buckets so we can reuse the notification slot on update.
     private const val NOTIF_ID_BASE_ABANDONED = 10_000
     private const val NOTIF_ID_CHECK_IN = 20_000
     private const val NOTIF_ID_ACHIEVEMENT = 30_000
+    private const val NOTIF_ID_HEALTH = 40_000
 }

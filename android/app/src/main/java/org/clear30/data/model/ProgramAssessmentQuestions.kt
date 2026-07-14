@@ -425,6 +425,36 @@ object AssessmentQuestions {
         min = 1, max = 1,
     )
 
+    // ─────────── New Break assessment (iOS BreakAssessmentAbstracted.swift) ───────────
+
+    val newBreakType = ProgramAssessmentQuestion(
+        questionNumber = 1,
+        type = AssessmentQuestionType.MultipleChoice,
+        strippedPrompt = AssessmentQuestionID.NEW_BREAK_TYPE.raw,
+        prompt1 = "Want to start a new break?",
+        prompt2 = "Choose a break below." +
+            if (ProgramBreakType.entries.count { !it.isStartSoon } == 1) "\n(More breaks coming soon)" else "",
+        options = ProgramBreakType.entries.filterNot { it.isStartSoon }.sortedBy { it.raw }.map { it.id },
+        displayedOptions = ProgramBreakType.entries.filterNot { it.isStartSoon }.sortedBy { it.raw }.map { it.typeName },
+        min = 1, max = 1,
+    )
+
+    val newBreakStart = ProgramAssessmentQuestion(
+        questionNumber = 2,
+        type = AssessmentQuestionType.DatePicker(cancelOption = null),
+        strippedPrompt = AssessmentQuestionID.START_DATE.raw,
+        prompt1 = "",
+        prompt2 = "When do you want to start your break?",
+        options = emptyList(),
+        min = 0, max = 14,
+    )
+
+    /** The ordered new-break question set (iOS `newClear30Questions`). */
+    val newClear30Questions: List<ProgramAssessmentQuestion> = listOf(
+        breakReason, consumptionMethod, daysUsing, moneySpent, helpHarm,
+        newBreakStart, previousBreak, triggers, afterClear30, commitment,
+    )
+
     private fun triggerAffirmation(title: String, body: String, symbol: String) = AssessmentInfoData(
         id = AssessmentInfoDataID.triggersAffirmation,
         title = title, subtitle = "", body = body,

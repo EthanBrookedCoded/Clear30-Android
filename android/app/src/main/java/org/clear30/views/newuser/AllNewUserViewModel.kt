@@ -63,8 +63,19 @@ class AllNewUserViewModel(
     }
 
     fun setAvailableSalesSlides() {
+        // Start-date step (O11): Clear30 users pick their quit date right after
+        // the notification-permission popup (Thatcher, PARITY §17-Q9). Life/
+        // moderation users skip (no break to anchor), and RESTORED accounts skip
+        // too — their break has real history, and re-picking a date would shift
+        // it. A fresh signup's break always starts today (handleBreaks Day 0 =
+        // today), so "break started today" identifies the fresh-signup case.
+        val breakStartedToday = program.currentBreak?.let {
+            org.clear30.data.model.PlainDate.from(it.startDate) ==
+                org.clear30.data.model.PlainDate.from(org.clear30.util.now())
+        } ?: false
         availableSalesSlides = buildList {
             if (experimentController.showFeature(ExperimentKey.onboardingNotifications)) add(NewUserScreen.Notifications)
+            if (clear30 && breakStartedToday) add(NewUserScreen.StartDate)
             if (experimentController.showFeature(ExperimentKey.onboardingReferral)) add(NewUserScreen.Referral)
             if (experimentController.showFeature(ExperimentKey.onboardingReviews)) add(NewUserScreen.Reviews)
             add(NewUserScreen.Payment)
@@ -81,13 +92,18 @@ class AllNewUserViewModel(
         val next: NewUserScreen? = when (_screen.value) {
             is NewUserScreen.Intro -> NewUserScreen.Assessment
             is NewUserScreen.Assessment -> NewUserScreen.SignUp
-            is NewUserScreen.SignUp ->
+            is NewUserScreen.SignUp -> {
+                // The break/program now exists (submit or restore ran) — recompute
+                // the slides so the StartDate gate sees the real break state.
+                setAvailableSalesSlides()
                 // Clear30 signups see their normative feedback first; Life (no
                 // feedback) goes straight to the sales slides (iOS handleNextScreen).
                 program.initialFeedback?.let { NewUserScreen.Feedback(it) }
                     ?: handleSalesSlide(_screen.value) ?: NewUserScreen.Payment
+            }
             is NewUserScreen.Feedback,
             is NewUserScreen.Notifications,
+            is NewUserScreen.StartDate,
             is NewUserScreen.Reviews,
             is NewUserScreen.Commitment,
             is NewUserScreen.Referral -> handleSalesSlide(_screen.value)

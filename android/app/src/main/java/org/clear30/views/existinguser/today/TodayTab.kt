@@ -119,13 +119,19 @@ private val MONTH_NAMES = listOf(
  * matching `GlobalData.shared.defaultAnimation`.
  */
 @Composable
-fun TodayTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30.data.model.JournalEntries) {
+fun TodayTab(
+    program: Program,
+    userInfo: UserInfo,
+    journalEntries: org.clear30.data.model.JournalEntries,
+    onOpenPostAssessment: (() -> Unit)? = null,
+) {
     val scope = rememberCoroutineScope()
     val logger = remember { CheckInLogger(program, userInfo, scope) }
     var refresh by remember { mutableIntStateOf(0) }
     var showCheckInSheet by remember { mutableStateOf(false) }
     var dayDetail by remember { mutableStateOf<PlainDate?>(null) }
     var showMultiCheckIn by remember { mutableStateOf(false) }
+    var showMidPilotAssessment by remember { mutableStateOf(false) }
     // In-app overlays opened from the inlined content cards (YouTube now plays
     // inline within its card).
     var webUrl by remember { mutableStateOf<String?>(null) }
@@ -169,7 +175,10 @@ fun TodayTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30.d
             val seeded = org.clear30.data.ProgramMessageHandler.applyBuiltInLessons(program, contentStart, userInfo.name)
             if (seeded > 0) refresh++
         }
-        val allMessages = program.contentInfo.values.flatMap { it.messages }
+        // School messages ride along un-notified only if they lack copy; include
+        // them like iOS AllTabs:488 (schoolMessages carry no notification copy,
+        // so scheduleContent skips them — included for parity all the same).
+        val allMessages = program.contentInfo.values.flatMap { it.messages } + program.schoolMessages
         org.clear30.data.NotificationHandler.scheduleContent(userInfo, allMessages)
         org.clear30.data.Logger.logEvent(userInfo.loggingID, org.clear30.data.LogEventType.openedCalendar)
     }
@@ -177,6 +186,21 @@ fun TodayTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30.d
     // Auto-prompt the catch-up flow when 2+ recent days are unlogged (iOS multi-check-in).
     LaunchedEffect(Unit) {
         if (missedCheckInDays(program).size >= 2) showMultiCheckIn = true
+    }
+
+    // Mid-pilot assessment (F2 — iOS TodayFeedView.handlePopups:290-300): a
+    // school user with 10+ checked-in days who hasn't completed it. On-load
+    // only for v1 (iOS also re-checks after check-ins); deferred while another
+    // sheet is up.
+    LaunchedEffect(showMultiCheckIn, showCheckInSheet) {
+        if (userInfo.schoolId != null &&
+            userInfo.midPilotAssessmentCompleted != true &&
+            program.numDaysCheckedIn >= 10 &&
+            !showMultiCheckIn && !showCheckInSheet && !showMidPilotAssessment
+        ) {
+            kotlinx.coroutines.delay(500)
+            showMidPilotAssessment = true
+        }
     }
 
     // Recent community posts for the in-feed carousel (iOS TodayFeedCommunity).
@@ -189,9 +213,12 @@ fun TodayTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30.d
     // `.reversed()` would also flip within-day order, putting a day's
     // assessment-response messages before its core message.
     val messages = remember(selectedDay, refresh) {
-        program.contentInfo.values.flatMap { it.messages }.unlocked
+        // School messages merge into the same feed (iOS ProgramContent.swift:96):
+        // within a day, core content first, school content appended after.
+        (program.contentInfo.values.flatMap { it.messages } + program.schoolMessages).unlocked
             .sortedWith(
                 compareByDescending<org.clear30.data.model.ProgramMessage> { PlainDate.from(it.unlockOn) }
+                    .thenBy { it.isSchoolMessage }
                     .thenBy { it.unlockOn },
             )
     }
@@ -235,6 +262,16 @@ fun TodayTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30.d
 
     Column(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding)) {
         @Suppress("UNUSED_EXPRESSION") refresh
+
+        // Pending post-assessment card (iOS PopUps.swift:31-33) — tap opens the flow.
+        val postAssessmentText = program.postAssessmentCardText
+        if (postAssessmentText != null && onOpenPostAssessment != null) {
+            org.clear30.views.existinguser.postassessment.PostAssessmentPopupCard(
+                text = postAssessmentText,
+                modifier = Modifier.padding(bottom = Dimens.cardSpacing / 2),
+                onClick = onOpenPostAssessment,
+            )
+        }
 
         TodayTopSection(
             program = program,
@@ -410,6 +447,12 @@ fun TodayTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30.d
                 logger = logger,
                 onDismiss = { showMultiCheckIn = false; refresh++ },
             )
+        }
+    }
+
+    if (showMidPilotAssessment) {
+        org.clear30.views.existinguser.midpilot.MidPilotAssessment(userInfo) {
+            showMidPilotAssessment = false
         }
     }
 

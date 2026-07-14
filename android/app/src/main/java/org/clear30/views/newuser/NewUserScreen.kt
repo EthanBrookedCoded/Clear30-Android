@@ -12,6 +12,7 @@ sealed class NewUserScreen(val type: String) {
     data object SignUp : NewUserScreen("sign_up")
     data class Feedback(val feedback: ProgramNormativeFeedback) : NewUserScreen("feedback")
     data object Notifications : NewUserScreen("notifications")
+    data object StartDate : NewUserScreen("start_date")
     data object Reviews : NewUserScreen("reviews")
     data object Commitment : NewUserScreen("commitment")
     data object Referral : NewUserScreen("referral")

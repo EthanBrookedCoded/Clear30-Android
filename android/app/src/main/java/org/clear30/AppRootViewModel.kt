@@ -103,6 +103,13 @@ class AppRootViewModel : ViewModel() {
             if (userInfo.loggingID.isNotEmpty()) {
                 org.clear30.data.supabase.refreshExperiments(experimentController, userInfo)
             }
+
+            // School mode: refresh the cached school bundle each launch (iOS
+            // ContentView.swift:239) — non-blocking, after routing like the
+            // experiments pull. AllTabs regenerates the feed messages from it.
+            if (userInfo.schoolData != null) {
+                org.clear30.data.updateSchoolData(userInfo)
+            }
         }
     }
 
@@ -118,6 +125,9 @@ class AppRootViewModel : ViewModel() {
             Logger.logEvent(userInfo.loggingID, LogEventType.openedApp)
         }
         userInfo.sessions.add(now())
+
+        // Back-fill schoolId from an already-cached school bundle (iOS ContentView:272).
+        if (userInfo.schoolId == null) userInfo.schoolId = userInfo.schoolData?.school_id
 
         // Sync the paid entitlement from RevenueCat on load — restores paid state on
         // a reinstall / new device. Only sets when RevenueCat reports an active

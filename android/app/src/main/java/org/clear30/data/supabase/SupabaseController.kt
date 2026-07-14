@@ -86,11 +86,17 @@ object SupabaseController {
         val message: String,
     )
 
-    // MARK: - RPC (public schema)
+    // MARK: - RPC
+    // All overloads take an optional [schema] — iOS calls non-public functions via
+    // `client.schema("schools").rpc(...)`; supabase-kt exposes the same thing as a
+    // per-request builder property. null = the default (public) schema.
 
     /** rpc with no params. */
-    suspend fun callFunction(function: SupabaseFunction): SupabaseFunctionError? = runCatching {
-        client.postgrest.rpc(function.rawValue)
+    suspend fun callFunction(
+        function: SupabaseFunction,
+        schema: String? = null,
+    ): SupabaseFunctionError? = runCatching {
+        client.postgrest.rpc(function.rawValue) { if (schema != null) this.schema = schema }
     }.fold({ null }, { it.toError() })
 
     /**
@@ -103,21 +109,23 @@ object SupabaseController {
     suspend inline fun <reified T : Any> callFunction(
         function: SupabaseFunction,
         params: T,
+        schema: String? = null,
     ): SupabaseFunctionError? = runCatching {
         val paramsJson = decoder.encodeToJsonElement(decoder.serializersModule.serializer<T>(), params)
             as kotlinx.serialization.json.JsonObject
-        client.postgrest.rpc(function.rawValue, paramsJson)
+        client.postgrest.rpc(function.rawValue, paramsJson) { if (schema != null) this.schema = schema }
     }.fold({ null }, { it.toError() })
 
     /** rpc returning a decoded value. */
     suspend inline fun <reified U : Any> callFunction(
         function: SupabaseFunction,
         @Suppress("UNUSED_PARAMETER") returnType: Class<U>,
+        schema: String? = null,
     ): Pair<U?, SupabaseFunctionError?> = runCatching {
         // supabase-kt's PostgrestResult.decodeAs<T> constrains T : Any, so
         // the wrapper has to match — otherwise the call-site type can be a
         // nullable T? which decodeAs refuses.
-        client.postgrest.rpc(function.rawValue).decodeAs<U>()
+        client.postgrest.rpc(function.rawValue) { if (schema != null) this.schema = schema }.decodeAs<U>()
     }.fold({ it to null }, { null to it.toError() })
 
     /** rpc with params returning a decoded value. */
@@ -125,10 +133,11 @@ object SupabaseController {
         function: SupabaseFunction,
         params: T,
         @Suppress("UNUSED_PARAMETER") returnType: Class<U>,
+        schema: String? = null,
     ): Pair<U?, SupabaseFunctionError?> = runCatching {
         val paramsJson = decoder.encodeToJsonElement(decoder.serializersModule.serializer<T>(), params)
             as kotlinx.serialization.json.JsonObject
-        client.postgrest.rpc(function.rawValue, paramsJson).decodeAs<U>()
+        client.postgrest.rpc(function.rawValue, paramsJson) { if (schema != null) this.schema = schema }.decodeAs<U>()
     }.fold({ it to null }, { null to it.toError() })
 
     // MARK: - Edge functions
@@ -201,6 +210,10 @@ value class SupabaseFunction(val rawValue: String) {
         val checkGuardianCode = SupabaseFunction("check_code")
         val incrementAssessmentSocialProofCount = SupabaseFunction("increment_assessment_social_proof_count")
         val getSupabaseExperiments = SupabaseFunction("get_user_experiments")
+        // School / pilot
+        val getSchoolData = SupabaseFunction("get_school_data")
+        val getAssessmentStatus = SupabaseFunction("get_assessment_status") // schema "schools"
+        val submitMidPilotAssessment = SupabaseFunction("submit_mid_pilot_assessment") // schema "schools"
     }
 }
 
@@ -223,6 +236,7 @@ object SupabaseUserProps {
     const val SMS_SETTINGS = "sms_settings"
     const val NOTIFICATION_SETTINGS = "notification_settings"
     const val YOUR_WHY = "your_why"
+    const val TRIGGER_RESPONSES = "trigger_responses"
     const val LAST_SMOKED = "last_smoked"
     const val CUSTOM_CHECK_INS = "custom_check_ins"
     const val CONTENT_INFO = "content_info"

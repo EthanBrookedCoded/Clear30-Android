@@ -175,6 +175,14 @@ fun AllSignUp(
                             else SupabaseController.verifyOtpPhone(target, code)
                             if (err == null) {
                                 patchUserAfterAuth(userInfo, target, isEmail)
+                                // Email path only (iOS AllSignUpViewModel.swift:144-146):
+                                // domain-allowlist unlock + school-mode hydration,
+                                // fire-and-forget alongside the restore/submit flow.
+                                if (isEmail) {
+                                    scope.launch {
+                                        org.clear30.views.newuser.ReferralCodeHandler.handleEmail(userInfo)
+                                    }
+                                }
                                 // DB-level returning-user detection after EVERY verify
                                 // (iOS checkIfReturningUser): a users row with non-empty
                                 // content_info must RESTORE — even when the user came in

@@ -66,6 +66,17 @@ suspend fun SupabaseController.updateNotificationSettings(settings: ToggleSettin
 suspend fun SupabaseController.updateYourWhy(yourWhy: String): SupabaseFunctionError? =
     updateUser(cols(SupabaseUserProps.YOUR_WHY to JsonPrimitive(yourWhy)))
 
+/** Replace the user's if-then slip plans (iOS `updateTriggerResponses`). */
+suspend fun SupabaseController.updateTriggerResponses(responses: List<SupabaseTriggerResponse>): SupabaseFunctionError? =
+    updateUser(
+        cols(
+            SupabaseUserProps.TRIGGER_RESPONSES to decoder.encodeToJsonElement(
+                kotlinx.serialization.builtins.ListSerializer(SupabaseTriggerResponse.serializer()),
+                responses,
+            ),
+        ),
+    )
+
 // Normative feedback
 
 @Serializable

@@ -47,6 +47,12 @@ class ProgramBreak(
     fun getAssessmentResponse(strippedPrompt: String): ProgramAssessmentResponse? =
         assessmentResponses.firstOrNull { it.question.strippedPrompt == strippedPrompt }
 
+    /** All chosen option strings for a multi-choice answer (iOS `getMultiAssessmentResponses`). */
+    fun getMultiAssessmentResponses(strippedPrompt: String): List<String> {
+        val response = getAssessmentResponse(strippedPrompt) ?: return emptyList()
+        return response.responses.mapNotNull { response.question.options.getOrNull(it) }
+    }
+
     /** Days/week of use from the assessment (iOS `getInitialWeeklyUsage`). */
     fun getInitialWeeklyUsage(): Float? {
         val response = getAssessmentResponse(AssessmentQuestionID.DAYS_USING.raw) ?: return null

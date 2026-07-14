@@ -94,7 +94,9 @@ val LocalInfoSlideController = compositionLocalOf { InfoSlideController() }
 @Composable
 fun AssessmentInfoSlide(
     data: AssessmentInfoData,
-    vm: AssessmentViewModel,
+    // Null outside onboarding (new-break / mid-pilot / post-assessment reuse the
+    // plain info layout without the onboarding VM's custom views).
+    vm: AssessmentViewModel?,
     onGradient: Boolean,
     onPrimary: () -> Unit,
     onSecondary: (() -> Unit)? = null,
@@ -179,8 +181,9 @@ fun AssessmentInfoSlide(
  * which fall through to the base layout above.
  */
 @Composable
-private fun customViewFor(data: AssessmentInfoData, vm: AssessmentViewModel): (@Composable () -> Unit)? =
-    when (data.id) {
+private fun customViewFor(data: AssessmentInfoData, vm: AssessmentViewModel?): (@Composable () -> Unit)? =
+    if (vm == null) null
+    else when (data.id) {
         AssessmentInfoDataID.socialProof -> ({ AssessmentSocialProof(vm.name) })
         AssessmentInfoDataID.credibility -> ({ AssessmentCredibility() })
         AssessmentInfoDataID.currentUseSummary -> ({ AssessmentPainPoint(vm.name, vm.responses) })

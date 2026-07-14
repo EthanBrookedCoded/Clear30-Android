@@ -108,6 +108,8 @@ fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30
     }
     // Meditation tapped on the hub's library rail — opens the standard sheet.
     var meditationSheet by remember { mutableStateOf<org.clear30.data.model.ProgramMeditation?>(null) }
+    // "Slip up?" hero → the full slipped sheet (iOS SlippedSheet).
+    var showSlipped by remember { mutableStateOf(false) }
 
     // Pull the program's messages from Supabase so the library rails populate even
     // if the user opens Support before the Today tab (mirrors TodayTab's fetch).
@@ -203,12 +205,10 @@ fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30
         }
 
         // Immediate support — iOS order: slipped, craving, sleep, Claire
-        // (Support2.swift:156-168). The full SlippedSheet flow isn't ported yet,
-        // so the slipped hero routes to Claire with a slip-support prompt — the
-        // iOS sheet's "Talk it out" activity offers Claire as a destination too.
+        // (Support2.swift:156-168).
         SectionLabel("Immediate support")
         SupportHero("leaf.fill", "Slip up?", "A moment of support", Clear30Gradients.slipped, Clear30Colors.slipped1) {
-            push(SupportRoute.Claire("Claire, I slipped up and could use a moment of support."))
+            showSlipped = true
         }
         SupportHero("flame.fill", "Cravings?", "Help is here", Clear30Gradients.red, Clear30Colors.red2) { push(SupportRoute.Cravings) }
         SupportHero("moon.fill", "Trouble Sleeping?", "Wind down", Clear30Gradients.sleep, Clear30Colors.sleep1) { push(SupportRoute.Sleep) }
@@ -295,6 +295,19 @@ fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30
 
     meditationSheet?.let { med ->
         MeditationPage(meditation = med, program = program, onDismiss = { meditationSheet = null })
+    }
+
+    if (showSlipped) {
+        org.clear30.views.existinguser.support.slipped.SlippedSheet(
+            userInfo = userInfo,
+            program = program,
+            callbacks = org.clear30.views.existinguser.support.slipped.SlippedCallbacks(
+                onDismiss = { showSlipped = false },
+                onOpenClaire = { push(SupportRoute.Claire("")) },
+                onOpenDrFred = { push(SupportRoute.DrFred) },
+                onOpenPeerSupport = { push(SupportRoute.PeerSupport) },
+            ),
+        )
     }
 }
 

@@ -66,9 +66,15 @@ fun AllNewUser(
             )
             is NewUserScreen.Feedback -> NormativeFeedbackView(s.feedback, userInfo, onNext = vm::handleNextScreen)
             is NewUserScreen.Notifications -> OnboardingNotificationRequest(onComplete = vm::handleNextScreen)
+            is NewUserScreen.StartDate -> OnboardingStartDateSlide(
+                userInfo = userInfo,
+                program = program,
+                scope = scope,
+                onNext = vm::handleNextScreen,
+            )
             is NewUserScreen.Reviews -> ReviewsSlide(userInfo, onNext = vm::handleNextScreen)
             is NewUserScreen.Commitment -> CommitmentSlide(userInfo, onNext = vm::handleNextScreen)
-            is NewUserScreen.Referral -> ReferralSlide(userInfo, onNext = vm::handleNextScreen)
+            is NewUserScreen.Referral -> ReferralSlide(userInfo, onboardingSetup, onNext = vm::handleNextScreen)
             is NewUserScreen.Payment -> Paywall(userInfo = userInfo, popup = false) { entitlement -> vm.handlePayment(entitlement) }
         }
     }

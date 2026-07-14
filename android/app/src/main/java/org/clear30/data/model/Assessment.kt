@@ -114,6 +114,16 @@ value class AssessmentInfoDataID(val raw: String) {
         val clear30Context = AssessmentInfoDataID("clear30_context")
         val lifeContext = AssessmentInfoDataID("life_context")
         val planPath = AssessmentInfoDataID("plan_path")
+        // New-break / mid-pilot / post-assessment flows (Wave 6).
+        val newBreakLoading = AssessmentInfoDataID("new_break_loading")
+        val midPilotAssessment = AssessmentInfoDataID("mid_pilot_assessment")
+        val postAssessmentWelcome = AssessmentInfoDataID("post_assessment_welcome")
+        val postAssessmentInterview = AssessmentInfoDataID("post_assessment_interview")
+        val postAssessmentTestimonial = AssessmentInfoDataID("post_assessment_testimonial")
+        val postAssessmentBreakdown = AssessmentInfoDataID("post_assessment_breakdown")
+        val postAssessmentLifeContext = AssessmentInfoDataID("post_assessment_life_context")
+        val postAssessmentCoachReferral = AssessmentInfoDataID("post_assessment_coach_referral")
+        val postAssessmentLoading = AssessmentInfoDataID("post_assessment_loading")
         // (additional ids added as referenced by onboarding slides)
     }
 }

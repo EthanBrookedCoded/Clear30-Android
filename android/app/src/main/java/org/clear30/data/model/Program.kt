@@ -128,6 +128,45 @@ class Program(
     /** Days checked in as smoked (iOS `numDaysSmoked`). */
     val numDaysSmoked: Int get() = dayInfo.values.count { it.sober == false }
 
+    /** Days with ANY weed check-in, sober or not (iOS `numDaysCheckedIn`). */
+    val numDaysCheckedIn: Int get() = dayInfo.values.count { it.sober != null }
+
+    /** Per-break day-info window: [startDate, endDate) (iOS `dayInfo(programBreak:)`). */
+    private fun dayInfoIn(programBreak: ProgramBreak): List<ProgramDayInfo> {
+        val start = PlainDate.from(programBreak.startDate)
+        val end = PlainDate.from(programBreak.endDate)
+        return dayInfo.filterKeys { it >= start && it < end }.values.toList()
+    }
+
+    fun numDaysSober(programBreak: ProgramBreak): Int =
+        dayInfoIn(programBreak).count { it.sober == true }
+
+    fun numDaysCheckedIn(programBreak: ProgramBreak): Int =
+        dayInfoIn(programBreak).count { it.sober != null }
+
+    /**
+     * % decrease in smoking frequency vs the assessment baseline (iOS
+     * `getDeltaSmokingFrequency`, ProgramAssessment.swift:439): the current
+     * smoked-day rate over the break vs the initial weekly frequency. Shared by
+     * the check-in rewards and the post-assessment intro.
+     */
+    fun getDeltaSmokingFrequency(programBreak: ProgramBreak): Int? {
+        val initialWeeklyUsage = programBreak.getInitialWeeklyUsage() ?: return null
+        val initialWeeklyFrequency = (initialWeeklyUsage / 7.0f) * 100.0f
+        if (initialWeeklyFrequency <= 0f) return null
+
+        val start = PlainDate.from(programBreak.startDate)
+        val today = PlainDate.from(org.clear30.util.now())
+        val entries = dayInfo.filterKeys { it in start..today }.values
+        val checkedIn = entries.count { it.sober != null }.toFloat()
+        val soberDays = entries.count { it.sober == true }.toFloat()
+
+        val currentFrequency =
+            if (checkedIn != 0f) ((checkedIn - soberDays) / checkedIn) * 100.0f
+            else initialWeeklyFrequency
+        return (((initialWeeklyFrequency - currentFrequency) / initialWeeklyFrequency) * 100.0f).toInt()
+    }
+
     /**
      * Recompute each health milestone's setback (iOS `updateProgramHealthSetbackDays`).
      * The health timeline renders `currentDay - setbackDays`, so each logged slip pushes

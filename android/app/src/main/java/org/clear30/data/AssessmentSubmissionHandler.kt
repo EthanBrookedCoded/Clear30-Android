@@ -148,6 +148,57 @@ object AssessmentSubmissionHandler {
     }
 
     /**
+     * Start a brand-new Clear30 from an existing account — the Profile "New
+     * Break" flow (iOS `handleNewBreak`, AssessmentSubmissionHandler.swift:265-353).
+     * Builds the break(s), submits under `"clear30"`, keeps the response ID +
+     * normative feedback on the break, then splices the new content in via
+     * [ProgramTimelineHandler.newClear30]. Returns an error message or null.
+     */
+    suspend fun handleNewBreak(
+        userInfo: UserInfo,
+        program: Program,
+        breakType: ProgramBreakType,
+        responses: List<ProgramAssessmentResponse>,
+    ): String? {
+        // 1. Create the break object(s). NOTE: unlike iOS, the breaks are NOT
+        //    appended here — Android's newClear30 appends them itself (guarding
+        //    on identity), so appending twice would duplicate.
+        val (startSoonBreak, mainBreak) = ProgramTimelineHandler.handleBreaks(breakType, responses)
+
+        // 2. Submit the responses under the break's assessment id ("clear30").
+        val (responseID, submitError) = SupabaseController.submitAssessment(breakType.assessmentType.string, responses)
+        if (submitError != null) return "Error with submitting responses: ${submitError.message}"
+        mainBreak.assessmentResponseID = responseID?.toInt()
+
+        // 3. Normative feedback, anchored on the chosen start date (default tomorrow).
+        val startDate = responses
+            .firstOrNull { it.question.strippedPrompt == AssessmentQuestionID.START_DATE.raw }
+            ?.question?.options?.firstOrNull()
+            ?.let { runCatching { org.clear30.data.model.PlainDate.parse(it) }.getOrNull() }
+            ?.dateObject
+            ?: now().justDay.adding(days = 1)
+        val (feedback, feedbackError) = SupabaseController.getNormativeFeedback(
+            userID = userInfo.userID,
+            lastSmoked = program.lastSmoked,
+            startDate = startDate,
+        )
+        if (feedbackError != null) return "Could not get feedback. ${feedbackError.message}"
+        if (feedback == null) return "Could not get feedback. Feedback is nil."
+        mainBreak.normativeFeedback = feedback
+
+        // 4. Start the break — content splice, health recompute, save + push.
+        ProgramTimelineHandler.newClear30(
+            program = program,
+            mainBreak = mainBreak,
+            startSoonBreak = startSoonBreak,
+            clientName = userInfo.name,
+        )?.let { return "Could not start break: $it" }
+
+        Logger.logEvent(userInfo.loggingID, LogEventType.completedAssessment, mapOf(LogEventExtraDataType.TYPE to "new_clear30"))
+        return null
+    }
+
+    /**
      * The Life ("Better Life Program") track (iOS `handleLife`): submit under
      * `"life-onboarding"` (NOT `"life"`, the post-assessment ID), set the
      * moderation mode from LO-Use-State, and start the core program.

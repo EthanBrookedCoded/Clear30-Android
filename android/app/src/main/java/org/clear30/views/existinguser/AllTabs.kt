@@ -16,6 +16,9 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.clear30.data.LogEventType
 import org.clear30.data.Logger
+import org.clear30.data.getMessages
+import org.clear30.util.daysTo
+import org.clear30.util.now
 import org.clear30.data.model.Program
 import org.clear30.data.model.UserInfo
 import org.clear30.views.existinguser.community.CommunityTab
@@ -38,9 +41,34 @@ fun AllTabs(
     userInfo: UserInfo,
     program: Program,
     journalEntries: org.clear30.data.model.JournalEntries,
+    experimentController: org.clear30.data.model.ExperimentController,
     onSignOut: () -> Unit,
 ) {
     var selected by remember { mutableStateOf(CustomTabBarItem.TODAY) }
+    var showPostAssessment by remember { mutableStateOf(false) }
+
+    // Post-assessment auto-open (iOS AllTabs.swift:560-566): the break's N days
+    // elapsed without completing it → present the flow, unless the welcome-back
+    // window (5+ days away) owns the popup slot.
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        val awayDays = userInfo.previousSessionDate?.daysTo(now()) ?: 0
+        if (program.postAssessmentCardText != null && awayDays < 5 && program.lastBreak != null) {
+            showPostAssessment = true
+        }
+    }
+
+    // Once per app-load (iOS AllTabs.swift:455-485): regenerate the transient
+    // school messages, pull the health timeline content, and arm the milestone
+    // notifications.
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        userInfo.schoolData?.let {
+            program.schoolMessages = it.getMessages(program, userInfo).toMutableList()
+        }
+        runCatching {
+            org.clear30.data.HealthDataHandler.ensureHealthData(userInfo, program)
+            org.clear30.data.NotificationHandler.scheduleHealthNotifications(userInfo, program)
+        }
+    }
 
     // React to deep-link / push-notification tab requests from AppState.
     val requested by org.clear30.AppState.requestedTab.collectAsStateWithLifecycle()
@@ -68,14 +96,32 @@ fun AllTabs(
             // as the incoming fades in.
             Crossfade(targetState = selected, animationSpec = tween(durationMillis = 280), label = "tab") { tab ->
                 when (tab) {
-                    CustomTabBarItem.TODAY -> TodayTab(program, userInfo, journalEntries)
+                    CustomTabBarItem.TODAY -> TodayTab(
+                        program, userInfo, journalEntries,
+                        onOpenPostAssessment = { showPostAssessment = true },
+                    )
                     CustomTabBarItem.COMMUNITY -> CommunityTab(program, userInfo)
                     CustomTabBarItem.GROUPS -> GroupsTab(program, userInfo)
-                    CustomTabBarItem.PROFILE -> ProfileTab(userInfo, program, journalEntries, onSignOut)
+                    CustomTabBarItem.PROFILE -> ProfileTab(
+                        userInfo, program, journalEntries, onSignOut,
+                        onOpenPostAssessment = { showPostAssessment = true },
+                    )
                     CustomTabBarItem.SUPPORT -> SupportTab(program, userInfo, journalEntries)
                 }
             }
         }
+    }
+
+    if (showPostAssessment) {
+        program.lastBreak?.let { lastBreak ->
+            org.clear30.views.existinguser.postassessment.PostAssessment(
+                userInfo = userInfo,
+                program = program,
+                currentBreak = lastBreak,
+                experimentController = experimentController,
+                completion = { showPostAssessment = false },
+            )
+        } ?: run { showPostAssessment = false }
     }
 }
 

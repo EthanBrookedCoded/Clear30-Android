@@ -151,7 +151,7 @@ fun AssessmentSlider(question: ProgramAssessmentQuestion, valueLabel: String, on
  * caller snaps to whole values on release.
  */
 @Composable
-private fun GradientSlider(
+internal fun GradientSlider(
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
     onValueChange: (Float) -> Unit,

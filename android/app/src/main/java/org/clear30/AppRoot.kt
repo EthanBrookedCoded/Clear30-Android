@@ -14,6 +14,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import org.clear30.data.getMessages
+import org.clear30.data.supabase.getSchoolData
 import org.clear30.views.newuser.AllNewUser
 import org.clear30.views.existinguser.AllTabs
 import org.clear30.views.theme.Clear30Colors
@@ -73,6 +75,40 @@ fun AppRoot(viewModel: AppRootViewModel = viewModel()) {
             is org.clear30.data.DeepLinkRoute.Claire,
             is org.clear30.data.DeepLinkRoute.DrFred -> AppState.requestTab("SUPPORT")
             is org.clear30.data.DeepLinkRoute.Settings -> AppState.requestTab("PROFILE")
+            is org.clear30.data.DeepLinkRoute.School -> {
+                // School unlock (iOS URLManager.swift:52-72): fetch the bundle,
+                // gift the app (freeCode), hydrate school mode, and regenerate
+                // the feed's school messages so no relaunch is needed. Setting
+                // schoolId immediately is a deliberate (safe) deviation — iOS
+                // leaves it to the next-launch back-fill.
+                val userInfo = (state as? AppRootState.ExistingUser)?.userInfo
+                    ?: (state as? AppRootState.NewUser)?.userInfo
+                if (userInfo != null) {
+                    val schoolData = org.clear30.data.supabase.SupabaseController.getSchoolData(route.schoolID)
+                    if (schoolData != null) {
+                        userInfo.freeCode = route.schoolID
+                        userInfo.schoolData = schoolData
+                        userInfo.schoolId = schoolData.school_id
+                        viewModel.program.schoolMessages =
+                            schoolData.getMessages(viewModel.program, userInfo).toMutableList()
+                        org.clear30.data.AlertHandler.info(
+                            "${schoolData.short_name} has unlocked Clear30 for you!",
+                            "Enjoy full access along with content from ${schoolData.long_name}.",
+                        )
+                        org.clear30.data.Clear30Store.save(userInfo)
+                        if (!userId.isNullOrEmpty()) {
+                            org.clear30.data.Logger.logEvent(
+                                userId,
+                                org.clear30.data.LogEventType.openedFromLink,
+                                mapOf(
+                                    org.clear30.data.LogEventExtraDataType.TITLE to "school",
+                                    org.clear30.data.LogEventExtraDataType.TYPE to route.schoolID,
+                                ),
+                            )
+                        }
+                    }
+                }
+            }
             is org.clear30.data.DeepLinkRoute.Unrecognized -> Unit
         }
         // Stash the payload-bearing routes so the destination tab can drive
@@ -112,6 +148,7 @@ fun AppRoot(viewModel: AppRootViewModel = viewModel()) {
                         userInfo = s.userInfo,
                         program = viewModel.program,
                         journalEntries = viewModel.journalEntries,
+                        experimentController = viewModel.experimentController,
                         onSignOut = viewModel::signOut,
                     )
                 }

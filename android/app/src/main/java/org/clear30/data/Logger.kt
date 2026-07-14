@@ -78,6 +78,7 @@ value class LogEventType(val rawValue: String) {
         val enabledAchievementNotifications = LogEventType("enabled_achievement_notifications")
 
         // Check-in
+        val checkedIn = LogEventType("checked_in")
         val loggedCheckIn = LogEventType("logged_check_in")
         val smokedCheckIn = LogEventType("smoked_check_in")
         val unloggedCheckIn = LogEventType("unlogged_check_in")
@@ -147,7 +148,13 @@ value class LogEventType(val rawValue: String) {
         val openedPreviousBreak = LogEventType("opened_previous_break")
         val sharedCalendar = LogEventType("shared_calendar")
 
+        // Slipped sheet (Support tab "Slip up?")
+        val slippedSheetOpened = LogEventType("slipped_sheet_opened")
+        val slippedActivitySwapped = LogEventType("slipped_activity_swapped")
+        val slippedActivityEngaged = LogEventType("slipped_activity_engaged")
+
         // Deep links / pushes — fired from URLManager / FCM dispatcher.
+        val openedFromLink = LogEventType("opened_from_link")
         val deepLinkReceived = LogEventType("deep_link_received")
         val pushReceived = LogEventType("push_received")
         val pushOpened = LogEventType("push_opened")

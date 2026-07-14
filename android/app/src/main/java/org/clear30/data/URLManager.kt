@@ -23,6 +23,8 @@ sealed interface DeepLinkRoute {
 
     data class Post(val id: String) : DeepLinkRoute
     data class Group(val code: String) : DeepLinkRoute
+    /** `?school=<id>` on ANY inbound URL — unlocks the app + school content (iOS URLManager.swift:52-72). */
+    data class School(val schoolID: String) : DeepLinkRoute
     data class Meditation(val url: String) : DeepLinkRoute
     /** The all-messages library on the Support tab (feed-end "All Messages" CTA). */
     data object Messages : DeepLinkRoute
@@ -57,6 +59,12 @@ object URLManager {
         // that case.
         val kind = if (host == "clear30.org") segments.firstOrNull()?.lowercase().orEmpty() else host
         val tail = if (host == "clear30.org") segments.drop(1) else segments
+
+        // School unlock rides on ANY inbound URL as a query param — checked
+        // before the kind dispatch, like iOS checks it before group_id.
+        uri.getQueryParameter("school")?.takeIf { it.isNotBlank() }?.let {
+            return DeepLinkRoute.School(it)
+        }
 
         return when (kind) {
             "today", "home" -> DeepLinkRoute.Today

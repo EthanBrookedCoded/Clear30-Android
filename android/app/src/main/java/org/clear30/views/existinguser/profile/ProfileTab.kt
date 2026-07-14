@@ -79,6 +79,7 @@ fun ProfileTab(
     program: Program,
     journalEntries: JournalEntries,
     onSignOut: () -> Unit,
+    onOpenPostAssessment: (() -> Unit)? = null,
 ) {
     var showSettings by remember { mutableStateOf(false) }
     var showJournal by remember { mutableStateOf(false) }
@@ -88,6 +89,15 @@ fun ProfileTab(
     // Bumped after a program mutation (new break) so the cards below recompute —
     // `program` is a plain model, not observable.
     var refresh by remember { mutableIntStateOf(0) }
+
+    // Make sure the health timeline content is loaded (N2 — AllTabs also fetches
+    // on app load; this covers the race when Profile renders first) and bump
+    // [refresh] so the gauges/timeline re-read program.healthProgress.
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        runCatching {
+            if (org.clear30.data.HealthDataHandler.ensureHealthData(userInfo, program)) refresh++
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
         Column(
@@ -105,6 +115,15 @@ fun ProfileTab(
                 Heading1(userInfo.name.ifBlank { "You" })
                 Spacer(Modifier.weight(1f))
                 CircleIconButton("gearshape.fill") { showSettings = true }
+            }
+
+            // Pending post-assessment card (iOS Profile.swift:181-184).
+            val postAssessmentText = program.postAssessmentCardText
+            if (postAssessmentText != null && onOpenPostAssessment != null) {
+                org.clear30.views.existinguser.postassessment.PostAssessmentPopupCard(
+                    text = postAssessmentText,
+                    onClick = onOpenPostAssessment,
+                )
             }
 
             // ===== Overall Progress =====
@@ -168,9 +187,9 @@ fun ProfileTab(
         }
 
         if (showNewBreak) {
-            NewBreakSheet(
-                program = program,
+            org.clear30.views.existinguser.profile.newbreak.BreakAssessmentFlow(
                 userInfo = userInfo,
+                program = program,
                 onDismiss = { showNewBreak = false },
                 onCreated = { refresh++; showNewBreak = false },
             )

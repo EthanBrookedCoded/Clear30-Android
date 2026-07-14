@@ -60,12 +60,22 @@ private val MONTHS = listOf(
  * Material `DatePicker` dialog for a friendlier, on-brand UX.
  *
  * [onResult] fires with the chosen new start date, or null on cancel/close.
+ *
+ * The onboarding start-date step (O11 — iOS `Tutorial2DatePicker`) reuses this
+ * with [initialSelection] (default tomorrow), [requireChange] = false (the
+ * pre-selected date is confirmable as-is), [showClose] = false (the step can't
+ * be dismissed), and a [confirmLabel] producing Today/Tomorrow/"Jul 18"-style
+ * button text.
  */
 @Composable
 fun StartDateCalendarPicker(
     currentStartDate: PlainDate,
     minOffsetDays: Int = -28,
     maxOffsetDays: Int = 12,
+    initialSelection: PlainDate? = null,
+    requireChange: Boolean = true,
+    showClose: Boolean = true,
+    confirmLabel: ((PlainDate?) -> String)? = null,
     onResult: (PlainDate?) -> Unit,
 ) {
     val today = remember { PlainDate.from(now()) }
@@ -73,11 +83,13 @@ fun StartDateCalendarPicker(
     val maxDate = remember { today.adding(days = maxOffsetDays) }
     val startMonth = remember { firstOfMonth(minDate) }
     val totalMonths = remember { startMonth.monthsTo(firstOfMonth(maxDate)).coerceAtLeast(0) }
-    var index by remember { mutableStateOf(startMonth.monthsTo(firstOfMonth(today)).coerceIn(0, totalMonths)) }
-    var selected by remember { mutableStateOf<PlainDate?>(null) }
+    var index by remember {
+        mutableStateOf(startMonth.monthsTo(firstOfMonth(initialSelection ?: today)).coerceIn(0, totalMonths))
+    }
+    var selected by remember { mutableStateOf(initialSelection) }
 
     val anchor = startMonth.adding(months = index)
-    val changed = selected != null && selected != currentStartDate
+    val changed = selected != null && (!requireChange || selected != currentStartDate)
     val canPrev = index > 0
     val canNext = index < totalMonths
 
@@ -89,7 +101,7 @@ fun StartDateCalendarPicker(
                     SmallText(monthLabel(a, today), color = Clear30Colors.text.copy(alpha = 0.5f))
                 }
                 Spacer(Modifier.weight(1f))
-                CloseButton { onResult(null) }
+                if (showClose) CloseButton { onResult(null) }
             }
 
             // Weekday labels, centered over each day column.
@@ -116,10 +128,15 @@ fun StartDateCalendarPicker(
                 }
             }
 
-            // Confirm — disabled/dimmed until a new date is chosen.
+            // Confirm — disabled/dimmed until a (new) date is chosen.
             val delta = selected?.let { today.daysTo(it) } ?: 0
+            val title = when {
+                confirmLabel != null && changed -> confirmLabel(selected)
+                changed -> relativeDayDescription(delta)
+                else -> "Select new start date"
+            }
             StretchedButton(
-                title = if (changed) relativeDayDescription(delta) else "Select new start date",
+                title = title,
                 gradient = if (changed) Clear30Gradients.clear30 else null,
                 modifier = Modifier.fillMaxWidth().padding(top = Dimens.cardSpacing).alpha(if (changed) 1f else 0.5f),
             ) { if (changed) selected?.let(onResult) }

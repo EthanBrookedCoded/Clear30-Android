@@ -220,7 +220,13 @@ private fun MultipleChoiceButton(
  * layouts are simplified to a flat list for now.)
  */
 @Composable
-fun AssessmentMultipleChoice(question: ProgramAssessmentQuestion, onCompleted: (List<Int>) -> Unit) {
+fun AssessmentMultipleChoice(
+    question: ProgramAssessmentQuestion,
+    // Options that can't combine with others (iOS `exclusiveOptionIndices` —
+    // e.g. "None of the above"): picking one clears the rest, and vice versa.
+    exclusiveOptionIndices: List<Int>? = null,
+    onCompleted: (List<Int>) -> Unit,
+) {
     val options = question.displayedOptions ?: question.options
     val min = question.min
     val max = question.max
@@ -300,6 +306,14 @@ fun AssessmentMultipleChoice(question: ProgramAssessmentQuestion, onCompleted: (
                             if (isSelected) {
                                 selected.remove(index)
                             } else {
+                                val exclusives = exclusiveOptionIndices.orEmpty()
+                                if (index in exclusives) {
+                                    // An exclusive pick clears everything else…
+                                    selected.clear()
+                                } else {
+                                    // …and a regular pick clears any exclusives.
+                                    selected.removeAll { it in exclusives }
+                                }
                                 if (selected.size >= max) selected.removeAt(selected.lastIndex)
                                 selected.add(index)
                                 // Age confirms via an "I am <age>" button (iOS), so

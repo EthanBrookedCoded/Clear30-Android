@@ -566,27 +566,9 @@ class CheckInRewardVariableGenerator(
             .mapNotNull { BreakReasonType.from(it) }
     }
 
-    /**
-     * % decrease in smoking frequency vs the assessment baseline (iOS
-     * `getDeltaSmokingFrequency`, ProgramAssessment.swift:439): the current
-     * smoked-day rate over the break vs the initial weekly frequency.
-     */
-    private fun getDeltaSmokingFrequency(programBreak: ProgramBreak): Int? {
-        val initialWeeklyUsage = programBreak.getInitialWeeklyUsage() ?: return null
-        val initialWeeklyFrequency = (initialWeeklyUsage / 7.0f) * 100.0f
-        if (initialWeeklyFrequency <= 0f) return null
-
-        val start = PlainDate.from(programBreak.startDate)
-        val today = PlainDate.from(now())
-        val entries = program.dayInfo.filterKeys { it in start..today }.values
-        val numDaysCheckedIn = entries.count { it.sober != null }.toFloat()
-        val numDaysSober = entries.count { it.sober == true }.toFloat()
-
-        val currentFrequency =
-            if (numDaysCheckedIn != 0f) ((numDaysCheckedIn - numDaysSober) / numDaysCheckedIn) * 100.0f
-            else initialWeeklyFrequency
-        return (((initialWeeklyFrequency - currentFrequency) / initialWeeklyFrequency) * 100.0f).toInt()
-    }
+    /** % decrease in smoking frequency vs baseline — shared logic on [Program]. */
+    private fun getDeltaSmokingFrequency(programBreak: ProgramBreak): Int? =
+        program.getDeltaSmokingFrequency(programBreak)
 
     private fun pick(list: List<String>, seed: Int): String = list[abs(seed) % list.size]
 

@@ -1,6 +1,7 @@
 package org.clear30.data
 
 import kotlinx.datetime.Instant
+import org.clear30.data.model.AssessmentQuestionID
 import org.clear30.data.model.CheckInMethod
 import org.clear30.data.model.ContentInfo
 import org.clear30.data.model.PlainDate
@@ -102,6 +103,12 @@ object ProgramTimelineHandler {
     private suspend fun finish(program: Program) {
         Clear30Store.save(program)
         SupabaseController.syncProgramState(program)
+        // Timeline mutations move the health milestones — reschedule their
+        // notifications (iOS ProgramTimelineHandler.swift:96,463). Gated on
+        // notificationSettings inside, so the pre-permission signup path no-ops.
+        runCatching {
+            NotificationHandler.scheduleHealthNotifications(Clear30Store.loadUserInfo(), program)
+        }
     }
 
     // ─────────────────────────── Break creation ───────────────────────────
@@ -117,9 +124,14 @@ object ProgramTimelineHandler {
         nameOverride: String? = null,
     ): Pair<ProgramBreak?, ProgramBreak> {
         val today = now().justDay
-        // The legacy start-date question (AssessmentQuestionID.START_DATE) is dead
-        // in the current Slides3 flow — Day 0 = today. (Kept as a hook for parity.)
-        val mainBreakDay0 = today
+        // A START_DATE answer (the new-break assessment's date picker, iOS
+        // ProgramBreakAbstracted.swift:20-26) makes Day 0 the day BEFORE the
+        // chosen start; the onboarding flow asks no start-date → Day 0 = today.
+        val startDateAnswer = assessmentResponses
+            .firstOrNull { it.question.strippedPrompt == AssessmentQuestionID.START_DATE.raw }
+            ?.question?.options?.firstOrNull()
+            ?.let { runCatching { PlainDate.parse(it) }.getOrNull() }
+        val mainBreakDay0 = startDateAnswer?.adding(days = -1)?.dateObject ?: today
         val breakName = nameOverride ?: breakType.typeName
         val mainBreak = ProgramBreak.create(breakName, breakType, mainBreakDay0, assessmentResponses)
 

@@ -15,7 +15,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.rememberDatePickerState
+import kotlinx.datetime.atStartOfDayIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,6 +33,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.datetime.Instant
+import kotlinx.datetime.toLocalDateTime
 import org.clear30.data.model.AssessmentDaysType
 import org.clear30.data.model.ImageChoice
 import org.clear30.data.model.ProgramAssessmentQuestion
@@ -149,7 +152,11 @@ fun AssessmentImageChoice(
     }
 }
 
-/** Date picker — Material3 calendar; returns the selected date or null. */
+/**
+ * Date picker — Material3 calendar; returns the selected date or null. The
+ * question's min/max are day offsets from today (iOS `.datePicker` semantics —
+ * e.g. the break start date allows today…today+14) and constrain selection.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AssessmentDatePicker(
@@ -157,7 +164,20 @@ fun AssessmentDatePicker(
     cancelOption: String?,
     onCompleted: (Instant?) -> Unit,
 ) {
-    val state = rememberDatePickerState()
+    val todayUtcMs = remember {
+        // DatePicker works in UTC-midnight millis; anchor "today" the same way.
+        val today = org.clear30.data.model.PlainDate.from(org.clear30.util.now())
+        kotlinx.datetime.LocalDate(today.year, today.month, today.day)
+            .atStartOfDayIn(kotlinx.datetime.TimeZone.UTC).toEpochMilliseconds()
+    }
+    val dayMs = 86_400_000L
+    val minMs = todayUtcMs + question.min * dayMs
+    val maxMs = todayUtcMs + question.max * dayMs
+    val state = rememberDatePickerState(
+        selectableDates = object : SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis in minMs..maxMs
+        },
+    )
 
     Column(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding)) {
         QuestionCard(question.prompt1, question.prompt2, modifier = Modifier.padding(bottom = Dimens.cardSpacing))
@@ -165,7 +185,16 @@ fun AssessmentDatePicker(
             DatePicker(state = state, modifier = Modifier.fillMaxWidth())
         }
         StretchedButton("Next", gradient = Clear30Gradients.clear30) {
-            onCompleted(state.selectedDateMillis?.let { Instant.fromEpochMilliseconds(it) })
+            // selectedDateMillis is UTC-midnight of the picked CALENDAR DATE.
+            // Re-anchor it to local midnight — converting the raw instant through
+            // the local zone shifts the date back a day for UTC-negative zones
+            // (picking "Jul 13" at 10pm ET used to store Jul 12).
+            val selected = state.selectedDateMillis?.let { ms ->
+                Instant.fromEpochMilliseconds(ms)
+                    .toLocalDateTime(kotlinx.datetime.TimeZone.UTC).date
+                    .atStartOfDayIn(kotlinx.datetime.TimeZone.currentSystemDefault())
+            }
+            onCompleted(selected)
         }
         if (cancelOption != null) {
             SmallText(
