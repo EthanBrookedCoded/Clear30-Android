@@ -488,6 +488,23 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   richer iOS message/claire card internals (heading pills w/ badges, animated
   emoji).
 
+- [x] (done 2026-07-14, d62f296) **T11 · P2 · divergent — Meditation, YouTube
+  + Claire feed cards matched to iOS** (Thatcher, 2026-07-14, follow-up on
+  T10). All three were Android inventions on gradient-background cards; iOS
+  puts each on a PLAIN card with a gradient `FeedCardHeading` (now a shared
+  port, along with `VisitedNode`). Meditation = heading + visited node with
+  the inline player centered (gradient play disc + full-width gradient
+  scrubber; the white-on-gradient styling was removed from
+  MeditationPlayerCore — the full-screen sheet keeps its 250dp bar cap).
+  YouTube = heading + share icon (system share sheet), rounded player
+  centered in the stretch space, video title below (iOS YouTubeViewer inline
+  layout — Android uses `res.title` instead of iOS's fetched metadata title).
+  Claire = heading, title in a claire-outlined capsule, chat preview (user
+  prompt as a right-aligned gradient bubble; Claire as a left-aligned bubble
+  with the pulsing/cycling `AnimatedEmoji` port, animating on page focus),
+  and a full-width gradient "Reveal ✨" CTA pinned at the bottom that opens
+  Claire seeded with the prompt. All three VERIFIED on-device.
+
 ## 6. Support tab & content viewers
 
 - [x] (done 2026-07-13, 8c944dd — full-screen `MeditationPage` sheet from library/cravings/sleep/hub-rail + `MeditationPageInline` in feed cards; ad-hoc mini-player deleted; starts paused like iOS; seekable scrubber) **S1 · P2 · divergent — Meditations: one standardized sheet.** Shared
