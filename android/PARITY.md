@@ -465,6 +465,29 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   account for the washed-out look — fix X10 first, then re-eyeball this item
   against the iOS simulator side-by-side.
 
+- [x] (done 2026-07-14, c81c05b) **T10 · P1 · bug+divergent — Today feed:
+  day-scoped messages + full-height iOS layouts** (Thatcher, 2026-07-14,
+  post-Wave-8). Two bugs: (a) the feed flattened EVERY content bucket — ~50
+  messages on one day — and (b) tapping a calendar day didn't change the
+  content. Root cause: iOS derives the feed from
+  `program.getProgramMessages(for: date)` (the SELECTED day's bucket +
+  same-day school messages); Android flat-mapped all of `contentInfo`. Ported
+  the getter onto `Program`, keyed the feed on it, and dropped the
+  Android-only DayDetailSheet auto-open (iOS `loadDay` just swaps the feed —
+  the page-0 check-in card edits the selected day). Layouts matched to iOS
+  TodayFeedViews: every page extends full height — page 0 = check-in card top
+  + topic card stretched (badge top / title centered / CTA bottom); video =
+  BARE rounded video, no card chrome, with the draggable bottom
+  MediaProgressBar (new `FeedNativeVideoPlayer`, plays on page focus);
+  carousel = full-height "Frames" card with a paged image carousel + dots;
+  guides = horizontal paged carousel of per-guide cards → full-text sheet;
+  message/reddit/meditation/claire/perk/journal cards fill the page height.
+  VERIFIED on-device: day tap swaps the feed, page count sane, all four named
+  layouts render. NOT ported (follow-ups): carousel pinch-zoom overlay (iOS
+  ZoomableImageOverlay), iOS's unread-catch-up + journal feed cards, and the
+  richer iOS message/claire card internals (heading pills w/ badges, animated
+  emoji).
+
 ## 6. Support tab & content viewers
 
 - [x] (done 2026-07-13, 8c944dd — full-screen `MeditationPage` sheet from library/cravings/sleep/hub-rail + `MeditationPageInline` in feed cards; ad-hoc mini-player deleted; starts paused like iOS; seekable scrubber) **S1 · P2 · divergent — Meditations: one standardized sheet.** Shared
