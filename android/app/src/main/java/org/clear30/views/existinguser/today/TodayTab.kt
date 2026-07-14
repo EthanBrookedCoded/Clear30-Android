@@ -69,7 +69,7 @@ import org.clear30.data.model.Post
 import org.clear30.data.model.Program
 import org.clear30.data.model.ProgramMessage
 import org.clear30.data.model.UserInfo
-import org.clear30.data.model.unlocked
+import org.clear30.data.model.sorted
 import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.getCommunityFeed
 import org.clear30.util.now
@@ -129,7 +129,6 @@ fun TodayTab(
     val logger = remember { CheckInLogger(program, userInfo, scope) }
     var refresh by remember { mutableIntStateOf(0) }
     var showCheckInSheet by remember { mutableStateOf(false) }
-    var dayDetail by remember { mutableStateOf<PlainDate?>(null) }
     var showMultiCheckIn by remember { mutableStateOf(false) }
     var showMidPilotAssessment by remember { mutableStateOf(false) }
     // In-app overlays opened from the inlined content cards (YouTube now plays
@@ -208,19 +207,11 @@ fun TodayTab(
         communityPosts = SupabaseController.getCommunityFeed(start = 0, end = 5, sortBy = "recent").getOrNull().orEmpty()
     }
 
-    // Day's feed content. `refresh`/`selectedDay` re-derive it. Newest day
-    // first, but READING order (unlockOn ascending) within a day — a plain
-    // `.reversed()` would also flip within-day order, putting a day's
-    // assessment-response messages before its core message.
+    // The SELECTED day's feed content only (iOS TodayFeedViewModel:
+    // `program.getProgramMessages(for: date).sorted`) — switching days on the
+    // calendar swaps the whole feed. `refresh` re-derives after mutations.
     val messages = remember(selectedDay, refresh) {
-        // School messages merge into the same feed (iOS ProgramContent.swift:96):
-        // within a day, core content first, school content appended after.
-        (program.contentInfo.values.flatMap { it.messages } + program.schoolMessages).unlocked
-            .sortedWith(
-                compareByDescending<org.clear30.data.model.ProgramMessage> { PlainDate.from(it.unlockOn) }
-                    .thenBy { it.isSchoolMessage }
-                    .thenBy { it.unlockOn },
-            )
+        program.getProgramMessages(selectedDay).sorted
     }
     val hasCommunity = communityPosts.isNotEmpty()
     // Full component separation (iOS `buildItems`): every container in a lesson is
@@ -297,10 +288,10 @@ fun TodayTab(
                 program.latestCalendarViewMode = it
                 scope.launch { Clear30Store.save(program) }
             },
-            onSelectDay = { date ->
-                selectedDay = date
-                if (date != today) dayDetail = date
-            },
+            // iOS `loadDay(date:)`: tapping a calendar day swaps the whole feed
+            // to that day (check-in card + its messages) — no detail sheet; the
+            // page-0 CheckInDayCard already edits the selected day's log.
+            onSelectDay = { date -> selectedDay = date },
             onMonthStep = { months -> monthAnchor = monthAnchor.adding(months = months) },
             onScrollToTop = { scope.launch { pagerState.animateScrollToPage(0) } },
             onShare = { shareProgress(it, program) },
@@ -372,7 +363,11 @@ fun TodayTab(
                         contentAlignment = Alignment.Center,
                     ) {
                         when (val item = feedItems.getOrNull(page)) {
+                            // First page (iOS TodayFeedCardRouter): check-in card at
+                            // the top, the day's topic card stretched over the rest
+                            // of the page height (iOS `stretch: true`).
                             FeedItem.CheckIn -> Column(
+                                Modifier.fillMaxSize(),
                                 verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
                             ) {
                                 CheckInDayCard(
@@ -383,21 +378,23 @@ fun TodayTab(
                                     onCheckIn = { showCheckInSheet = true },
                                     onCheckInChange = onCheckInChange,
                                 )
-                                // iOS TodayFeedCardRouter: the first feed page carries
-                                // the day's topic card under the check-in card (T9a).
                                 messages.firstOrNull()?.let { first ->
                                     TopicProgressCard(
                                         emoji = first.topicEmoji,
                                         title = first.topicTitle,
                                         badge = program.getBadgeInfo(first.unlockOn),
                                         progress = program.contentInfo[selectedDay]?.progress?.toFloat(),
+                                        modifier = Modifier.fillMaxWidth().weight(1f),
                                         onContinue = {
                                             scope.launch { pagerState.animateScrollToPage(1) }
                                         },
                                     )
                                 }
                             }
-                            is FeedItem.Video -> VideoFeedCard(item.msg, userInfo)
+                            is FeedItem.Video -> VideoFeedCard(
+                                item.msg, userInfo,
+                                focused = page == pagerState.settledPage,
+                            )
                             is FeedItem.Message -> MessageContentCard(item.msg, program, userInfo, glow = glow)
                             is FeedItem.Carousel -> CarouselFeedCard(item.images, glow = glow)
                             is FeedItem.Guides -> GuidesFeedCard(item.msg, glow = glow)
@@ -466,17 +463,6 @@ fun TodayTab(
                 // page 0 is the check-in card) so today's content is front-and-center.
                 scope.launch { if (totalFeedItems > 1) pagerState.animateScrollToPage(1) }
             },
-        )
-    }
-
-    dayDetail?.let { d ->
-        DayDetailSheet(
-            date = d,
-            program = program,
-            userInfo = userInfo,
-            logger = logger,
-            onDismiss = { dayDetail = null; refresh++ },
-            onCheckInToday = { dayDetail = null; showCheckInSheet = true },
         )
     }
 

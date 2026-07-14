@@ -235,6 +235,15 @@ class Program(
         return auto + programBreak.moneySavedAdjustment
     }
 
+    /**
+     * The selected day's feed messages (iOS `getProgramMessages(for:)`,
+     * ProgramContent.swift:105-112): that date's contentInfo bucket plus any
+     * school messages unlocking the same day.
+     */
+    fun getProgramMessages(date: PlainDate): List<ProgramMessage> =
+        contentInfo[date]?.messages.orEmpty() +
+            schoolMessages.filter { PlainDate.from(it.unlockOn) == date }
+
     // MARK: - Core (Life) program (ProgramContent.swift)
     /**
      * The "Life" timeline — every `contentInfo` entry whose date falls OUTSIDE

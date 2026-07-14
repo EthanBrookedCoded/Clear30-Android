@@ -5,11 +5,16 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -20,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -27,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -111,6 +118,103 @@ fun InlineVideoPlayer(
                 .background(Color.Black),
             contentAlignment = Alignment.Center,
         ) { VideoSurface(uri, Modifier.fillMaxSize()) }
+    }
+}
+
+/**
+ * FeedNativeVideoPlayer — iOS `InlineNativeVideoView`: a bare full-bleed video
+ * (no card chrome, no platform controller) with the `MediaProgressBar`
+ * treatment — a draggable white progress track pinned to the bottom edge.
+ * Plays while [playTrigger] is true (feed page focused), pauses when it flips
+ * false, and tap toggles play/pause like iOS.
+ */
+@Composable
+fun FeedNativeVideoPlayer(
+    uri: String,
+    modifier: Modifier = Modifier,
+    playTrigger: Boolean = true,
+) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val player = remember(uri) {
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(uri))
+            prepare()
+        }
+    }
+    DisposableEffect(uri) { onDispose { player.release() } }
+    DisposableEffect(lifecycleOwner) {
+        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_STOP) player.pause() }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
+
+    // iOS `isFeedFocused && !isFeedScrolling` → play / pause.
+    LaunchedEffect(playTrigger, uri) {
+        if (playTrigger) player.play() else player.pause()
+    }
+
+    var positionMs by remember(uri) { mutableLongStateOf(0L) }
+    var durationMs by remember(uri) { mutableLongStateOf(0L) }
+    LaunchedEffect(uri) {
+        while (true) {
+            positionMs = player.currentPosition.coerceAtLeast(0)
+            durationMs = player.duration.coerceAtLeast(0)
+            kotlinx.coroutines.delay(250)
+        }
+    }
+
+    Box(
+        modifier
+            .clickable { if (player.isPlaying) player.pause() else player.play() },
+        contentAlignment = Alignment.Center,
+    ) {
+        AndroidView(
+            factory = { ctx -> PlayerView(ctx).apply { this.player = player; setUseController(false) } },
+            modifier = Modifier.fillMaxSize(),
+        )
+        // MediaProgressBar — a draggable white track pinned to the bottom edge
+        // (iOS overlays it inside the video frame with cardSpacing insets).
+        val fraction = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+        BoxWithConstraints(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = Dimens.cardSpacing)
+                .padding(bottom = Dimens.cardSpacing)
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(RoundedCornerShape(99.dp))
+                .background(Color.White.copy(alpha = 0.25f)),
+        ) {
+            val widthPx = constraints.maxWidth.toFloat()
+            fun seekTo(x: Float) {
+                if (durationMs > 0 && widthPx > 0) {
+                    val target = ((x / widthPx).coerceIn(0f, 1f) * durationMs).toLong()
+                    positionMs = target
+                    player.seekTo(target)
+                }
+            }
+            Box(
+                Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(fraction)
+                    .clip(RoundedCornerShape(99.dp))
+                    .background(Color.White),
+            )
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .pointerInput(widthPx, durationMs) {
+                        detectTapGestures { offset -> seekTo(offset.x) }
+                    }
+                    .pointerInput(widthPx, durationMs) {
+                        detectHorizontalDragGestures { change, _ ->
+                            change.consume()
+                            seekTo(change.position.x)
+                        }
+                    },
+            )
+        }
     }
 }
 

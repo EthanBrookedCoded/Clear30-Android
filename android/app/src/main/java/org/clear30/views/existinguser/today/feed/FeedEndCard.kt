@@ -134,11 +134,12 @@ internal fun FeedEndCelebration(
 
 /**
  * The topic card with the animated completion state (iOS
- * `ProgramMessageTopicCard`): emoji + title (+ optional break badge); below,
- * a progress bar + live percentage that becomes a "100% Completed 🥹" button.
- * [onContinue] renders the iOS bottom button ("Dive In" with no progress data,
- * "Continue" mid-progress, and makes the 100% state tappable) — the Today feed
- * passes it to scroll to the first lesson page.
+ * `ProgramMessageTopicCard`): break badge at the top, emoji + title centered
+ * in the stretched middle (iOS `stretch: true` — the card fills the page
+ * height its caller gives it), and the progress/CTA block pinned at the
+ * bottom. [onContinue] renders the iOS bottom button ("Dive In" with no
+ * progress data, "Continue" mid-progress, and makes the 100% state tappable)
+ * — the Today feed passes it to scroll to the first lesson page.
  */
 @Composable
 internal fun TopicProgressCard(
@@ -146,14 +147,14 @@ internal fun TopicProgressCard(
     title: String,
     badge: Pair<String, String>? = null,
     progress: Float?,
+    modifier: Modifier = Modifier.fillMaxWidth(),
     onContinue: (() -> Unit)? = null,
 ) {
-    Clear30Card(modifier = Modifier.fillMaxWidth()) {
-        Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-                emoji?.let { Heading2(it) }
-                Heading3(title, modifier = Modifier.weight(1f))
-                badge?.let { (subtitle, badgeTitle) ->
+    Clear30Card(modifier = modifier) {
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
+            // Badge — top-leading (iOS puts it above the stretched title).
+            badge?.let { (subtitle, badgeTitle) ->
+                Row {
                     Column(
                         Modifier.cardStyle(
                             outlineGradient = Clear30Gradients.clear30,
@@ -165,6 +166,17 @@ internal fun TopicProgressCard(
                         TinyText(subtitle, color = Clear30Colors.text.copy(alpha = 0.5f))
                         SmallText(badgeTitle)
                     }
+                }
+            }
+            // Title — centered in the stretch space (iOS `.frame(maxHeight: .infinity)`).
+            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+                    modifier = Modifier.padding(horizontal = Dimens.cardSpacing),
+                ) {
+                    emoji?.let { Heading2(it) }
+                    Heading3(title)
                 }
             }
             when {

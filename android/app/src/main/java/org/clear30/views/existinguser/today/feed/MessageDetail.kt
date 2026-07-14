@@ -211,8 +211,9 @@ fun MessageDetail(
                         title = message.topicTitle,
                         badge = program.getBadgeInfo(message.unlockOn).let { (subtitle, title) -> subtitle to title },
                         progress = program.contentInfo[contentDay]?.progress?.toFloat(),
+                        modifier = Modifier.fillMaxSize(),
                     )
-                    ViewerPage.Video -> VideoFeedCard(message, userInfo)
+                    ViewerPage.Video -> VideoFeedCard(message, userInfo, focused = focused)
                     ViewerPage.Body -> MessageContentCard(message, program, userInfo, glow = glow)
                     is ViewerPage.Carousel -> CarouselFeedCard(item.images, glow = glow)
                     ViewerPage.Guides -> GuidesFeedCard(message, glow = glow)

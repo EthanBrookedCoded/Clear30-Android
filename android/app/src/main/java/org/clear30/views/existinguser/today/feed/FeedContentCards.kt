@@ -2,14 +2,12 @@ package org.clear30.views.existinguser.today
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -62,9 +60,10 @@ import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.updateContentInfo
 import org.clear30.views.components.Clear30Card
 import org.clear30.views.components.DefaultButton
+import org.clear30.views.components.FeedNativeVideoPlayer
+import org.clear30.views.components.softShadow
 import org.clear30.views.components.Heading3
 import org.clear30.views.components.HighlightedTextFormat
-import org.clear30.views.components.InlineVideoPlayer
 import org.clear30.views.components.InlineYouTubePlayer
 import org.clear30.views.components.pressScale
 import org.clear30.views.components.SmallText
@@ -112,8 +111,10 @@ internal fun ExpandingFeedCard(
     val clipState = rememberScrollState()
     val overflows by remember { derivedStateOf { clipState.maxValue > 0 } }
     val onTap: (() -> Unit)? = onTapOverride ?: if (overflows) ({ readerOpen = true }) else null
+    // fillMaxSize: feed pages extend to the full page height like iOS (the
+    // sections stretch with internal Spacers; short content top-aligns).
     Clear30Card(
-        modifier = Modifier.fillMaxWidth().then(
+        modifier = Modifier.fillMaxSize().then(
             if (onTap != null) Modifier.pressScale { onTap() } else Modifier,
         ),
         glowGradient = glow,
@@ -180,23 +181,32 @@ internal fun ExpandingFeedCard(
     }
 }
 
-/** The lesson's video — plays in-app (direct file inline, YouTube embedded in place). */
+/**
+ * The lesson's video — iOS `VideoFeedView`: the BARE video filling the page
+ * (no card chrome, heading, or padding), corner-radius clipped with the card
+ * shadow, and the draggable progress bar overlaid at the bottom
+ * (`InlineNativeVideoView`). Plays on page focus, pauses when swiped away.
+ */
 @Composable
-internal fun VideoFeedCard(msg: ProgramMessage, userInfo: UserInfo) {
+internal fun VideoFeedCard(msg: ProgramMessage, userInfo: UserInfo, focused: Boolean = false) {
     val url = msg.videoURL ?: return
-    Clear30Card(modifier = Modifier.fillMaxWidth(), shadowColor = Clear30Colors.green.copy(alpha = 0.5f)) {
-        Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-            SmallTextHighlighted(formats = listOf(HighlightedTextFormat("Video", highlighted = true)))
-            val ytId = youTubeId(url)
-            if (ytId != null) {
-                InlineYouTubePlayer(ytId, Modifier.fillMaxWidth()) {
-                    Logger.logEvent(userInfo.loggingID, LogEventType.openedContent, mapOf(LogEventExtraDataType.URL to url))
-                }
-            } else {
-                InlineVideoPlayer(url, msg.thumbnailURL, Modifier.fillMaxWidth())
-            }
-            TopicRow(msg)
+    LaunchedEffect(focused) {
+        if (focused) {
+            Logger.logEvent(userInfo.loggingID, LogEventType.openedContent, mapOf(LogEventExtraDataType.URL to url))
         }
+    }
+    val frame = Modifier
+        .fillMaxSize()
+        .softShadow(Clear30Colors.shadow, Dimens.cornerRadius)
+        .clip(RoundedCornerShape(Dimens.cornerRadius))
+        .background(Color.Black)
+    val ytId = youTubeId(url)
+    if (ytId != null) {
+        androidx.compose.foundation.layout.Box(frame, contentAlignment = Alignment.Center) {
+            InlineYouTubePlayer(ytId, Modifier.fillMaxWidth(), autoplay = focused)
+        }
+    } else {
+        org.clear30.views.components.FeedNativeVideoPlayer(url, frame, playTrigger = focused)
     }
 }
 
@@ -228,38 +238,134 @@ internal fun MessageContentCard(msg: ProgramMessage, program: Program, userInfo:
     }
 }
 
-/** Horizontally scrollable image gallery (iOS CarouselFeedView). */
+/**
+ * Image gallery — iOS `CarouselFeedView`: a full-height card with the "Frames"
+ * heading and a full-width PAGED image carousel (one image per snapping page,
+ * aspect-fit, page dots below).
+ */
 @Composable
 internal fun CarouselFeedCard(images: List<String>, glow: Brush? = null) {
-    Clear30Card(modifier = Modifier.fillMaxWidth(), glowGradient = glow) {
-        Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-            SmallTextHighlighted(formats = listOf(HighlightedTextFormat("Gallery", highlighted = true)))
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
-            ) {
-                images.forEach { url ->
+    Clear30Card(modifier = Modifier.fillMaxSize(), glowGradient = glow) {
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+            SmallTextHighlighted(formats = listOf(HighlightedTextFormat("Frames", highlighted = true)))
+            val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { images.size })
+            androidx.compose.foundation.pager.HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+            ) { page ->
+                androidx.compose.foundation.layout.Box(
+                    Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
                     AsyncImage(
-                        model = url,
+                        model = images[page],
                         contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.height(220.dp).width(300.dp).clip(RoundedCornerShape(Dimens.cornerRadius)),
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(Dimens.cornerRadius)),
                     )
                 }
+            }
+            if (images.size > 1) {
+                FeedPagerDots(
+                    count = images.size,
+                    current = pagerState.currentPage,
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                )
             }
         }
     }
 }
 
-/** The lesson's guide pages (intro / how-to / why-it-matters), stacked; overflow expands. */
+/**
+ * The lesson's guide pages — iOS `MessageGuidesFeedView`: a horizontal PAGED
+ * carousel where every guide is its own full-height card ("Guide" heading +
+ * title + body at 0.5, "Tap to see more" pinned at the bottom → a sheet with
+ * the full text).
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 internal fun GuidesFeedCard(msg: ProgramMessage, glow: Brush? = null) {
-    ExpandingFeedCard(glow = glow) {
-        msg.programPageInfo.forEach { page ->
-            Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 4)) {
-                Heading3(page.title)
-                SmallText(page.body)
+    val guides = msg.programPageInfo
+    if (guides.isEmpty()) return
+    var openGuide by remember { mutableStateOf<org.clear30.data.model.ProgramPageInfo?>(null) }
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { guides.size })
+    Column(Modifier.fillMaxSize()) {
+        androidx.compose.foundation.pager.HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            pageSpacing = Dimens.cardSpacing,
+        ) { page ->
+            val guide = guides[page]
+            Clear30Card(
+                modifier = Modifier.fillMaxSize().pressScale { openGuide = guide },
+                glowGradient = glow,
+            ) {
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+                    SmallTextHighlighted(formats = listOf(HighlightedTextFormat("Guide", highlighted = true)))
+                    Heading3(guide.title)
+                    SmallText(
+                        guide.body,
+                        color = Clear30Colors.text.copy(alpha = 0.5f),
+                        modifier = Modifier.weight(1f, fill = false),
+                        maxLines = 12,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    TinyText("Tap to see more", color = Clear30Colors.text.copy(alpha = 0.5f))
+                }
             }
+        }
+        if (guides.size > 1) {
+            FeedPagerDots(
+                count = guides.size,
+                current = pagerState.currentPage,
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = Dimens.cardSpacing / 2),
+            )
+        }
+    }
+
+    // Full guide text (iOS `.sheet(item: $currentGuide)`).
+    openGuide?.let { guide ->
+        androidx.compose.material3.ModalBottomSheet(
+            onDismissRequest = { openGuide = null },
+            sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = Clear30Colors.background,
+        ) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.cardSpacing),
+                verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+            ) {
+                Heading3(guide.title)
+                org.clear30.views.components.SmallTextMarkdown(guide.body, color = Clear30Colors.text)
+                Spacer(Modifier.height(Dimens.cardSpacing * 2))
+            }
+        }
+    }
+}
+
+/** FeedView `pageDots` — small dots in a translucent capsule, current darker. */
+@Composable
+private fun FeedPagerDots(count: Int, current: Int, modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .clip(RoundedCornerShape(99.dp))
+            .background(Clear30Colors.opacityGray)
+            .padding(horizontal = Dimens.cardSpacing / 2, vertical = Dimens.cardSpacing / 4),
+        horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        repeat(count) { index ->
+            androidx.compose.foundation.layout.Box(
+                Modifier
+                    .size(7.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(
+                        if (index == current) Clear30Colors.text.copy(alpha = 0.75f)
+                        else Clear30Colors.text.copy(alpha = 0.25f),
+                    ),
+            )
         }
     }
 }
@@ -268,12 +374,16 @@ internal fun GuidesFeedCard(msg: ProgramMessage, glow: Brush? = null) {
  *  `MeditationFeedView` = `MeditationPage(inlineType:)`). */
 @Composable
 internal fun MeditationFeedCard(med: ProgramMeditation, program: Program, glow: Brush? = null) {
+    // fillMaxSize + centered player — iOS MeditationFeedView wraps MeditationPage
+    // in Spacers so the card stretches to the page height.
     Clear30Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxSize(),
         gradient = Clear30Gradients.meditation,
         glowGradient = glow,
     ) {
-        org.clear30.views.existinguser.support.MeditationPageInline(med, program)
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            org.clear30.views.existinguser.support.MeditationPageInline(med, program)
+        }
     }
 }
 
@@ -371,7 +481,7 @@ internal fun YouTubeFeedCard(
 @Composable
 internal fun ClairePromptFeedCard(prompt: ProgramClairePrompt, userInfo: UserInfo, glow: Brush? = null) {
     Clear30Card(
-        modifier = Modifier.fillMaxWidth().pressScale {
+        modifier = Modifier.fillMaxSize().pressScale {
             Logger.logEvent(userInfo.loggingID, LogEventType.openedContent, mapOf(LogEventExtraDataType.EXTRA to prompt.title))
             // Claire lives on the Support tab — stash the seed, then switch tabs
             // (a sub-route alone doesn't navigate; the destination tab consumes it).
@@ -381,12 +491,15 @@ internal fun ClairePromptFeedCard(prompt: ProgramClairePrompt, userInfo: UserInf
         gradient = Clear30Gradients.claire,
         glowGradient = glow,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-            Icon(sfSymbol("bubble.left.fill"), contentDescription = null, tint = Color.White)
-            Column(Modifier.weight(1f)) {
-                SmallText(prompt.title, color = Color.White)
-                (prompt.displayPrompt ?: prompt.prompt).takeIf { it.isNotBlank() }?.let {
-                    TinyText(it, color = Color.White.copy(alpha = 0.75f))
+        // Full page height with centered content (iOS stretches via Spacers).
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
+                Icon(sfSymbol("bubble.left.fill"), contentDescription = null, tint = Color.White)
+                Column(Modifier.weight(1f)) {
+                    SmallText(prompt.title, color = Color.White)
+                    (prompt.displayPrompt ?: prompt.prompt).takeIf { it.isNotBlank() }?.let {
+                        TinyText(it, color = Color.White.copy(alpha = 0.75f))
+                    }
                 }
             }
         }
@@ -396,8 +509,12 @@ internal fun ClairePromptFeedCard(prompt: ProgramClairePrompt, userInfo: UserInf
 /** A premium member perk — its CTA opens the link in-app or jumps to a section. */
 @Composable
 internal fun MemberPerkFeedCard(perk: ProgramMemberPerk, glow: Brush? = null, onOpenWeb: (String) -> Unit) {
-    Clear30Card(modifier = Modifier.fillMaxWidth(), gradient = Clear30Gradients.clear30, glowGradient = glow) {
-        Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+    Clear30Card(modifier = Modifier.fillMaxSize(), gradient = Clear30Gradients.clear30, glowGradient = glow) {
+        // Full page height, content centered (iOS MemberPerkFeedView Spacers).
+        Column(
+            Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2, Alignment.CenterVertically),
+        ) {
             perk.imageURL?.let { img ->
                 AsyncImage(
                     model = img, contentDescription = null, contentScale = ContentScale.Crop,
@@ -429,8 +546,12 @@ internal fun MemberPerkFeedCard(perk: ProgramMemberPerk, glow: Brush? = null, on
 internal fun JournalPromptsFeedCard(prompts: List<String>, glow: Brush? = null, onJournal: (String) -> Unit) {
     var current by remember(prompts) { mutableStateOf(0) }
     val index = current.coerceIn(0, (prompts.size - 1).coerceAtLeast(0))
-    Clear30Card(modifier = Modifier.fillMaxWidth(), glowGradient = glow) {
-        Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+    Clear30Card(modifier = Modifier.fillMaxSize(), glowGradient = glow) {
+        // Full page height, content centered like the other compact cards.
+        Column(
+            Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2, Alignment.CenterVertically),
+        ) {
             SmallTextHighlighted(
                 formats = listOf(HighlightedTextFormat("New Journal", highlighted = true)),
                 highlightBrush = Clear30Gradients.journals,
