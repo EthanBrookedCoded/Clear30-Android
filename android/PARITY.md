@@ -53,9 +53,9 @@ from iOS) · `env` (local/dev environment task).
 4. **Wave 4 — content & viewers:** T7+S5 (reddit), S8 (YouTube), S6, T5, T6,
    S1–S4, S7, S9–S11.
 5. **Wave 5 — check-in / profile / community / groups:** T2–T4, P1–P6, C1–C3, G1.
-6. **Wave 6 — pilot features:** F1–F3, O11, B3, X6, S12, N2. *(done 2026-07-13
-   — N2's pop-in half deferred per §17-Q13; F1's school-library UI split out as
-   F1b.)*
+6. **Wave 6 — pilot features:** F1–F3, O11, B3, X6, S12, N2. *(done 2026-07-13,
+   72b9af9 — N2's pop-in half deferred per §17-Q13; F1's school-library UI
+   split out as F1b. Backend seeds 40/41 landed in the iOS repo, 3d986e12.)*
 7. **Wave 7 — post-Wave-5 feedback (Thatcher 2026-07-13):** T8 (reward-bar
    radii), P7 (health timeline cards), G3 (Groups UI exact copy), F1b (school
    Support-tab section).
