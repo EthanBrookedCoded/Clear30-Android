@@ -54,6 +54,8 @@ from iOS) · `env` (local/dev environment task).
    S1–S4, S7, S9–S11.
 5. **Wave 5 — check-in / profile / community / groups:** T2–T4, P1–P6, C1–C3, G1.
 6. **Wave 6 — pilot features:** F1–F3, O11, B3, X6, S12, N2.
+7. **Wave 7 — post-Wave-5 feedback (Thatcher 2026-07-13):** T8 (reward-bar
+   radii), P7 (health timeline cards), G3 (Groups UI exact copy).
 
 ---
 
@@ -329,6 +331,14 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   `A/data/RedditScraper.kt:41-75`. Root cause of S5's nondeterminism. Requires
   E1 locally.
 
+- [ ] **T8 · P3 · bug — Reward timer/progress bars: corner radii distort on
+  short fills** (Thatcher, 2026-07-13, post-Wave-5). P3's fix landed for the
+  profile `DopamineTimer`, but the check-in reward views' bars
+  (`A/views/existinguser/today/checkin/CheckInRewardViews.kt` — the
+  `RewardTimeSinceLastSmoked` timer bars / `RewardBar` / `RewardBreakBar`)
+  still clip the fill independently. Apply the same pattern: clip the
+  container once; fill = left-aligned plain rect.
+
 ## 6. Support tab & content viewers
 
 - [x] (done 2026-07-13, 8c944dd — full-screen `MeditationPage` sheet from library/cravings/sleep/hub-rail + `MeditationPageInline` in feed cards; ad-hoc mini-player deleted; starts paused like iOS; seekable scrubber) **S1 · P2 · divergent — Meditations: one standardized sheet.** Shared
@@ -433,6 +443,13 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   named by the selected prompt (`NewVideoEntryViewModel.swift:321`). Minimum:
   full-screen text editor + nameable video entries (prompt picker optional).
 
+- [ ] **P7 · P2 · missing — Health timeline detail cards** (Thatcher,
+  2026-07-13, post-Wave-5). The `HealthTimelinePage` overlay added with P5 is
+  a bare milestone list — "the health timeline doesn't have the actual cards
+  for anything." Copy the iOS health timeline UI exactly (per-milestone cards;
+  see iOS `HealthTimelineSection`/`HealthCard` and the detail views under
+  `iOS/Views/Existing User/Profile/`).
+
 ## 8. Community
 
 - [x] (done 2026-07-13, c6b3055 — `opened_pinned_<id>` cache tracking + Newest-mode hiding + program-tag feed seeding (feed verified opening scoped to the Clear30 tag; CreatePostScreen forced tag switched to `communityProgramTagName` to match). Pinned hide/return flow not exercised on-device — no pinned row seeded locally; check `get_filtered_posts` returns pinned rows without an explicit `exclude_pinned` arg) **C1 · P2 · missing — Pinned-post behavior.** `is_pinned` parsed but never
@@ -461,6 +478,13 @@ Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
   compact invite. Section picker/tabs already match.
 - [ ] **G2 · P2 · missing — Groups depth:** create/join/leave flows
   (`add_member`/`remove_member`), group calendar, notes, member detail, pings.
+- [ ] **G3 · P2 · divergent — Copy the iOS Groups UI exactly** (Thatcher,
+  2026-07-13, post-Wave-5). Android has invented sections/behaviors that
+  don't exist on iOS — mirror iOS 1:1: remove the extra "Recent activity"
+  section; fix the Chat section (no back button top-left, iOS-style message
+  composer); the color picker isn't real; Notes should hang off the member
+  cards on the main page (not a separate tab). Audit every Groups section
+  against `iOS/.../GroupAll.swift` + siblings before/while doing G2.
 
 ## 10. Notifications & FCM
 
@@ -622,17 +646,16 @@ Google Sign-In (phone/email OTP is enough) · SMS/Twilio.
 
 ## 18. Deferred / backlog
 
-- **D1 — Smoked-check-in crash investigation.** Deferred pending a logcat stack
-  trace (`adb logcat -d | grep -A 30 "FATAL EXCEPTION"`). Documented suspects:
-  (a) uncaught exception in the async persist coroutine — achievement sync +
-  Supabase calls with no try/catch (`A/data/CheckInLogger.kt:105-141`);
-  (b) reward generator invoked twice, mutating `program.dayInfo` during
-  composition (`A/.../CheckInSheet.kt:510-512` vs `CheckInLogger.kt:56`).
-  Cheap hardening (try/catch the coroutine; hoist the generator out of
-  composition) is safe to fold into T3/T4 work. *(2026-07-13, c6b3055: both
-  hardenings landed with T3/T4 — the persist pipeline is step-isolated
-  try/catch, and the generator now runs once inside `logCheckIns` (returned,
-  never invoked from composition). The crash itself remains unreproduced.)*
+- ~~**D1 — Smoked-check-in crash investigation.**~~ **SOLVED 2026-07-13** —
+  reproduced on-device after Wave 5: `StackOverflowError` in
+  `CheckInMethod.getAmountString(index)` (`A/data/model/ProgramCheckIns.kt:115`,
+  introduced with T4) — the `Int` argument resolved to the same non-nullable
+  overload instead of the `Int?` one → infinite recursion the moment a smoked
+  amount rendered. Fixed by calling the `Int?` overload via the named `amount`
+  param; full smoked flow (slider → amount picker → slip rewards → day-card
+  timestamp row) verified crash-free on-device. Neither documented suspect was
+  the cause, but both hardenings landed anyway with c6b3055 (step-isolated
+  persist try/catch; generator hoisted out of composition).
 - **D2 — Old-Android-app user migration (~3.1k users, empty program state).**
   Goal: the old app's users seamlessly land on the new app — ideally migrate
   the OLD app's local data and push it to the backend so the new app restores

@@ -112,7 +112,10 @@ enum class CheckInMethod(val raw: String) {
         BUD -> "hit"; PEN -> "rip"; EDIBLE -> "mg"; DAB -> "dab"
     }
 
-    fun getAmountString(index: Int): String = getAmountString(amountIncrement * (index + 1))!!
+    // NOTE: must call the Int? overload via the named `amount` param — a plain
+    // Int argument resolves to THIS overload and recurses forever (the shipped
+    // smoked-check-in StackOverflowError).
+    fun getAmountString(index: Int): String = getAmountString(amount = getAmount(index))!!
 
     fun getAmountString(amount: Int?): String? {
         if (amount == null) return null
