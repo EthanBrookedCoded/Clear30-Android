@@ -96,7 +96,7 @@ fun AllSignUp(
     var step by remember { mutableStateOf(SignUpStep.INTRO) }
     var contact by remember { mutableStateOf("") }
     var isEmail by remember { mutableStateOf(false) }
-    // iOS PhoneNumberRegionView default; full prefix list is a TODO(port).
+    // iOS PhoneNumberRegionView default; the picker offers PHONE_PREFIXES.
     var phonePrefix by remember { mutableStateOf("+1") }
     var code by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -157,6 +157,7 @@ fun AllSignUp(
                     onContactChange = { contact = it },
                     isEmail = isEmail,
                     phonePrefix = phonePrefix,
+                    onPhonePrefixChange = { phonePrefix = it },
                     onContinue = ::sendCode,
                     onToggleMethod = { isEmail = !isEmail; contact = ""; error = null },
                 )
@@ -270,6 +271,7 @@ private fun ColumnScope.ContactStep(
     onContactChange: (String) -> Unit,
     isEmail: Boolean,
     phonePrefix: String,
+    onPhonePrefixChange: (String) -> Unit,
     onContinue: () -> Unit,
     onToggleMethod: () -> Unit,
 ) {
@@ -289,18 +291,35 @@ private fun ColumnScope.ContactStep(
         horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Region prefix — iOS PhoneNumberRegionView (a Menu of dialing codes).
-        // The dropdown of codes is a TODO(port); we display the +1 default in a
-        // matching OffWhite chip so the layout reads identically.
+        // Region prefix — iOS PhoneNumberRegionView: a menu over the NANP
+        // dialing codes; the selected prefix renders in a card-style chip (A3).
         if (!isEmail) {
-            Box(
-                Modifier
-                    .clip(RoundedCornerShape(Dimens.cornerRadius))
-                    .background(Clear30Colors.opacityGray)
-                    .padding(horizontal = Dimens.cardSpacing, vertical = 16.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                SmallText(phonePrefix) // TODO(port): region-prefix picker menu
+            var prefixMenuOpen by remember { mutableStateOf(false) }
+            Box {
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(Dimens.cornerRadius))
+                        .background(Clear30Colors.opacityGray)
+                        .pressScale { prefixMenuOpen = true }
+                        .padding(horizontal = Dimens.cardSpacing, vertical = 16.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    SmallText(phonePrefix)
+                }
+                androidx.compose.material3.DropdownMenu(
+                    expanded = prefixMenuOpen,
+                    onDismissRequest = { prefixMenuOpen = false },
+                ) {
+                    PHONE_PREFIXES.sorted().forEach { prefix ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { SmallText(prefix) },
+                            onClick = {
+                                onPhonePrefixChange(prefix)
+                                prefixMenuOpen = false
+                            },
+                        )
+                    }
+                }
             }
         }
         OffWhiteInput(
@@ -575,3 +594,10 @@ private suspend fun restoreAccount(userInfo: UserInfo, program: Program): String
     )
     return null
 }
+
+/** iOS `PhoneNumberRegionView.prefixes` — the NANP dialing codes offered. */
+private val PHONE_PREFIXES = listOf(
+    "+1", "+1264", "+1268", "+1242", "+1246", "+1345", "+1767", "+1441",
+    "+1849", "+1809", "+1473", "+1876", "+1658", "+1664", "+1869", "+1787",
+    "+1758", "+1784", "+1868", "+1649", "+1340", "+1284",
+)

@@ -21,6 +21,7 @@ supabase = "3.0.3"          # supabase-kt (jan-tennert) -> Supabase
 ktor = "3.0.1"              # HTTP engine for supabase-kt + RestHandler
 firebaseBom = "33.7.0"     # Firebase (Messaging, Crashlytics, Analytics)
 revenuecat = "8.10.5"      # RevenueCat (Purchases) -> PaywallController
+playReview = "2.0.2"       # Play In-App Review (iOS requestReview parity)
 googleServices = "4.4.2"
 firebaseCrashlyticsPlugin = "3.0.2"
 
@@ -66,6 +67,8 @@ firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashly
 firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics-ktx" }
 # RevenueCat
 revenuecat = { group = "com.revenuecat.purchases", name = "purchases", version.ref = "revenuecat" }
+# Play In-App Review
+play-review = { group = "com.google.android.play", name = "review-ktx", version.ref = "playReview" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

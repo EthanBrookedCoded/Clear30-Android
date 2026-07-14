@@ -70,8 +70,7 @@ import org.clear30.util.now
  *   Journal & Previous Breaks browse buttons
  *
  * The gear opens the settings overlay (iOS `viewModel.activeSheet = .settings`),
- * which also hosts the Android-only management rows (symptoms, start-date,
- * share calendar) so the main profile body stays faithful to iOS.
+ * which mirrors the iOS SettingsView rows 1:1 (§17-Q18).
  */
 @Composable
 fun ProfileTab(
@@ -136,7 +135,7 @@ fun ProfileTab(
             SectionLabel("Overall Progress")
             UserWhyCard(userInfo)
             DopamineTimer(program, userInfo)
-            HealthCardsRow(program, userInfo) { hp ->
+            HealthCardsRow(program, userInfo, revision = refresh) { hp ->
                 healthTimeline = hp to hp.hasNew
                 // iOS Profile.handleHealthProgress: stamp the visit so the
                 // hasNew highlight clears after this open.
@@ -149,12 +148,17 @@ fun ProfileTab(
             // ===== Your Program / Your Break =====
             val calendarBreak = program.currentBreak
             SectionLabel(if (calendarBreak != null) "Your Break" else "Your Program")
-            ProgramCard(program, userInfo)
+            ProgramCard(program, userInfo, revision = refresh)
             // Calendar — iOS branches: in-break → the 30-day snake calendar
             // (Profile.swift programBreakLayout), Life → the Roman month calendar
             // (lifeLayout). Both sit between the program card and the stat cards.
             if (calendarBreak != null) {
-                ProfileSnakeCalendar(height = 275.dp, program = program, programBreak = calendarBreak)
+                ProfileSnakeCalendar(
+                    height = 275.dp,
+                    program = program,
+                    programBreak = calendarBreak,
+                    revision = refresh,
+                )
             } else {
                 ProfileCalendar(program)
             }
@@ -186,7 +190,7 @@ fun ProfileTab(
 
             // In-break management (Restart / Change start date / End) or the Day-0
             // "Start break now" — renders nothing in Life. Wired to ProgramTimelineHandler.
-            ProfileBreakOptions(program, userInfo) { refresh++ }
+            ProfileBreakOptions(program, userInfo, revision = refresh) { refresh++ }
 
             // ===== Journal & Previous Breaks (each opens its own full page) =====
             BrowseButton("Journal", "book.closed.fill", Clear30Gradients.journals) {
@@ -346,13 +350,16 @@ private fun UserWhyCard(userInfo: UserInfo) {
 // MARK: - Program card (iOS `ProgramCard`, Life branch)
 
 @Composable
-private fun ProgramCard(program: Program, userInfo: UserInfo) {
+private fun ProgramCard(program: Program, userInfo: UserInfo, revision: Int) {
     val scope = rememberCoroutineScope()
     var refresh by remember { mutableIntStateOf(0) }
     var showSwitchConfirm by remember { mutableStateOf(false) }
     var detailInfo by remember { mutableStateOf<org.clear30.data.model.ProgramDetailSheetInfo?>(null) }
     @Suppress("UNUSED_EXPRESSION") refresh // read so toggles recompose
-    val currentBreak = program.currentBreak
+    // `program` is mutated in place, so `revision` is what invalidates this card
+    // after break mutations — keying the read on it keeps the param genuinely
+    // used (unused params are excluded from the skip comparison).
+    val currentBreak = remember(revision, refresh) { program.currentBreak }
 
     // iOS info button → detail sheet about the current program / break.
     detailInfo?.let { info ->
@@ -364,9 +371,10 @@ private fun ProgramCard(program: Program, userInfo: UserInfo) {
         )
     }
 
-    // iOS `switchCoreProgram()` shows a yes/no alert before flipping the core
-    // program. (The backend `updateLifeProgram` assessment submit + message
-    // refetch is a follow-up — this flips the mode locally + persists.)
+    // iOS `switchCoreProgram()` (ProfileCards.swift:317-336): yes/no alert →
+    // `program.switchCore` under the global loading scrim — submits the
+    // life-short LO-Use-State assessment and re-fetches the new mode's Life
+    // content; errors surface through the master alert.
     if (showSwitchConfirm) {
         val target = if (program.coreModeration) "weed free" else "moderation"
         AlertDialog(
@@ -375,10 +383,17 @@ private fun ProgramCard(program: Program, userInfo: UserInfo) {
             text = { Text("Do you want to switch to the $target program?") },
             confirmButton = {
                 TextButton(onClick = {
-                    program.coreModeration = !program.coreModeration
-                    refresh++
-                    scope.launch { Clear30Store.save(program) }
                     showSwitchConfirm = false
+                    scope.launch {
+                        org.clear30.data.LoadingCoordinator.tracked {
+                            val error = org.clear30.data.ProgramTimelineHandler.switchCore(
+                                program,
+                                clientName = userInfo.name,
+                            )
+                            if (error != null) org.clear30.data.AlertHandler.error(message = error)
+                        }
+                        refresh++
+                    }
                 }) { Text("Switch") }
             },
             dismissButton = { TextButton(onClick = { showSwitchConfirm = false }) { Text("Cancel") } },
@@ -619,10 +634,10 @@ private fun ProfileSettingsOverlay(
                 Spacer(Modifier.weight(1f))
                 CircleIconButton("xmark") { onClose() }
             }
+            // Rows mirror iOS SettingsView 1:1 (§17-Q18) — the Android-only
+            // symptoms / start-date / share-calendar rows were cut (the start-date
+            // picker also desynced the timeline, B5).
             SettingsSection(userInfo, program, onSignOut, onClose)
-            SymptomsSection(userInfo)
-            ProgramStartDatePicker(program, userInfo)
-            ShareCalendarRow(program, userInfo)
         }
     }
 }

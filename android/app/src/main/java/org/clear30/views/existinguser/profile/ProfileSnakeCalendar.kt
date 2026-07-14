@@ -61,10 +61,14 @@ fun ProfileSnakeCalendar(
     modifier: Modifier = Modifier,
     animateNodes: Boolean = false,
     onAnimationComplete: (() -> Unit)? = null,
+    revision: Int = 0,
 ) {
     val currentDay = programBreak.currentBreakDay
     val breakStart = programBreak.startDate
-    val startPlain = remember(breakStart) { PlainDate.from(breakStart) }
+    // `revision` invalidates this calendar after in-place break mutations
+    // (restart / change start date) — keying the read on it keeps the param
+    // genuinely used (unused params are excluded from the skip comparison).
+    val startPlain = remember(breakStart, revision) { PlainDate.from(breakStart) }
 
     // iOS `dayMarked(_:)` — the break-relative day is sober AND not in the future.
     fun dayMarked(day: Int): Boolean {

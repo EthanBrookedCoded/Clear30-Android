@@ -142,4 +142,7 @@ dependencies {
 
     // RevenueCat
     implementation(libs.revenuecat)
+
+    // Play In-App Review (iOS requestReview parity — O9)
+    implementation(libs.play.review)
 }

@@ -1,5 +1,6 @@
 package org.clear30
 
+import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,6 +53,41 @@ class AppRootViewModel : ViewModel() {
     init {
         loadStorage()
         observeFcmToken()
+        observeScenePhase()
+    }
+
+    /**
+     * ContentView `.onChange(of: scenePhase)` (X9). Foreground: record a
+     * session + `openedApp`. Background: persist the in-place-mutated models
+     * (iOS `flushContentInfo` — captures message.visited/progress edits that
+     * haven't hit a save call yet), log `endedSession`, refresh the widgets
+     * (iOS `WidgetCenter.reloadAllTimelines()`).
+     *
+     * The launch transition is skipped — `patchUserInfo` already records the
+     * first session/openedApp (the flow starts true and StateFlow dedups).
+     */
+    private fun observeScenePhase() {
+        viewModelScope.launch {
+            AppState.foregrounded.collect { active ->
+                val userInfo = when (val s = _state.value) {
+                    is AppRootState.ExistingUser -> s.userInfo
+                    is AppRootState.NewUser -> s.userInfo
+                    else -> return@collect
+                }
+                if (active) {
+                    userInfo.sessions.add(now())
+                    Clear30Store.save(userInfo)
+                    Logger.logEvent(userInfo.loggingID, LogEventType.openedApp)
+                } else {
+                    if (::program.isInitialized) Clear30Store.save(program)
+                    Clear30Store.save(userInfo)
+                    Logger.logEvent(userInfo.loggingID, LogEventType.endedSession)
+                    runCatching {
+                        org.clear30.widget.StatsWidget().updateAll(Clear30Application.instance)
+                    }
+                }
+            }
+        }
     }
 
     /**

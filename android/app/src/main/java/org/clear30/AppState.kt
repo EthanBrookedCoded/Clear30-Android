@@ -53,7 +53,16 @@ object AppState : ViewModel() {
     private val _pendingSubRoute = MutableStateFlow<org.clear30.data.DeepLinkRoute?>(null)
     val pendingSubRoute: StateFlow<org.clear30.data.DeepLinkRoute?> = _pendingSubRoute.asStateFlow()
 
+    /**
+     * Foreground/background transitions (iOS `scenePhase`), driven by
+     * MainActivity's lifecycle. Starts true so the launch transition doesn't
+     * double-fire the foreground work `patchUserInfo` already does.
+     */
+    private val _foregrounded = MutableStateFlow(true)
+    val foregrounded: StateFlow<Boolean> = _foregrounded.asStateFlow()
+
     fun setLoading(value: Boolean) { _loadingTrigger.value = value }
+    fun setForegrounded(value: Boolean) { _foregrounded.value = value }
     fun triggerSignOut() { _signOutTrigger.value = true }
     fun clearSignOut() { _signOutTrigger.value = false }
     fun setFcmToken(token: String?) { _fcmToken.value = token }

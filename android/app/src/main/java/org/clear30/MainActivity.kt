@@ -55,13 +55,14 @@ class MainActivity : ComponentActivity() {
                 runCatching {
                     org.clear30.data.ShortcutHandler.installDefaults(this@MainActivity)
                 }
-                // TODO(port): updateSession + Logger.openedApp + handleNotification
+                // Session/openedApp + background flush live in AppRootViewModel
+                // (it owns the loaded models); this just relays the transition.
+                AppState.setForegrounded(true)
             }
 
             override fun onStop(owner: LifecycleOwner) {
                 // scenePhase == .background
-                // TODO(port): program.flushContentInfo(), Logger.endedSession,
-                //   WidgetCenter.reloadAllTimelines() (Glance widget update)
+                AppState.setForegrounded(false)
             }
         })
     }

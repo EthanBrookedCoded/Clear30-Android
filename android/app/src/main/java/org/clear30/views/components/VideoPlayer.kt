@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -246,11 +247,23 @@ fun YouTubeEmbedPlayer(
 fun InlineYouTubePlayer(
     videoId: String,
     modifier: Modifier = Modifier,
+    autoplay: Boolean = false,
     onStart: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     var playing by remember(videoId) { mutableStateOf(false) }
     var failed by remember(videoId) { mutableStateOf(false) }
+    // Feed-focus autoplay (iOS YouTubeViewer `isFeedFocused`): mounting the
+    // embed starts playback; unmounting on focus loss stops it so a swiped-away
+    // card never keeps playing audio.
+    LaunchedEffect(autoplay) {
+        if (autoplay && !failed && !playing) {
+            playing = true
+            onStart?.invoke()
+        } else if (!autoplay && playing) {
+            playing = false
+        }
+    }
     val frame = modifier
         .fillMaxWidth()
         .aspectRatio(16f / 9f)

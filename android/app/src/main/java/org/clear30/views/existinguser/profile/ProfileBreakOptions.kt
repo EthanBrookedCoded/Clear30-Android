@@ -11,7 +11,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.window.Dialog
@@ -47,15 +46,22 @@ import org.clear30.util.now
  * Every action saves locally and pushes to Supabase inside the handler.
  */
 @Composable
-fun ProfileBreakOptions(program: Program, userInfo: UserInfo, onChanged: () -> Unit) {
+fun ProfileBreakOptions(program: Program, userInfo: UserInfo, revision: Int = 0, onChanged: () -> Unit) {
     val current = program.currentBreak ?: return
-    val scope = rememberCoroutineScope()
+    // Deliberately NOT rememberCoroutineScope: endBreak nulls currentBreak
+    // in place before its network work (life-short submit, content refetch)
+    // finishes, so this composable leaves composition mid-flight on the next
+    // recomposition — a composition-tied scope would cancel the mutation
+    // halfway through. The app-lifetime scope lets it run to completion.
+    val scope = org.clear30.Clear30Application.appScope
     var busy by remember { mutableStateOf(false) }
     var showRestart by remember { mutableStateOf(false) }
     var showEnd by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
 
-    val today = now().justDay
+    // Keyed on `revision` so break mutations re-derive the Day-0 branch — and so
+    // the param stays genuinely used (unused params are excluded from skipping).
+    val today = remember(revision) { now().justDay }
     // Day 0 = the countdown day; start-soon = the preparation bridge before Day 0.
     val notStarted = current.isStartSoon || current.getBreakDay(today) <= 0
 

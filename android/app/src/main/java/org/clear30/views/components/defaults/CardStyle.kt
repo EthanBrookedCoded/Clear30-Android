@@ -1,8 +1,6 @@
 package org.clear30.views.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
@@ -10,12 +8,16 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.PaintingStyle
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -125,9 +127,22 @@ private fun Modifier.composedCardStyle(
         .clip(shape)
         .background(bg, shape)
     if (outlineGradient != null && outlineWidth > 0.dp) {
-        m = m
-            .graphicsLayer { alpha = outlineOpacity }
-            .border(BorderStroke(outlineWidth, outlineGradient), shape)
+        // iOS applies outlineOpacity to the stroke overlay ONLY (Cards.swift:650,657) —
+        // never to the card background or content, so draw the stroke ourselves with
+        // per-draw alpha instead of dimming the whole node with graphicsLayer.
+        m = m.drawWithContent {
+            drawContent()
+            val sw = outlineWidth.toPx()
+            val inset = sw / 2
+            drawRoundRect(
+                brush = outlineGradient,
+                topLeft = Offset(inset, inset),
+                size = Size(size.width - sw, size.height - sw),
+                cornerRadius = CornerRadius((cornerRadius.toPx() - inset).coerceAtLeast(0f)),
+                alpha = outlineOpacity,
+                style = Stroke(sw),
+            )
+        }
     }
     if (padding) m = m.padding(16.dp)
     return m

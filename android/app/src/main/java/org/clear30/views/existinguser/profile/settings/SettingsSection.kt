@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.text.BasicTextField
@@ -68,21 +69,21 @@ import org.clear30.data.supabase.updateUser
 import org.clear30.views.components.Clear30Card
 import org.clear30.views.components.DefaultText
 import org.clear30.views.components.SmallText
-import org.clear30.views.components.StretchedButton
 import org.clear30.views.components.pressScale
 import org.clear30.views.components.sfSymbol
 import org.clear30.views.existinguser.today.CustomCheckInSetup
 import org.clear30.views.theme.Clear30Colors
-import org.clear30.views.theme.Clear30Gradients
 import org.clear30.views.theme.Dimens
 import org.clear30.views.theme.Lexend
 
 /**
- * SettingsSection — ported from Profile/Settings (SettingsView.swift). The
- * Options rows (name, emoji, custom check-in, tutorial), the notification /
- * SMS toggles (persisted to UserInfo + Supabase), the Info links and the
- * account actions. [onClose] dismisses the settings overlay (the tutorial row
- * closes settings before the tutorials re-arm, like iOS `onActionCompleted`).
+ * SettingsSection — mirrors iOS Profile/Settings (SettingsView.swift) 1:1
+ * (§17-Q18): Options (name, emoji, notification / SMS toggles inline instead of
+ * iOS's pushed SettingsToggleView pages, custom check-in) → Info (rate us,
+ * manage subscription) → Account (red sign-out / delete + userID) → footer
+ * links. Deliberately not ported: "Show Tutorial" (tutorials cut, §17-Q4),
+ * "Clear30 widgets" showcase (only StatsWidget exists), the 10-tap influencer
+ * mode (out of scope §15). [onClose] dismisses the settings overlay.
  */
 @Composable
 fun SettingsSection(userInfo: UserInfo, program: Program, onSignOut: () -> Unit, onClose: () -> Unit) {
@@ -113,15 +114,14 @@ fun SettingsSection(userInfo: UserInfo, program: Program, onSignOut: () -> Unit,
     }
 
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-        // ===== Options (iOS SettingsView `options`) =====
+        // ===== Options (iOS SettingsView `options`: name, emoji, notifications,
+        // text messages, custom check-in — the "Show Tutorial" row was cut with
+        // the tab tutorials, §17-Q4) =====
         SettingsSectionHeader("Options")
         NameCard(userInfo)
         SettingsCard("Emoji") { UserEmojiPickerButton(userInfo) }
-        SettingsCard(
-            "Custom Check In",
-            onClick = { showCustomCheckIn = true },
-        ) { SettingsTrailingIcon("calendar.badge.checkmark") }
-        SettingsSectionHeader("Notifications")
+        // Notifications — iOS pushes a SettingsToggleView page; the same toggles
+        // render inline here (simpler, per §17-Q18).
         Clear30Card(modifier = Modifier.fillMaxWidth()) {
             Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
                 ToggleRow("All notifications", settings.all) { on ->
@@ -153,8 +153,7 @@ fun SettingsSection(userInfo: UserInfo, program: Program, onSignOut: () -> Unit,
             }
         }
 
-        SettingsSectionHeader("Text messages")
-        // iOS disables the Text Messages row for adolescent mode (opacity 0.5 +
+        // Text messages — iOS disables the row for adolescent mode (opacity 0.5 +
         // `.disabled`) — SMS accountability isn't offered to minors.
         val smsDisabled = userInfo.mode == AppMode.ADOLESCENT
         Clear30Card(modifier = Modifier.fillMaxWidth().alpha(if (smsDisabled) 0.5f else 1f)) {
@@ -191,11 +190,16 @@ fun SettingsSection(userInfo: UserInfo, program: Program, onSignOut: () -> Unit,
             }
         }
 
+        SettingsCard(
+            "Custom Check In",
+            onClick = { showCustomCheckIn = true },
+        ) { SettingsTrailingIcon("calendar.badge.checkmark") }
+
         InfoSection(userInfo)
 
         AccountSection(userInfo, onSignOut)
 
-        StretchedButton("Sign out", gradient = Clear30Gradients.red, modifier = Modifier.fillMaxWidth()) { onSignOut() }
+        LinksFooter()
     }
 
     // Custom check-in management (today/CustomCheckInSetup) as a full page.
@@ -307,7 +311,8 @@ private fun NameCard(userInfo: UserInfo) {
     }
 }
 
-/** Info section — iOS `info`: rate-us + manage-subscription cards. */
+/** Info section — iOS `info`: rate-us + manage-subscription cards. (The iOS
+ *  "Clear30 widgets" showcase row is skipped — only StatsWidget is ported.) */
 @Composable
 private fun InfoSection(userInfo: UserInfo) {
     val context = LocalContext.current
@@ -320,9 +325,11 @@ private fun InfoSection(userInfo: UserInfo) {
             Logger.logEvent(userInfo.loggingID, LogEventType.clickedReviewButton)
             // Play Store app first; fall back to the web listing.
             try {
-                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=org.clear30")))
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${context.packageName}")),
+                )
             } catch (e: ActivityNotFoundException) {
-                uri.openUri("https://play.google.com/store/apps/details?id=org.clear30")
+                uri.openUri("https://play.google.com/store/apps/details?id=${context.packageName}")
             }
         },
     ) { DefaultText("🌟") }
@@ -331,65 +338,95 @@ private fun InfoSection(userInfo: UserInfo) {
         onClick = {
             Logger.logEvent(userInfo.loggingID, LogEventType.openedManageSubscription)
             // Play subscriptions deep link — handled by the Play Store app.
-            uri.openUri("https://play.google.com/store/account/subscriptions?package=org.clear30")
+            uri.openUri("https://play.google.com/store/account/subscriptions?package=${context.packageName}")
         },
     ) { DefaultText("⚙️") }
 }
 
+/** Account section — iOS `account`: red Sign Out / Delete buttons + the userID. */
 @Composable
-private fun AccountSection(userInfo: org.clear30.data.model.UserInfo, onSignOut: () -> Unit) {
-    val uri = androidx.compose.ui.platform.LocalUriHandler.current
+private fun AccountSection(userInfo: UserInfo, onSignOut: () -> Unit) {
     val scope = rememberCoroutineScope()
-    var confirmDelete by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     SettingsSectionHeader("Account")
-    Clear30Card(modifier = Modifier.fillMaxWidth()) {
-        Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-            // Privacy policy + terms — open in the system browser. URLs match
-            // the iOS app's footer links so legal review only had to land once.
-            SmallText("Privacy policy",
-                modifier = Modifier.fillMaxWidth().clickable {
-                    uri.openUri("https://clear30.org/privacy")
-                })
-            SmallText("Terms of service",
-                modifier = Modifier.fillMaxWidth().clickable {
-                    uri.openUri("https://clear30.org/terms")
-                })
-            SmallText("Delete account",
-                color = org.clear30.views.theme.Clear30Colors.red2,
-                modifier = Modifier.fillMaxWidth().clickable {
-                    confirmDelete = true
-                })
-        }
+    RedCardButton("Sign Out") {
+        AlertHandler.show(
+            AlertHandler.Alert(
+                title = "Sign Out",
+                message = "Are you sure you want to sign out?\nYou will not have to pay again",
+                primaryLabel = "Sign Out",
+                onPrimary = {
+                    Logger.logEvent(userInfo.loggingID, LogEventType.signedOut)
+                    onSignOut()
+                },
+                secondaryLabel = "Cancel",
+            ),
+        )
     }
-    if (confirmDelete) {
-        // Two-step confirmation — destructive, so we route through the
-        // standard AlertHandler instead of an inline dialog so the user can
-        // back out cleanly. On confirm: server delete → sign-out wipes
-        // local state.
-        androidx.compose.runtime.LaunchedEffect(Unit) {
-            org.clear30.data.AlertHandler.show(
-                org.clear30.data.AlertHandler.Alert(
-                    title = "Delete your account?",
-                    message = "This permanently removes your check-ins, journals, and group membership. This can't be undone.",
-                    primaryLabel = "Delete",
-                    onPrimary = {
-                        scope.launch {
-                            org.clear30.data.LoadingCoordinator.tracked {
-                                org.clear30.data.supabase.SupabaseController.deleteAccount()
-                            }
-                            org.clear30.data.Logger.logEvent(
-                                userInfo.loggingID,
-                                org.clear30.data.LogEventType.deletedAccount,
-                            )
-                            onSignOut()
+    RedCardButton("Delete Account and Data") {
+        AlertHandler.show(
+            AlertHandler.Alert(
+                title = "Delete account?",
+                message = "This will remove all user data.\nYour subscription will NOT automatically be canceled.",
+                primaryLabel = "Delete",
+                onPrimary = {
+                    scope.launch {
+                        Logger.logEvent(userInfo.loggingID, LogEventType.deletedAccount)
+                        org.clear30.data.LoadingCoordinator.tracked {
+                            SupabaseController.deleteAccount()
                         }
-                    },
-                    secondaryLabel = "Cancel",
-                    onSecondary = { confirmDelete = false },
-                )
-            )
+                        onSignOut()
+                    }
+                },
+                secondaryLabel = "Cancel",
+            ),
+        )
+    }
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        org.clear30.views.components.TinyText(
+            userInfo.userID,
+            color = Clear30Colors.text.copy(alpha = 0.25f),
+        )
+    }
+}
+
+/** iOS `TextIconButton(foregroundColor: .red)` — a centered red card button. */
+@Composable
+private fun RedCardButton(title: String, onClick: () -> Unit) {
+    Clear30Card(modifier = Modifier.fillMaxWidth().pressScale { onClick() }) {
+        SmallText(
+            title,
+            color = org.clear30.views.theme.Clear30Colors.red2,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/** Footer links — iOS `links`: Privacy / Terms / Clear30.org, centered + dim. */
+@Composable
+private fun LinksFooter() {
+    val uri = androidx.compose.ui.platform.LocalUriHandler.current
+
+    @Composable
+    fun LinkText(text: String, url: String) {
+        org.clear30.views.components.TinyText(
+            text,
+            color = Clear30Colors.text.copy(alpha = 0.5f),
+            modifier = Modifier.clickable { uri.openUri(url) },
+        )
+    }
+
+    Column(
+        Modifier.fillMaxWidth().padding(bottom = Dimens.cardSpacing),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
+            LinkText("Privacy Policy", "https://www.clear30.org/privacy-policy")
+            LinkText("Terms and Conditions", "https://www.clear30.org/terms-and-conditions")
         }
+        LinkText("Clear30.org", "https://clear30.org/")
     }
 }
 

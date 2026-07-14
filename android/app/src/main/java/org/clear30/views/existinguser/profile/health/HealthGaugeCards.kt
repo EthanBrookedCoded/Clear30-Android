@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -53,8 +54,17 @@ import org.clear30.views.theme.colorFromHex
  * category. Always tappable, even at 0% — routes to that category's timeline.
  */
 @Composable
-fun HealthCardsRow(program: Program, userInfo: UserInfo, onOpenTimeline: (ProgramHealthProgress) -> Unit) {
-    val sorted = program.healthProgress.sortedBy { it.category.order }
+fun HealthCardsRow(
+    program: Program,
+    userInfo: UserInfo,
+    revision: Int = 0,
+    onOpenTimeline: (ProgramHealthProgress) -> Unit,
+) {
+    // Keyed on `revision`: the health models are mutated in place (break
+    // mutations shift step dates, opening a timeline stamps lastVisited), so
+    // the caller's counter is what invalidates this row — and the remember key
+    // keeps the param genuinely used (unused params are excluded from skipping).
+    val sorted = remember(revision) { program.healthProgress.sortedBy { it.category.order } }
     if (sorted.isEmpty()) return
     val soonest = program.healthProgress.nextIncreaseCategory
     Row(
@@ -65,6 +75,7 @@ fun HealthCardsRow(program: Program, userInfo: UserInfo, onOpenTimeline: (Progra
             HealthGaugeCard(
                 hp,
                 showTimeLeft = soonest?.category?.name == hp.category.name,
+                revision = revision,
                 onClick = { onOpenTimeline(hp) },
                 modifier = Modifier.weight(1f),
             )
@@ -86,10 +97,14 @@ internal val ProgramHealthProgress.color2: Color get() = colorFromHex(category.c
 private fun HealthGaugeCard(
     healthProgress: ProgramHealthProgress,
     showTimeLeft: Boolean,
+    revision: Int,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val percentage = healthProgress.currentStep?.percentage ?: 0
+    // `healthProgress` is mutated in place — `revision` invalidates the card;
+    // the remember key keeps the param genuinely used (unused params are
+    // excluded from the skip comparison).
+    val percentage = remember(revision) { healthProgress.currentStep?.percentage ?: 0 }
     val gradient = healthProgress.gradientBrush()
     val hasNew = healthProgress.hasNew
     val bestPercentage = healthProgress.bestStep?.percentage

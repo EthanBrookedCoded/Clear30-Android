@@ -179,7 +179,7 @@ fun TodayTab(
         // them like iOS AllTabs:488 (schoolMessages carry no notification copy,
         // so scheduleContent skips them — included for parity all the same).
         val allMessages = program.contentInfo.values.flatMap { it.messages } + program.schoolMessages
-        org.clear30.data.NotificationHandler.scheduleContent(userInfo, allMessages)
+        org.clear30.data.NotificationHandler.scheduleContent(userInfo, allMessages, program)
         org.clear30.data.Logger.logEvent(userInfo.loggingID, org.clear30.data.LogEventType.openedCalendar)
     }
 
@@ -260,7 +260,13 @@ fun TodayTab(
     val currentIndex by remember { derivedStateOf { pagerState.currentPage } }
     val showProgressBar by remember { derivedStateOf { showWeekView && pagerState.currentPage > 0 } }
 
-    Column(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding)) {
+    // iOS scrollShadowFix pattern (T9b): the column keeps horizontalPadding −
+    // scrollShadowFix and every non-pager child pads the remaining
+    // scrollShadowFix itself, so the pager (a clipping scroll container) has
+    // scrollShadowFix of breathing room around its pages and the cards' soft
+    // shadows aren't cut at the pager bounds.
+    val shadowPad = Dimens.scrollShadowFix
+    Column(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding - shadowPad)) {
         @Suppress("UNUSED_EXPRESSION") refresh
 
         // Pending post-assessment card (iOS PopUps.swift:31-33) — tap opens the flow.
@@ -268,12 +274,13 @@ fun TodayTab(
         if (postAssessmentText != null && onOpenPostAssessment != null) {
             org.clear30.views.existinguser.postassessment.PostAssessmentPopupCard(
                 text = postAssessmentText,
-                modifier = Modifier.padding(bottom = Dimens.cardSpacing / 2),
+                modifier = Modifier.padding(horizontal = shadowPad).padding(bottom = Dimens.cardSpacing / 2),
                 onClick = onOpenPostAssessment,
             )
         }
 
-        TodayTopSection(
+        Box(Modifier.fillMaxWidth().padding(horizontal = shadowPad)) {
+            TodayTopSection(
             program = program,
             today = today,
             selectedDay = selectedDay,
@@ -297,21 +304,27 @@ fun TodayTab(
             onMonthStep = { months -> monthAnchor = monthAnchor.adding(months = months) },
             onScrollToTop = { scope.launch { pagerState.animateScrollToPage(0) } },
             onShare = { shareProgress(it, program) },
-        )
+            )
+        }
 
-        FeedDivider(showToggle = !showProgressBar, isDown = showWeekView) {
-            Haptics.lightImpact()
-            if (!showWeekView) {
-                // collapsing to week
-            } else {
-                monthAnchor = firstOfMonth(selectedDay) // open month on the selected day's month
+        Box(Modifier.fillMaxWidth().padding(horizontal = shadowPad)) {
+            FeedDivider(showToggle = !showProgressBar, isDown = showWeekView) {
+                Haptics.lightImpact()
+                if (!showWeekView) {
+                    // collapsing to week
+                } else {
+                    monthAnchor = firstOfMonth(selectedDay) // open month on the selected day's month
+                }
+                showWeekView = !showWeekView
             }
-            showWeekView = !showWeekView
         }
 
         if (!showWeekView) {
             // Month mode: a single centered day-preview card (iOS `dayPreview`).
-            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.fillMaxWidth().weight(1f).padding(horizontal = shadowPad),
+                contentAlignment = Alignment.Center,
+            ) {
                 CheckInDayCard(
                     selectedDay = selectedDay,
                     program = program,
@@ -330,8 +343,13 @@ fun TodayTab(
                     modifier = Modifier.fillMaxSize(),
                     // Extra vertical padding so the previous/next card clearly peeks
                     // above & below the focused one — it should be obvious there's a
-                    // deck to swipe through, not a single static card.
-                    contentPadding = PaddingValues(vertical = Dimens.cardSpacing * 2.5f),
+                    // deck to swipe through, not a single static card. Horizontal =
+                    // the scrollShadowFix share this column no longer applies, so
+                    // page content stays aligned while shadows get room (T9b).
+                    contentPadding = PaddingValues(
+                        horizontal = shadowPad,
+                        vertical = Dimens.cardSpacing * 2.5f,
+                    ),
                     pageSpacing = Dimens.cardSpacing,
                 ) { page ->
                     // Subscribe each page to the mutation counter — `program` is
@@ -354,21 +372,45 @@ fun TodayTab(
                         contentAlignment = Alignment.Center,
                     ) {
                         when (val item = feedItems.getOrNull(page)) {
-                            FeedItem.CheckIn -> CheckInDayCard(
-                                selectedDay = selectedDay,
-                                program = program,
-                                showStreak = selectedDay == today,
-                                revision = refresh,
-                                onCheckIn = { showCheckInSheet = true },
-                                onCheckInChange = onCheckInChange,
-                            )
+                            FeedItem.CheckIn -> Column(
+                                verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+                            ) {
+                                CheckInDayCard(
+                                    selectedDay = selectedDay,
+                                    program = program,
+                                    showStreak = selectedDay == today,
+                                    revision = refresh,
+                                    onCheckIn = { showCheckInSheet = true },
+                                    onCheckInChange = onCheckInChange,
+                                )
+                                // iOS TodayFeedCardRouter: the first feed page carries
+                                // the day's topic card under the check-in card (T9a).
+                                messages.firstOrNull()?.let { first ->
+                                    TopicProgressCard(
+                                        emoji = first.topicEmoji,
+                                        title = first.topicTitle,
+                                        badge = program.getBadgeInfo(first.unlockOn),
+                                        progress = program.contentInfo[selectedDay]?.progress?.toFloat(),
+                                        onContinue = {
+                                            scope.launch { pagerState.animateScrollToPage(1) }
+                                        },
+                                    )
+                                }
+                            }
                             is FeedItem.Video -> VideoFeedCard(item.msg, userInfo)
                             is FeedItem.Message -> MessageContentCard(item.msg, program, userInfo, glow = glow)
                             is FeedItem.Carousel -> CarouselFeedCard(item.images, glow = glow)
                             is FeedItem.Guides -> GuidesFeedCard(item.msg, glow = glow)
                             is FeedItem.Meditation -> MeditationFeedCard(item.med, program, glow = glow?.let { Clear30Gradients.meditation })
                             is FeedItem.Reddit -> RedditFeedCard(item.res, userInfo, glow = glow?.let { Clear30Gradients.reddit }, onOpen = { redditUrl = it })
-                            is FeedItem.YouTube -> YouTubeFeedCard(item.res, userInfo, glow = glow?.let { Clear30Gradients.youtube }, onOpenWeb = { webUrl = it })
+                            is FeedItem.YouTube -> YouTubeFeedCard(
+                                item.res, userInfo,
+                                glow = glow?.let { Clear30Gradients.youtube },
+                                // iOS autoplays inline YouTube when the page settles
+                                // into focus and pauses when it leaves (T9c).
+                                focused = page == pagerState.settledPage,
+                                onOpenWeb = { webUrl = it },
+                            )
                             is FeedItem.Claire -> ClairePromptFeedCard(item.prompt, userInfo, glow = glow?.let { Clear30Gradients.claire })
                             is FeedItem.Perk -> MemberPerkFeedCard(item.perk, glow = glow?.let { Clear30Gradients.supplements }, onOpenWeb = { webUrl = it })
                             is FeedItem.Journal -> JournalPromptsFeedCard(item.prompts, glow = glow?.let { Clear30Gradients.journals }, onJournal = { journalPrompt = it })

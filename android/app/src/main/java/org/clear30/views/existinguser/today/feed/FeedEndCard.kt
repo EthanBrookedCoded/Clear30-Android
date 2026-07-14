@@ -136,6 +136,9 @@ internal fun FeedEndCelebration(
  * The topic card with the animated completion state (iOS
  * `ProgramMessageTopicCard`): emoji + title (+ optional break badge); below,
  * a progress bar + live percentage that becomes a "100% Completed 🥹" button.
+ * [onContinue] renders the iOS bottom button ("Dive In" with no progress data,
+ * "Continue" mid-progress, and makes the 100% state tappable) — the Today feed
+ * passes it to scroll to the first lesson page.
  */
 @Composable
 internal fun TopicProgressCard(
@@ -143,6 +146,7 @@ internal fun TopicProgressCard(
     title: String,
     badge: Pair<String, String>? = null,
     progress: Float?,
+    onContinue: (() -> Unit)? = null,
 ) {
     Clear30Card(modifier = Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
@@ -164,23 +168,48 @@ internal fun TopicProgressCard(
                 }
             }
             when {
-                progress == null -> Unit
+                progress == null -> onContinue?.let { TopicCardButton("Dive In", "arrow.down", it) }
                 progress >= 1f -> Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(Dimens.cornerRadius)).background(Clear30Gradients.clear30)
+                        .then(if (onContinue != null) Modifier.pressScale { onContinue() } else Modifier)
                         .padding(vertical = Dimens.cardSpacing * 0.75f),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     SmallText("100% Completed 🥹", color = Color.White)
                 }
-                else -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-                    Box(Modifier.weight(1f)) {
-                        ElectricProgressBar(current = (progress * 100).toInt(), max = 100, height = 8.dp)
+                else -> Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+                        Box(Modifier.weight(1f)) {
+                            ElectricProgressBar(current = (progress * 100).toInt(), max = 100, height = 8.dp)
+                        }
+                        SmallText("${(progress * 100).toInt()}%", color = Clear30Colors.text.copy(alpha = 0.5f))
                     }
-                    SmallText("${(progress * 100).toInt()}%", color = Clear30Colors.text.copy(alpha = 0.5f))
+                    onContinue?.let { TopicCardButton("Continue", "arrow.down", it) }
                 }
             }
         }
+    }
+}
+
+/** iOS `TextIconButton(outlineGradient: clear30, 0.5)` — the topic card CTA. */
+@Composable
+private fun TopicCardButton(text: String, icon: String, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth()
+            .cardStyle(
+                shadowColor = Color.Transparent,
+                outlineGradient = Clear30Gradients.clear30,
+                outlineOpacity = 0.5f,
+                padding = false,
+            )
+            .pressScale { onClick() }
+            .padding(vertical = Dimens.cardSpacing * 0.75f),
+        horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SmallText(text)
+        Icon(sfSymbol(icon), contentDescription = null, tint = Clear30Colors.text, modifier = Modifier.size(12.dp))
     }
 }
 

@@ -55,6 +55,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.getAssessmentSocialProofValue
+import org.clear30.data.supabase.getCommunityPostById
 import org.clear30.data.supabase.incrementAssessmentSocialProofCount
 import org.clear30.views.components.Clear30Card
 import org.clear30.views.components.GiganticText
@@ -92,6 +93,12 @@ private sealed interface TestimonialType {
     ) : TestimonialType
 
     data class Review(val title: String, val body: String, val rating: Double) : TestimonialType
+}
+
+/** iOS `SheetType` — the tapped testimonial's detail sheet (O5). */
+private sealed interface SocialProofSheet {
+    data class PostDetail(val title: String, val body: String) : SocialProofSheet
+    data class ReviewDetail(val title: String, val body: String, val rating: Double) : SocialProofSheet
 }
 
 private data class SocialProofData(
@@ -189,6 +196,7 @@ fun AssessmentSocialProof(name: String, modifier: Modifier = Modifier) {
     // back to the static count when the row is absent (e.g. the local stack has
     // none), and bump the counter on appear.
     var peopleCount by remember { mutableStateOf(data.peopleCount) }
+    var activeSheet by remember { mutableStateOf<SocialProofSheet?>(null) }
     LaunchedEffect(Unit) {
         SupabaseController.getAssessmentSocialProofValue()
             ?.let(::parseLivePeopleCount)
@@ -207,7 +215,48 @@ fun AssessmentSocialProof(name: String, modifier: Modifier = Modifier) {
         PeopleCountSection(name = name, peopleCount = peopleCount)
         StatisticsSection(stats = data.stats)
         ReviewSection(review = data.review)
-        TestimonialsSection(testimonials = data.testimonials)
+        TestimonialsSection(testimonials = data.testimonials, onOpenSheet = { activeSheet = it })
+    }
+
+    // Detail sheets (iOS `.sheet(item: $activeSheet)` → DetailViewWrapper).
+    activeSheet?.let { sheet -> SocialProofDetailSheet(sheet) { activeSheet = null } }
+}
+
+/** iOS `DetailViewWrapper` — the tapped review / community post, full text. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun SocialProofDetailSheet(sheet: SocialProofSheet, onDismiss: () -> Unit) {
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = Clear30Colors.background,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.cardSpacing),
+        ) {
+            when (sheet) {
+                is SocialProofSheet.PostDetail -> {
+                    CommunityHeadingPill()
+                    Spacer(Modifier.height(Dimens.cardSpacing))
+                    Heading3(sheet.title, color = Clear30Colors.text)
+                    if (sheet.body.isNotEmpty()) {
+                        Spacer(Modifier.height(Dimens.cardSpacing))
+                        SmallText(sheet.body, color = Clear30Colors.text)
+                    }
+                }
+                is SocialProofSheet.ReviewDetail -> {
+                    StarsRow(rating = sheet.rating, starSize = 20.dp)
+                    Spacer(Modifier.height(Dimens.cardSpacing))
+                    Heading3(sheet.title, color = Clear30Colors.text)
+                    Spacer(Modifier.height(Dimens.cardSpacing))
+                    SmallText(sheet.body, color = Clear30Colors.text)
+                }
+            }
+            Spacer(Modifier.height(Dimens.cardSpacing * 2))
+        }
     }
 }
 
@@ -407,7 +456,10 @@ private fun LaurelFlourish() {
 // MARK: - Testimonials
 
 @Composable
-private fun TestimonialsSection(testimonials: List<TestimonialType>) {
+private fun TestimonialsSection(
+    testimonials: List<TestimonialType>,
+    onOpenSheet: (SocialProofSheet) -> Unit,
+) {
     Column(Modifier.fillMaxWidth()) {
         SmallText(
             "Real people who felt just like you",
@@ -447,6 +499,7 @@ private fun TestimonialsSection(testimonials: List<TestimonialType>) {
                         scaleY = s
                         alpha = 1f - 0.5f * offset
                     },
+                onOpenSheet = onOpenSheet,
             )
         }
         if (testimonials.size > 1) {
@@ -490,12 +543,18 @@ private fun PageDots(count: Int, current: Int, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun TestimonialCard(testimonial: TestimonialType, modifier: Modifier = Modifier) {
+private fun TestimonialCard(
+    testimonial: TestimonialType,
+    modifier: Modifier = Modifier,
+    onOpenSheet: (SocialProofSheet) -> Unit,
+) {
     when (testimonial) {
         is TestimonialType.CommunityPost -> CommunityPostTestimonialCard(
-            title = testimonial.title,
-            bodyText = testimonial.body,
+            postId = testimonial.postId,
+            fallbackTitle = testimonial.title,
+            fallbackBody = testimonial.body,
             modifier = modifier,
+            onOpenSheet = onOpenSheet,
         )
 
         is TestimonialType.Review -> ReviewTestimonialCard(
@@ -503,39 +562,71 @@ private fun TestimonialCard(testimonial: TestimonialType, modifier: Modifier = M
             bodyText = testimonial.body,
             rating = testimonial.rating,
             modifier = modifier,
+            onOpenSheet = onOpenSheet,
         )
     }
 }
 
+/** The "Clear30 Community" gradient pill (iOS `FeedCardHeading`). */
+@Composable
+private fun CommunityHeadingPill() {
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(Dimens.cornerRadius / 2))
+            .background(Clear30Gradients.community)
+            .padding(horizontal = Dimens.cardSpacing / 2, vertical = Dimens.cardSpacing / 4),
+    ) {
+        TinyText("Clear30 Community", color = Color.White)
+    }
+}
+
+/** The 5-star row shared by the review card (17dp) and its sheet (20dp). */
+@Composable
+private fun StarsRow(rating: Double, starSize: androidx.compose.ui.unit.Dp) {
+    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        // iOS: full stars for index < rating, gold journal fill. A 5.0 review
+        // shows five filled stars.
+        repeat(5) { index ->
+            Icon(
+                Icons.Rounded.Star,
+                contentDescription = null,
+                tint = if (index < rating.toInt()) Clear30Colors.journal2 else Clear30Colors.journal2.copy(alpha = 0.25f),
+                modifier = Modifier.size(starSize),
+            )
+        }
+    }
+}
+
 /**
- * CommunityPostTestimonialCard — iOS fetches the post by id and renders its title
- * + body, then opens a detail sheet on tap. We render the title + body inline and
- * make "Tap to see more" actually expand the full body (no dead affordance).
+ * CommunityPostTestimonialCard — iOS `CommunityPostTestimonialCard`: fetches the
+ * live post by id (`getCommunityPostById`) and opens the detail sheet on tap
+ * (O5). The inlined title/body serve as the fallback while loading / when the
+ * fetch fails (e.g. the local stack without the seeded posts), so the card is
+ * never blank — a deliberate softening of iOS's empty loading state.
  */
-// TODO(port): fetch the live community Post by id (getCommunityPostById) + open the
-//             iOS-style detail sheet instead of inline expansion.
 @Composable
 private fun CommunityPostTestimonialCard(
-    title: String,
-    bodyText: String,
+    postId: String,
+    fallbackTitle: String,
+    fallbackBody: String,
     modifier: Modifier = Modifier,
+    onOpenSheet: (SocialProofSheet) -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var title by remember(postId) { mutableStateOf(fallbackTitle) }
+    var bodyText by remember(postId) { mutableStateOf(fallbackBody) }
+    LaunchedEffect(postId) {
+        SupabaseController.getCommunityPostById(postId).getOrNull()?.let { post ->
+            title = post.title
+            bodyText = post.body
+        }
+    }
     Clear30Card(
         modifier = modifier
             .height(300.dp)
-            .pressScale { expanded = !expanded },
+            .pressScale { onOpenSheet(SocialProofSheet.PostDetail(title, bodyText)) },
     ) {
-        Column(Modifier.fillMaxWidth().animateContentSize()) {
-            // FeedCardHeading stand-in — community gradient pill.
-            Box(
-                Modifier
-                    .clip(RoundedCornerShape(Dimens.cornerRadius / 2))
-                    .background(Clear30Gradients.community)
-                    .padding(horizontal = Dimens.cardSpacing / 2, vertical = Dimens.cardSpacing / 4),
-            ) {
-                TinyText("Clear30 Community", color = Color.White)
-            }
+        Column(Modifier.fillMaxWidth()) {
+            CommunityHeadingPill()
             Spacer(Modifier.height(Dimens.cardSpacing))
             Heading3(title, color = Clear30Colors.text)
             Spacer(Modifier.height(Dimens.cardSpacing))
@@ -543,11 +634,11 @@ private fun CommunityPostTestimonialCard(
                 bodyText,
                 modifier = Modifier.fillMaxWidth().alpha(0.5f),
                 color = Clear30Colors.text,
-                maxLines = if (expanded) Int.MAX_VALUE else 4,
+                maxLines = 4,
             )
             Spacer(Modifier.weight(1f))
             TinyText(
-                if (expanded) "Tap to collapse" else "Tap to see more",
+                "Tap to see more",
                 modifier = Modifier.alpha(0.5f),
                 color = Clear30Colors.text,
             )
@@ -561,28 +652,16 @@ private fun ReviewTestimonialCard(
     bodyText: String,
     rating: Double,
     modifier: Modifier = Modifier,
+    onOpenSheet: (SocialProofSheet) -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
     Clear30Card(
         modifier = modifier
             .height(300.dp)
-            .pressScale { expanded = !expanded },
+            .pressScale { onOpenSheet(SocialProofSheet.ReviewDetail(title, bodyText, rating)) },
     ) {
-        Column(Modifier.fillMaxWidth().animateContentSize()) {
-            Row(
-                Modifier.padding(bottom = Dimens.cardSpacing / 2),
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                // iOS: full stars for index < rating, gold journal fill. A 5.0 review
-                // shows five filled stars (17pt on iOS).
-                repeat(5) { index ->
-                    Icon(
-                        Icons.Rounded.Star,
-                        contentDescription = null,
-                        tint = if (index < rating.toInt()) Clear30Colors.journal2 else Clear30Colors.journal2.copy(alpha = 0.25f),
-                        modifier = Modifier.size(17.dp),
-                    )
-                }
+        Column(Modifier.fillMaxWidth()) {
+            Box(Modifier.padding(bottom = Dimens.cardSpacing / 2)) {
+                StarsRow(rating = rating, starSize = 17.dp)
             }
             Heading3(title, color = Clear30Colors.text)
             Spacer(Modifier.height(Dimens.cardSpacing))
@@ -590,11 +669,11 @@ private fun ReviewTestimonialCard(
                 bodyText,
                 modifier = Modifier.fillMaxWidth().alpha(0.5f),
                 color = Clear30Colors.text,
-                maxLines = if (expanded) Int.MAX_VALUE else 6,
+                maxLines = 6,
             )
             Spacer(Modifier.weight(1f))
             TinyText(
-                if (expanded) "Tap to collapse" else "Tap to see more",
+                "Tap to see more",
                 modifier = Modifier.alpha(0.5f),
                 color = Clear30Colors.text,
             )

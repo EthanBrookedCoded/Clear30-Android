@@ -17,7 +17,9 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.automirrored.rounded.Notes
+import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.EventAvailable
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.Refresh
@@ -146,6 +148,7 @@ fun sfSymbol(name: String): ImageVector = when (name) {
     "hand.thumbsup", "hand.thumbsup.fill" -> Icons.Rounded.ThumbUp
     "chart.bar", "chart.bar.fill" -> Icons.Rounded.BarChart
     "calendar" -> Icons.Rounded.CalendarMonth
+    "calendar.badge.checkmark", "calendar.badge.plus" -> Icons.Rounded.EventAvailable
     "bell.fill", "bell" -> Icons.Rounded.Notifications
     "gearshape.fill", "gearshape", "gear" -> Icons.Rounded.Settings
     "heart.fill", "heart" -> Icons.Rounded.Favorite
@@ -186,6 +189,7 @@ fun sfSymbol(name: String): ImageVector = when (name) {
     "arrow.clockwise", "arrow.clockwise.circle" -> Icons.Rounded.Refresh
     "ellipsis", "ellipsis.circle" -> Icons.Rounded.MoreHoriz
     "arrow.up", "arrow.up.circle" -> Icons.Rounded.ArrowUpward
+    "arrow.down", "arrow.down.circle" -> Icons.Rounded.ArrowDownward
     "lungs.fill", "lungs" -> Icons.Rounded.Air
     "brain.head.profile", "brain.head.profile.fill", "brain", "brain.fill" -> Icons.Rounded.Psychology
     "face.smiling", "face.smiling.fill" -> Icons.Rounded.SentimentSatisfied

@@ -2,25 +2,29 @@ package org.clear30.views.existinguser.support
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
@@ -114,20 +118,81 @@ internal fun SymptomSupportSection(infos: SymptomInfos, program: Program, onOpen
             .thenBy { it.key },
     )
     if (entries.isEmpty()) return
+    // iOS presents these through FeedView (horizontal paging, S13): one
+    // full-width card per snapping page, neighbors at 0.9 scale / 0.5 opacity,
+    // page dots below — the same treatment as the assessment testimonials rail.
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { entries.size })
+    var settledPage by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    LaunchedEffect(pagerState.currentPage) {
+        if (pagerState.currentPage != settledPage) {
+            settledPage = pagerState.currentPage
+            org.clear30.views.theme.Haptics.lightImpact()
+        }
+    }
+    Column(Modifier.fillMaxWidth().padding(vertical = Dimens.cardSpacing / 4)) {
+        androidx.compose.foundation.pager.HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxWidth().height(220.dp),
+        ) { page ->
+            val offset = (
+                (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
+                ).let { kotlin.math.abs(it) }.coerceIn(0f, 1f)
+            val (key, info) = entries[page]
+            SymptomCard(
+                key, info,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        val s = 1f - 0.1f * offset
+                        scaleX = s
+                        scaleY = s
+                        alpha = 1f - 0.5f * offset
+                    },
+            ) { onOpen(key, info) }
+        }
+        if (entries.size > 1) {
+            SymptomPageDots(
+                count = entries.size,
+                current = pagerState.currentPage,
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(top = Dimens.cardSpacing),
+            )
+        }
+    }
+}
+
+/** FeedView `pageDots` — small dots in a translucent capsule, current darker. */
+@Composable
+private fun SymptomPageDots(count: Int, current: Int, modifier: Modifier = Modifier) {
     Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = Dimens.cardSpacing / 4),
-        horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+        modifier
+            .clip(RoundedCornerShape(99.dp))
+            .background(Color.White.copy(alpha = 0.25f))
+            .padding(horizontal = Dimens.cardSpacing / 2, vertical = Dimens.cardSpacing / 4),
+        horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        entries.forEach { (key, info) -> SymptomCard(key, info) { onOpen(key, info) } }
+        repeat(count) { index ->
+            Box(
+                Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (index == current) Clear30Colors.text.copy(alpha = 0.75f)
+                        else Clear30Colors.text.copy(alpha = 0.25f),
+                    ),
+            )
+        }
     }
 }
 
 @Composable
-private fun SymptomCard(key: String, info: SymptomInfo, onClick: () -> Unit) {
+private fun SymptomCard(key: String, info: SymptomInfo, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val emoji = key.firstEmoji ?: "🩺"
     val title = (key.firstEmoji?.let { key.removePrefix(it) } ?: key).trim().replaceFirstChar { it.uppercase() }
     Box(
-        Modifier.size(width = 200.dp, height = 210.dp)
+        modifier
             .clip(RoundedCornerShape(Dimens.cornerRadius))
             .background(info.getGradient())
             .pressScale { onClick() },

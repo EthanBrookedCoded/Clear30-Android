@@ -332,6 +332,7 @@ internal fun YouTubeFeedCard(
     res: ProgramResource,
     userInfo: UserInfo,
     glow: Brush? = null,
+    focused: Boolean = false,
     onOpenWeb: (String) -> Unit,
 ) {
     val id = youTubeId(res.url)
@@ -352,7 +353,9 @@ internal fun YouTubeFeedCard(
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
             if (id != null) {
-                InlineYouTubePlayer(id, Modifier.fillMaxWidth()) {
+                // `autoplay` mirrors iOS YouTubeViewer's isFeedFocused handling:
+                // play when the page settles into focus, stop when it leaves.
+                InlineYouTubePlayer(id, Modifier.fillMaxWidth(), autoplay = focused) {
                     Logger.logEvent(userInfo.loggingID, LogEventType.openedYouTubeVideo, mapOf(LogEventExtraDataType.URL to res.url))
                 }
             }

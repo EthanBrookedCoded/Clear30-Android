@@ -105,6 +105,16 @@ class Clear30Application : Application() {
         lateinit var instance: Clear30Application
             private set
 
+        /**
+         * App-lifetime scope for one-shot model mutations whose UI trigger can
+         * leave composition before the work completes (e.g. ending a break
+         * removes the break-options section mid-flight). Main-dispatched with a
+         * SupervisorJob so one failed mutation doesn't kill the scope.
+         */
+        val appScope = kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main,
+        )
+
         const val CHANNEL_CONTENT = "content"
         const val CHANNEL_CHECK_IN = "check_in"
         const val CHANNEL_POP_IN = "pop_in"

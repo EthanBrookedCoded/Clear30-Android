@@ -76,12 +76,24 @@ object NotificationHandler {
     // MARK: - Daily content
 
     /**
-     * Schedule one notification per future-dated [ProgramMessage] that carries
-     * a `notificationTitle` + `notificationBody`. Replaces any previously
-     * scheduled content notifications (idempotent — safe to re-call after every
-     * `ProgramMessageHandler.ensureContent`).
+     * Schedule one notification per future-dated [ProgramMessage] — the full
+     * iOS `NotificationHandlerContent.scheduleContent` port (N3):
+     *
+     *  - Fire time is anchored to the user's **smoke time** from the break
+     *    assessment ("4:20 PM"): a random minute in the hour BEFORE it on the
+     *    message's unlock day (iOS `smokeTimeBasedDate`, verified against
+     *    source per §17-Q20). With no smoke-time answer: unlockOn ± up to 1h
+     *    (iOS `randomDate`).
+     *  - Copy falls back from `notificationTitle`/`notificationBody` to the
+     *    message `title`/`subtitle`, with `_CLIENTNAME_` substitution.
+     *  - Within a day, assessment-response messages win: base messages only
+     *    notify on days that have no assessment message (iOS pre-filter).
+     *  - School messages never notify; capped at 50.
+     *
+     * Replaces any previously scheduled content notifications (idempotent —
+     * safe to re-call after every `ProgramMessageHandler.ensureContent`).
      */
-    fun scheduleContent(userInfo: UserInfo, messages: List<ProgramMessage>) {
+    fun scheduleContent(userInfo: UserInfo, messages: List<ProgramMessage>, program: Program) {
         val settings = userInfo.notificationSettings ?: return
         if (!settings.typeEnabled(ToggleSettingsOption.CONTENT)) {
             wm().cancelAllWorkByTag(NotificationPostWorker.TAG_CONTENT)
@@ -90,11 +102,27 @@ object NotificationHandler {
 
         wm().cancelAllWorkByTag(NotificationPostWorker.TAG_CONTENT)
 
+        // Smoke time parsed once outside the loop (iOS).
+        val smokeTime = program.currentBreak
+            ?.getMultiAssessmentResponses(org.clear30.data.model.AssessmentQuestionID.SMOKE_TIME.raw)
+            ?.firstOrNull()
+            ?.let(::parseTimeString)
+
+        val tz = TimeZone.currentSystemDefault()
         val nowMs = System.currentTimeMillis()
-        messages.forEach { msg ->
-            val title = msg.notificationTitle ?: return@forEach
-            val body = msg.notificationBody ?: return@forEach
-            val fireAt = msg.unlockOn.toEpochMilliseconds()
+        val future = messages.filter { !it.isSchoolMessage && it.unlockOn.toEpochMilliseconds() > nowMs }
+        val filtered = future.filter { msg ->
+            val isAssessment = msg.questionID != null && msg.questionResponse != null
+            isAssessment || future.none { other ->
+                other !== msg && other.questionID != null && other.questionResponse != null &&
+                    other.unlockOn.toLocalDateTime(tz).date == msg.unlockOn.toLocalDateTime(tz).date
+            }
+        }
+
+        filtered.take(MAX_CONTENT_NOTIFICATIONS).forEach { msg ->
+            val title = (msg.notificationTitle ?: msg.title).replace("_CLIENTNAME_", userInfo.name)
+            val body = (msg.notificationBody ?: msg.subtitle).replace("_CLIENTNAME_", userInfo.name)
+            val fireAt = smokeTimeBasedFireMs(msg.unlockOn, smokeTime, tz)
             if (fireAt <= nowMs) return@forEach
             val notifId = msg.messageID ?: msg.title.hashCode()
 
@@ -110,6 +138,43 @@ object NotificationHandler {
                 .build()
             wm().enqueueUniqueWork("content_$notifId", ExistingWorkPolicy.REPLACE, req)
         }
+    }
+
+    /**
+     * iOS `smokeTimeBasedDate`: with a smoke time, fire on the unlock DAY at a
+     * random minute inside [smokeTime − 1h, smokeTime]; otherwise unlockOn plus
+     * a random offset in ±1h.
+     */
+    private fun smokeTimeBasedFireMs(
+        unlockOn: kotlinx.datetime.Instant,
+        smokeTime: Pair<Int, Int>?,
+        tz: TimeZone,
+    ): Long {
+        if (smokeTime != null) {
+            val (hour, minute) = smokeTime
+            if (hour in 0..23 && minute in 0..59) {
+                val day = unlockOn.toLocalDateTime(tz).date
+                val smokeMs = LocalTime(hour, minute).atDate(day).toInstant(tz).toEpochMilliseconds()
+                return smokeMs - 3_600_000L + (0..60).random() * 60_000L
+            }
+        }
+        return unlockOn.toEpochMilliseconds() + (-3_600_000L..3_600_000L).random()
+    }
+
+    /** iOS `parseTimeString` — "1:00 AM" / "11:00 PM" → 24h (hour, minute). */
+    private fun parseTimeString(timeString: String): Pair<Int, Int>? {
+        val parts = timeString.trim().split(" ")
+        if (parts.size != 2) return null
+        val hm = parts[0].split(":")
+        if (hm.size != 2) return null
+        val hour = hm[0].toIntOrNull() ?: return null
+        val minute = hm[1].toIntOrNull() ?: return null
+        var finalHour = hour
+        when (parts[1].uppercase()) {
+            "AM" -> if (hour == 12) finalHour = 0
+            "PM" -> if (hour != 12) finalHour = hour + 12
+        }
+        return finalHour to minute
     }
 
     // MARK: - Check-in reminder
@@ -234,6 +299,9 @@ object NotificationHandler {
         wm().cancelAllWorkByTag(NotificationPostWorker.TAG_POP_IN)
         wm().cancelAllWorkByTag(NotificationPostWorker.TAG_HEALTH)
     }
+
+    // iOS `maxNotis` — content notifications scheduled per pass.
+    private const val MAX_CONTENT_NOTIFICATIONS = 50
 
     // Stable id buckets so we can reuse the notification slot on update.
     private const val NOTIF_ID_BASE_ABANDONED = 10_000

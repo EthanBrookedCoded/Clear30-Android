@@ -29,7 +29,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -43,6 +45,7 @@ import org.clear30.views.components.pressScale
 import org.clear30.views.components.sfSymbol
 import org.clear30.views.theme.Anim
 import org.clear30.views.theme.Clear30Colors
+import org.clear30.views.theme.Clear30Gradients
 import org.clear30.views.theme.Dimens
 
 /**
@@ -65,8 +68,22 @@ import org.clear30.views.theme.Dimens
 fun ReviewsSlide(userInfo: UserInfo, onNext: () -> Unit) {
     @Suppress("UNUSED_PARAMETER") val u = userInfo
     var canProgress by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(Unit) {
-        // TODO(port): iOS also calls requestReview() here on appear.
+        // iOS `requestReview()` on appear — the Play In-App Review equivalent.
+        // Silently no-ops when Play isn't available (emulator, sideload) or the
+        // quota is exhausted, exactly like StoreKit's requestReview.
+        runCatching {
+            val activity = generateSequence(context) { (it as? android.content.ContextWrapper)?.baseContext }
+                .filterIsInstance<android.app.Activity>()
+                .firstOrNull()
+            if (activity != null) {
+                val manager = com.google.android.play.core.review.ReviewManagerFactory.create(context)
+                manager.requestReviewFlow().addOnSuccessListener { info ->
+                    manager.launchReviewFlow(activity, info)
+                }
+            }
+        }
         delay(2000)
         canProgress = true
     }
@@ -82,13 +99,13 @@ fun ReviewsSlide(userInfo: UserInfo, onNext: () -> Unit) {
             .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
         horizontalAlignment = Alignment.Start,
     ) {
-        // ScrollView. iOS bleeds the scroll out by `scrollShadowFix` and fades
-        // the edges; Compose's standard padding modifier rejects negative insets,
-        // so we keep the simple vertical scroll (the edge fade is omitted).
-        // TODO(port): edge fade-out + horizontal scrollShadowFix bleed.
+        // ScrollView with the iOS `.fadeOut(fadeLength: 10)` edge treatment —
+        // content dissolves over the last 10dp at the top and bottom of the
+        // scroll viewport instead of hard-clipping.
         Column(
             Modifier
                 .weight(1f)
+                .fadeOutEdges(10.dp)
                 .verticalScroll(rememberScrollState())
                 .padding(vertical = Dimens.headingTopPadding),
             verticalArrangement = Arrangement.Top,
@@ -145,9 +162,9 @@ private val placeholderReviews = listOf(
 /**
  * InfoScreenLaurels (big) — port of `InfoScreenLaurels`. Five gold stars between
  * two laurel branches. `laurel.leading` / `laurel.trailing` SF symbols aren't in
- * the Material map, so we render Unicode laurel flourishes for visual parity
- * (matches the IntroScreen.kt port). iOS tints the stars with `journalsGradient`
- * (yellow); we approximate with the solid yellow `journal1` token.
+ * the Material map, so we render Unicode laurel flourishes — the leading one
+ * mirrored horizontally so the pair wraps the stars like the iOS wreath. Stars
+ * carry the iOS `journalsGradient` tint (O9).
  */
 @Composable
 private fun InfoScreenLaurels(big: Boolean, modifier: Modifier = Modifier) {
@@ -157,20 +174,59 @@ private fun InfoScreenLaurels(big: Boolean, modifier: Modifier = Modifier) {
         horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 4, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("🌿", fontSize = if (big) 56.sp else 36.sp, color = LocalContentColor.current)
+        Text(
+            "🌿", fontSize = if (big) 56.sp else 36.sp, color = LocalContentColor.current,
+            modifier = Modifier.graphicsLayer { scaleX = -1f },
+        )
         Spacer(Modifier.size(Dimens.cardSpacing / 4))
-        repeat(5) {
-            Icon(
-                Icons.Rounded.Star,
-                contentDescription = null,
-                tint = Clear30Colors.journal1,
-                modifier = Modifier.size(starHeight),
-            )
+        Row(
+            Modifier.gradientTint(Clear30Gradients.journals),
+            horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 4),
+        ) {
+            repeat(5) {
+                Icon(
+                    Icons.Rounded.Star,
+                    contentDescription = null,
+                    tint = Clear30Colors.journal1,
+                    modifier = Modifier.size(starHeight),
+                )
+            }
         }
         Spacer(Modifier.size(Dimens.cardSpacing / 4))
         Text("🌿", fontSize = if (big) 56.sp else 36.sp, color = LocalContentColor.current)
     }
 }
+
+/**
+ * iOS `.foregroundStyle(journalsGradient)` on icon runs — composites the row
+ * offscreen and stamps the gradient over the rendered pixels (SrcAtop).
+ */
+private fun Modifier.gradientTint(brush: androidx.compose.ui.graphics.Brush): Modifier = this
+    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        drawRect(brush = brush, blendMode = androidx.compose.ui.graphics.BlendMode.SrcAtop)
+    }
+
+/**
+ * iOS `.fadeOut(fadeLength:)` — masks the composable so content dissolves over
+ * the first/last [fadeLength] of its bounds (DstIn alpha mask).
+ */
+private fun Modifier.fadeOutEdges(fadeLength: androidx.compose.ui.unit.Dp): Modifier = this
+    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        val fade = fadeLength.toPx().coerceAtMost(size.height / 2)
+        drawRect(
+            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                0f to Color.Transparent,
+                (fade / size.height) to Color.Black,
+                (1f - fade / size.height) to Color.Black,
+                1f to Color.Transparent,
+            ),
+            blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+        )
+    }
 
 /**
  * IntroScreenReviewCard — port of `IntroScreenReviewCard`: a leading-aligned
@@ -183,8 +239,8 @@ private fun IntroScreenReviewCard(title: String, bodyText: String) {
         Column(horizontalAlignment = Alignment.Start) {
             Row(
                 Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = Dimens.cardSpacing / 2),
+                    .padding(bottom = Dimens.cardSpacing / 2)
+                    .gradientTint(Clear30Gradients.journals),
                 horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
             ) {
                 repeat(5) {
