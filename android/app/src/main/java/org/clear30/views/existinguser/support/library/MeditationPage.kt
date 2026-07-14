@@ -91,15 +91,22 @@ fun MeditationPage(meditation: ProgramMeditation, program: Program, onDismiss: (
 /** The inline (feed-card) variant — same player, left-aligned, full-width scrubber. */
 @Composable
 internal fun MeditationPageInline(meditation: ProgramMeditation, program: Program) {
-    MeditationPlayerCore(meditation, program, centered = false)
+    // iOS MeditationPage(inlineType: .horizontal): centered on the PLAIN feed
+    // card — gradient play disc + gradient full-width bar (T11).
+    MeditationPlayerCore(meditation, program, centered = true, inline = true)
 }
 
 /** Shared title + play disc + scrubber over one ExoPlayer instance. */
 @Composable
-private fun MeditationPlayerCore(meditation: ProgramMeditation, program: Program, centered: Boolean) {
+private fun MeditationPlayerCore(
+    meditation: ProgramMeditation,
+    program: Program,
+    centered: Boolean,
+    inline: Boolean = false,
+) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
-    val onGradient = !centered // inline sits on the meditation-gradient card → white content
+    val onGradient = false // both the sheet and the inline card are plain-backed (iOS)
     val player = remember(meditation.url) {
         ExoPlayer.Builder(context).build().apply {
             // Process-wide audio attributes baseline (iOS AVAudioSession
@@ -193,7 +200,9 @@ private fun MeditationPlayerCore(meditation: ProgramMeditation, program: Program
             durationMs = durationMs,
             textColor = textColor,
             fill = if (onGradient) null else Clear30Gradients.meditation,
-            modifier = if (centered) Modifier.widthIn(max = 250.dp) else Modifier.fillMaxWidth(),
+            // iOS `.frame(maxWidth: inline ? nil : 250)` — the feed card's bar
+            // spans the card; the full-screen sheet caps at 250.
+            modifier = if (inline) Modifier.fillMaxWidth() else Modifier.widthIn(max = 250.dp),
             onSeek = { fraction ->
                 if (durationMs > 0) {
                     val target = (durationMs * fraction).toLong()

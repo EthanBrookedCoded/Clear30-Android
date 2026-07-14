@@ -1,6 +1,7 @@
 package org.clear30.views.existinguser.today
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -35,9 +36,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import org.clear30.AppState
@@ -60,6 +63,7 @@ import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.updateContentInfo
 import org.clear30.views.components.Clear30Card
 import org.clear30.views.components.DefaultButton
+import org.clear30.views.components.cardStyle
 import org.clear30.views.components.FeedNativeVideoPlayer
 import org.clear30.views.components.softShadow
 import org.clear30.views.components.Heading3
@@ -370,19 +374,63 @@ private fun FeedPagerDots(count: Int, current: Int, modifier: Modifier = Modifie
     }
 }
 
-/** Meditation — the inline MeditationPage player on a gradient card (iOS
- *  `MeditationFeedView` = `MeditationPage(inlineType:)`). */
+/**
+ * FeedCardHeading (iOS TodayFeedViews.swift:22-58): the gradient section title
+ * top-leading with an optional trailing accessory, cardSpacing/2 below.
+ */
+@Composable
+internal fun FeedCardHeading(text: String, gradient: Brush, trailing: (@Composable () -> Unit)? = null) {
+    Row(
+        Modifier.fillMaxWidth().padding(bottom = Dimens.cardSpacing / 2),
+        verticalAlignment = Alignment.Top,
+    ) {
+        SmallTextHighlighted(
+            formats = listOf(HighlightedTextFormat(text, highlighted = true)),
+            highlightBrush = gradient,
+        )
+        Spacer(Modifier.weight(1f))
+        trailing?.invoke()
+    }
+}
+
+/** iOS `VisitedNode` — the checkbox-style visited marker on feed headings. */
+@Composable
+internal fun VisitedNode(visited: Boolean, gradient: Brush) {
+    androidx.compose.foundation.layout.Box(
+        Modifier
+            .size(23.dp)
+            .clip(RoundedCornerShape(9.dp))
+            .background(Clear30Colors.button)
+            .border(3.dp, Clear30Colors.text.copy(alpha = 0.25f), RoundedCornerShape(9.dp)),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (visited) {
+            androidx.compose.foundation.layout.Box(
+                Modifier.size(13.dp).clip(RoundedCornerShape(4.dp)).background(gradient),
+            )
+        }
+    }
+}
+
+/**
+ * Meditation — iOS `MeditationFeedView`: a PLAIN card with the "Meditation"
+ * gradient heading (+ visited node), and the inline MeditationPage player
+ * centered in the stretched space (iOS wraps it in Spacers). The gradient
+ * lives on the play disc / progress fill, not the card background.
+ */
 @Composable
 internal fun MeditationFeedCard(med: ProgramMeditation, program: Program, glow: Brush? = null) {
-    // fillMaxSize + centered player — iOS MeditationFeedView wraps MeditationPage
-    // in Spacers so the card stretches to the page height.
-    Clear30Card(
-        modifier = Modifier.fillMaxSize(),
-        gradient = Clear30Gradients.meditation,
-        glowGradient = glow,
-    ) {
-        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            org.clear30.views.existinguser.support.MeditationPageInline(med, program)
+    Clear30Card(modifier = Modifier.fillMaxSize(), glowGradient = glow) {
+        Column(Modifier.fillMaxSize()) {
+            FeedCardHeading("Meditation", Clear30Gradients.meditation) {
+                VisitedNode(med.visited, Clear30Gradients.meditation)
+            }
+            androidx.compose.foundation.layout.Box(
+                Modifier.fillMaxWidth().weight(1f),
+                contentAlignment = Alignment.Center,
+            ) {
+                org.clear30.views.existinguser.support.MeditationPageInline(med, program)
+            }
         }
     }
 }
@@ -445,9 +493,12 @@ internal fun YouTubeFeedCard(
     focused: Boolean = false,
     onOpenWeb: (String) -> Unit,
 ) {
+    // iOS `YouTubeVideoFeedView`: a PLAIN card with the "YouTube Video" gradient
+    // heading + share icon, the rounded player, and the video title below.
+    val context = androidx.compose.ui.platform.LocalContext.current
     val id = youTubeId(res.url)
     Clear30Card(
-        modifier = Modifier.fillMaxWidth().then(
+        modifier = Modifier.fillMaxSize().then(
             // Non-parsable URLs (no video id) fall back to the in-app web viewer.
             if (id == null) {
                 Modifier.pressScale {
@@ -458,52 +509,167 @@ internal fun YouTubeFeedCard(
                 Modifier
             },
         ),
-        gradient = Clear30Gradients.youtube,
         glowGradient = glow,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-            if (id != null) {
-                // `autoplay` mirrors iOS YouTubeViewer's isFeedFocused handling:
-                // play when the page settles into focus, stop when it leaves.
-                InlineYouTubePlayer(id, Modifier.fillMaxWidth(), autoplay = focused) {
-                    Logger.logEvent(userInfo.loggingID, LogEventType.openedYouTubeVideo, mapOf(LogEventExtraDataType.URL to res.url))
+        Column(Modifier.fillMaxSize()) {
+            FeedCardHeading("YouTube Video", Clear30Gradients.youtube) {
+                Icon(
+                    sfSymbol("square.and.arrow.up"),
+                    contentDescription = "Share",
+                    tint = Clear30Colors.text.copy(alpha = 0.5f),
+                    modifier = Modifier.size(18.dp).pressScale {
+                        runCatching {
+                            val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(
+                                    android.content.Intent.EXTRA_TEXT,
+                                    "Check out this video I found through Clear30!\n${res.url}",
+                                )
+                            }
+                            context.startActivity(android.content.Intent.createChooser(send, null))
+                        }
+                    },
+                )
+            }
+            androidx.compose.foundation.layout.Box(
+                Modifier.fillMaxWidth().weight(1f),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (id != null) {
+                    // `autoplay` mirrors iOS YouTubeViewer's isFeedFocused handling:
+                    // play when the page settles into focus, stop when it leaves.
+                    InlineYouTubePlayer(id, Modifier.fillMaxWidth(), autoplay = focused) {
+                        Logger.logEvent(userInfo.loggingID, LogEventType.openedYouTubeVideo, mapOf(LogEventExtraDataType.URL to res.url))
+                    }
+                } else {
+                    VideoThumbnail(null, Modifier.fillMaxWidth())
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-                Icon(sfSymbol("play.fill"), contentDescription = null, tint = Color.White)
-                SmallText(res.title, color = Color.White)
+            if (res.title.isNotBlank()) {
+                Spacer(Modifier.height(Dimens.cardSpacing))
+                Heading3(res.title)
             }
         }
     }
 }
 
-/** A Claire conversation starter — opens Claire. */
+/**
+ * A Claire conversation starter — iOS `ClairePromptFeedView`: a PLAIN card
+ * with the "Claire Prompt" gradient heading, the title in a claire-outlined
+ * capsule, a chat preview (the user's prompt as a gradient bubble on the
+ * right, an animated-emoji Claire bubble on the left), and a full-width
+ * gradient "Reveal ✨" CTA pinned at the bottom.
+ */
 @Composable
-internal fun ClairePromptFeedCard(prompt: ProgramClairePrompt, userInfo: UserInfo, glow: Brush? = null) {
-    Clear30Card(
-        modifier = Modifier.fillMaxSize().pressScale {
-            Logger.logEvent(userInfo.loggingID, LogEventType.openedContent, mapOf(LogEventExtraDataType.EXTRA to prompt.title))
-            // Claire lives on the Support tab — stash the seed, then switch tabs
-            // (a sub-route alone doesn't navigate; the destination tab consumes it).
-            AppState.requestSubRoute(DeepLinkRoute.Claire(prompt.prompt))
-            AppState.requestTab("SUPPORT")
-        },
-        gradient = Clear30Gradients.claire,
-        glowGradient = glow,
-    ) {
-        // Full page height with centered content (iOS stretches via Spacers).
-        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-                Icon(sfSymbol("bubble.left.fill"), contentDescription = null, tint = Color.White)
-                Column(Modifier.weight(1f)) {
-                    SmallText(prompt.title, color = Color.White)
-                    (prompt.displayPrompt ?: prompt.prompt).takeIf { it.isNotBlank() }?.let {
-                        TinyText(it, color = Color.White.copy(alpha = 0.75f))
-                    }
+internal fun ClairePromptFeedCard(
+    prompt: ProgramClairePrompt,
+    userInfo: UserInfo,
+    glow: Brush? = null,
+    focused: Boolean = false,
+) {
+    fun openClaire() {
+        Logger.logEvent(userInfo.loggingID, LogEventType.openedContent, mapOf(LogEventExtraDataType.EXTRA to prompt.title))
+        // Claire lives on the Support tab — stash the seed, then switch tabs
+        // (a sub-route alone doesn't navigate; the destination tab consumes it).
+        AppState.requestSubRoute(DeepLinkRoute.Claire(prompt.prompt))
+        AppState.requestTab("SUPPORT")
+    }
+    Clear30Card(modifier = Modifier.fillMaxSize(), glowGradient = glow) {
+        Column(Modifier.fillMaxSize()) {
+            FeedCardHeading("Claire Prompt", Clear30Gradients.claire)
+            // Title in a claire-outlined capsule, centered (iOS CardStyle with
+            // clear fill + outline 0.5).
+            androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                SmallText(
+                    prompt.title,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.cardStyle(
+                        color = Color.Transparent,
+                        shadowColor = Color.Transparent,
+                        outlineGradient = Clear30Gradients.claire,
+                        outlineOpacity = 0.5f,
+                    ),
+                )
+            }
+            Spacer(Modifier.height(Dimens.cardSpacing))
+            // The user's prompt — gradient bubble, right-aligned.
+            androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                ClaireBubble(gradient = Clear30Gradients.claire) {
+                    TinyText(prompt.effectiveDisplayPrompt, color = Color.White)
                 }
+            }
+            Spacer(Modifier.height(Dimens.cardSpacing / 2))
+            // Claire's reply — an animated emoji in a plain bubble, left-aligned.
+            androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
+                ClaireBubble(gradient = null) {
+                    AnimatedEmoji(
+                        emojis = prompt.effectiveEmojis.ifEmpty { listOf("😁", "🤔", "☝️", "🤓", "💡") },
+                        animating = focused,
+                    )
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            // "Reveal ✨" (iOS TextIconButton with the claire gradient).
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(Dimens.cornerRadius))
+                    .background(Clear30Gradients.claire)
+                    .pressScale { openClaire() }
+                    .padding(vertical = Dimens.cardSpacing * 0.75f),
+                horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SmallText("Reveal", color = Color.White)
+                Icon(sfSymbol("sparkles"), contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
             }
         }
     }
+}
+
+/** iOS `BubbleStyle` — a rounded chat bubble; gradient = the user side. */
+@Composable
+private fun ClaireBubble(gradient: Brush?, content: @Composable () -> Unit) {
+    androidx.compose.foundation.layout.Box(
+        Modifier
+            .clip(RoundedCornerShape(Dimens.cornerRadius))
+            .then(
+                if (gradient != null) Modifier.background(gradient)
+                else Modifier.background(Clear30Colors.opacityGray),
+            )
+            .padding(horizontal = Dimens.cardSpacing, vertical = (Dimens.cardSpacing.value * 0.8f).dp),
+    ) { content() }
+}
+
+/**
+ * iOS `AnimatedEmojiView` — the emoji pulses (1.0 → 1.15 → 1.0) and cycles to
+ * the next one each loop while the page is focused.
+ */
+@Composable
+private fun AnimatedEmoji(emojis: List<String>, animating: Boolean) {
+    var index by remember(emojis) { mutableStateOf(0) }
+    val scale = remember { androidx.compose.animation.core.Animatable(1f) }
+    LaunchedEffect(animating, emojis) {
+        if (!animating) {
+            scale.animateTo(1f, androidx.compose.animation.core.tween(300))
+            return@LaunchedEffect
+        }
+        while (true) {
+            scale.animateTo(1.15f, androidx.compose.animation.core.tween(1500))
+            kotlinx.coroutines.delay(500)
+            scale.animateTo(1f, androidx.compose.animation.core.tween(1500))
+            kotlinx.coroutines.delay(500)
+            if (emojis.size > 1) index = (index + 1) % emojis.size
+        }
+    }
+    Text(
+        emojis.getOrElse(index) { "💡" },
+        fontSize = 22.sp,
+        modifier = Modifier.graphicsLayer {
+            scaleX = scale.value
+            scaleY = scale.value
+        },
+    )
 }
 
 /** A premium member perk — its CTA opens the link in-app or jumps to a section. */

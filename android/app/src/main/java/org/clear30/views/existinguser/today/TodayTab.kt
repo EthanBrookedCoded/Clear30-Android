@@ -408,7 +408,11 @@ fun TodayTab(
                                 focused = page == pagerState.settledPage,
                                 onOpenWeb = { webUrl = it },
                             )
-                            is FeedItem.Claire -> ClairePromptFeedCard(item.prompt, userInfo, glow = glow?.let { Clear30Gradients.claire })
+                            is FeedItem.Claire -> ClairePromptFeedCard(
+                                item.prompt, userInfo,
+                                glow = glow?.let { Clear30Gradients.claire },
+                                focused = page == pagerState.settledPage,
+                            )
                             is FeedItem.Perk -> MemberPerkFeedCard(item.perk, glow = glow?.let { Clear30Gradients.supplements }, onOpenWeb = { webUrl = it })
                             is FeedItem.Journal -> JournalPromptsFeedCard(item.prompts, glow = glow?.let { Clear30Gradients.journals }, onJournal = { journalPrompt = it })
                             FeedItem.FeedEnd -> FeedEndCelebration(
