@@ -422,7 +422,7 @@ fun RewardThroughBreakSmall(
             ) {
                 Box(
                     Modifier.fillMaxWidth(animatedFill.coerceIn(0f, 1f)).fillMaxHeight()
-                        .clip(RoundedCornerShape(99.dp)).background(Clear30Gradients.clear30),
+                        .background(Clear30Gradients.clear30),
                 )
             }
         }
@@ -1138,7 +1138,9 @@ fun RewardBreakBar(
     val shape = RoundedCornerShape(14.dp)
     val animated by animateFloatAsState(fraction.coerceIn(0f, 1f), Anim.rewardSpring(), label = "rewardBreakBar")
 
-    BoxWithConstraints(Modifier.fillMaxWidth().height(40.dp)) {
+    // Container clipped ONCE; the fill is a plain left-aligned rect — clipping
+    // the fill independently collapses its corner radii on narrow fills.
+    BoxWithConstraints(Modifier.fillMaxWidth().height(40.dp).clip(shape)) {
         val full = maxWidth
         val fillW = full * animated
 
@@ -1147,8 +1149,8 @@ fun RewardBreakBar(
         val labelOnTrack = if (onGradient) Color.White else Clear30Colors.text
         val labelOnFill = if (onGradient) Clear30Colors.blue else Color.White
 
-        Box(Modifier.fillMaxSize().clip(shape).background(trackColor))
-        Box(Modifier.width(fillW).fillMaxHeight().clip(shape).background(fillBrush))
+        Box(Modifier.fillMaxSize().background(trackColor))
+        Box(Modifier.width(fillW).fillMaxHeight().background(fillBrush))
 
         @Composable
         fun label(color: Color) {
@@ -1191,11 +1193,12 @@ private fun RewardTimerBar(value: Int, max: Int, unit: String) {
         label = "rewardTimer-$unit",
     )
 
-    BoxWithConstraints(Modifier.fillMaxWidth().height(40.dp)) {
+    // Container clipped once; fill = plain rect (same fix as RewardBreakBar).
+    BoxWithConstraints(Modifier.fillMaxWidth().height(40.dp).clip(shape)) {
         val full = maxWidth
         val fillW = full * fraction
-        Box(Modifier.fillMaxSize().clip(shape).background(Color.White.copy(alpha = 0.25f)))
-        Box(Modifier.width(fillW).fillMaxHeight().clip(shape).background(Color.White))
+        Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.25f)))
+        Box(Modifier.width(fillW).fillMaxHeight().background(Color.White))
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
             TimerBarLabel(label, Color.White)
         }
@@ -1227,13 +1230,11 @@ private fun RewardBar(progress: Double, checked: Boolean, size: Dp = 18.dp) {
     val normalized = progress.coerceIn(0.0, 1.0).toFloat()
     val animated by animateFloatAsState(normalized, Anim.rewardSpring(), label = "rewardBar")
 
-    BoxWithConstraints(Modifier.fillMaxWidth().height(size)) {
+    // Container clipped once; fill = plain rect (same fix as RewardBreakBar).
+    BoxWithConstraints(Modifier.fillMaxWidth().height(size).clip(RoundedCornerShape(99.dp))) {
         val full = maxWidth
-        Box(Modifier.fillMaxSize().clip(RoundedCornerShape(99.dp)).background(Clear30Colors.opacityGray))
-        Box(
-            Modifier.width(full * animated).fillMaxHeight()
-                .clip(RoundedCornerShape(99.dp)).background(Clear30Gradients.clear30),
-        )
+        Box(Modifier.fillMaxSize().background(Clear30Colors.opacityGray))
+        Box(Modifier.width(full * animated).fillMaxHeight().background(Clear30Gradients.clear30))
         // Knob riding the fill front.
         Box(
             Modifier

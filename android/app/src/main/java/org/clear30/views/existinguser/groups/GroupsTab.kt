@@ -18,7 +18,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,40 +31,60 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
+import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.isoDayNumber
+import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.todayIn
 import org.clear30.data.GroupController
-import org.clear30.data.supabase.getGroupActivityItems
-import org.clear30.data.supabase.sendGroupPing
-import org.clear30.data.supabase.updateGroupSubscriptions
+import org.clear30.data.model.CheckInDefaults
 import org.clear30.data.model.Clear30Group
 import org.clear30.data.model.Clear30GroupMember
+import org.clear30.data.model.Clear30GroupNote
+import org.clear30.data.model.GROUP_BRIGHTNESS
+import org.clear30.data.model.GROUP_SATURATION
+import org.clear30.data.model.PlainDate
+import org.clear30.data.model.ProgramDayInfo
 import org.clear30.data.model.UserInfo
+import org.clear30.data.supabase.SupabaseController
+import org.clear30.data.supabase.sendGroupPing
+import org.clear30.data.supabase.updateGroupSubscriptions
 import org.clear30.views.components.Clear30Card
 import org.clear30.views.components.cardStyle
 import org.clear30.views.components.pressScale
 import org.clear30.views.components.DefaultButton
+import org.clear30.views.components.DefaultText
 import org.clear30.views.components.GradientActionButton
 import org.clear30.views.components.Heading1
-import org.clear30.views.components.Heading2
+import org.clear30.views.components.Heading3
+import org.clear30.views.components.HuePicker
+import org.clear30.views.components.MultiLineInput
+import org.clear30.views.components.PillPicker
+import org.clear30.views.components.PillPickerStyle
 import org.clear30.views.components.SmallText
+import org.clear30.views.components.StretchedButton
 import org.clear30.views.components.TinyText
+import org.clear30.views.existinguser.profile.achievements.GradientIcon
 import org.clear30.views.theme.Clear30Colors
 import org.clear30.views.theme.Clear30Gradients
 import org.clear30.views.theme.Dimens
 
 /**
- * GroupsTab — ported from the Group views. Shows the user's accountability group
- * (header + member ranking by days checked in) via [GroupController], or a
- * create/join prompt when they aren't in one. The create/join/leave actions
- * fan out to [GroupController.create] / [GroupController.join] /
- * [GroupController.leave], each of which writes through to Supabase and then
- * refreshes the group state.
+ * GroupsTab — 1:1 port of the iOS Group views (GroupTab/GroupAll/GroupCreation).
+ * Shows the user's accountability group (header + pill picker + the selected
+ * section) via [GroupController], or the creation carousel when they aren't in
+ * one. Joining happens exclusively through the invite deep link, like iOS.
  */
 @Composable
 fun GroupsTab(program: org.clear30.data.model.Program, userInfo: UserInfo) {
@@ -74,25 +93,15 @@ fun GroupsTab(program: org.clear30.data.model.Program, userInfo: UserInfo) {
     val scope = rememberCoroutineScope()
 
     var creatingGroup by remember { mutableStateOf(false) }
-    var showJoin by remember { mutableStateOf(false) }
     var showLeaveConfirm by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { controller.refresh() }
 
-    // Tap-to-detail for a member — full-bleed; system back returns to roster.
-    var memberDetail by remember { mutableStateOf<org.clear30.data.model.Clear30GroupMember?>(null) }
-    memberDetail?.let { m ->
-        val g = group ?: return@let
-        androidx.activity.compose.BackHandler { memberDetail = null }
-        MemberDetailScreen(m, g, userInfo, onBack = { memberDetail = null })
-        return
-    }
-
-    // Deep link → auto-join with a code from clear30://group/<code>. We only
-    // fire when the user isn't already in a group; otherwise the link is a
-    // no-op and we drop it. Errors surface through the regular `error` field.
+    // Deep link → auto-join from clear30://group/<code> (iOS invite link flow).
+    // We only fire when the user isn't already in a group; otherwise the link
+    // is a no-op and we drop it. Errors surface through the regular `error` field.
     val sub by org.clear30.AppState.pendingSubRoute.collectAsStateWithLifecycle()
     LaunchedEffect(sub) {
         val r = sub as? org.clear30.data.DeepLinkRoute.Group ?: return@LaunchedEffect
@@ -106,12 +115,9 @@ fun GroupsTab(program: org.clear30.data.model.Program, userInfo: UserInfo) {
     val g = group
     if (g == null) {
         // Not in a group — 1:1 of iOS GroupCreation: heading, the swipeable
-        // benefit carousel (image cards, fixed 450dp, no dots), and the create
-        // CTA. Creation is INSTANT — no name prompt; the group is auto-named
-        // "<name>'s Group" with the default hue, exactly like iOS createGroup().
-        // (The join-with-a-code affordance is Android-only: iOS joins via the
-        // invite deep link, which Android also supports; the code entry is the
-        // discoverable fallback.)
+        // benefit carousel (image cards, fixed 450dp, no dots), and the single
+        // create CTA. Creation is INSTANT — no name prompt; the group is
+        // auto-named "<name>'s Group" with the default hue, like iOS createGroup().
         fun createGroup() {
             if (creatingGroup) return
             creatingGroup = true
@@ -149,7 +155,7 @@ fun GroupsTab(program: org.clear30.data.model.Program, userInfo: UserInfo) {
         Column(
             Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
         ) {
-            org.clear30.views.components.Heading1("Groups")
+            Heading1("Groups")
             Spacer(Modifier.weight(1f))
             HorizontalPager(
                 state = pagerState,
@@ -161,8 +167,6 @@ fun GroupsTab(program: org.clear30.data.model.Program, userInfo: UserInfo) {
             }
             Spacer(Modifier.weight(1f))
             GradientActionButton("person.2.fill", Clear30Gradients.clear30, "Start Your Group") { createGroup() }
-            Spacer(Modifier.height(Dimens.cardSpacing / 2))
-            GradientActionButton("person.3", Clear30Gradients.community, "Join with a code") { showJoin = true }
             error?.let { msg ->
                 SmallText(
                     msg,
@@ -179,15 +183,22 @@ fun GroupsTab(program: org.clear30.data.model.Program, userInfo: UserInfo) {
         ) {
             GroupHeader(g, userInfo, section)
             Spacer(Modifier.size(Dimens.cardSpacing / 2))
-            GroupSectionPicker(section, g.gradient) { section = it }
+            PillPicker(
+                selection = section,
+                items = GroupSection.entries.toList(),
+                label = { it.title },
+                systemImage = { it.symbol },
+                onChanged = { section = it },
+                style = PillPickerStyle.Primary(g.gradient),
+                expanded = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
             Spacer(Modifier.size(Dimens.cardSpacing))
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when (section) {
-                    GroupSection.MEMBERS -> MembersTab(g, userInfo, controller, onMemberTap = { memberDetail = it })
-                    GroupSection.CHAT -> GroupChat(g, userInfo, onBack = { section = GroupSection.MEMBERS })
-                    GroupSection.NOTES -> NotesTab(g) { msg ->
-                        scope.launch { busy = true; error = controller.addNote(msg); busy = false }
-                    }
+                    GroupSection.MEMBERS -> MembersTab(g, userInfo, controller)
+                    GroupSection.CHAT -> GroupChat(g, userInfo, controller)
+                    GroupSection.NOTES -> NotesTab(g)
                     GroupSection.SETTINGS -> GroupSettingsTab(g, userInfo, controller, scope) { showLeaveConfirm = true }
                 }
             }
@@ -195,21 +206,6 @@ fun GroupsTab(program: org.clear30.data.model.Program, userInfo: UserInfo) {
         }
     }
 
-    if (showJoin) {
-        JoinGroupDialog(
-            busy = busy,
-            onDismiss = { showJoin = false; error = null },
-            onSubmit = { code ->
-                if (code.isBlank()) return@JoinGroupDialog
-                busy = true
-                scope.launch {
-                    error = controller.join(code.trim())
-                    busy = false
-                    if (error == null) showJoin = false
-                }
-            },
-        )
-    }
     if (showLeaveConfirm) {
         LeaveGroupDialog(
             busy = busy,
@@ -226,104 +222,7 @@ fun GroupsTab(program: org.clear30.data.model.Program, userInfo: UserInfo) {
     }
 }
 
-/**
- * Recent group activity — loads `groups.group_activity` and renders the latest
- * smoked / didn't-smoke / joined / note events with the member's emoji + name.
- */
-@Composable
-private fun GroupActivitySection(group: Clear30Group) {
-    val items = remember { androidx.compose.runtime.mutableStateListOf<org.clear30.data.model.Clear30GroupActivityItem>() }
-    LaunchedEffect(group.id) {
-        org.clear30.data.supabase.SupabaseController.getGroupActivityItems(group.id, count = 12)
-            .onSuccess { items.clear(); items.addAll(it) }
-    }
-    if (items.isEmpty()) return
-
-    val labels = remember(group.members) { group.members.associate { it.memberID to ("${it.emoji}  ${it.name}").trim() } }
-    Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-        Heading2("Recent activity")
-        items.forEach { item ->
-            val verb = when (item.type) {
-                org.clear30.data.model.Clear30GroupActivityItemType.SMOKED -> "smoked."
-                org.clear30.data.model.Clear30GroupActivityItemType.SOBER -> "didn't smoke!"
-                org.clear30.data.model.Clear30GroupActivityItemType.JOINED -> "joined the group!"
-                org.clear30.data.model.Clear30GroupActivityItemType.MESSAGE -> "sent a note."
-                null -> item.activity
-            }
-            Clear30Card(modifier = Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-                    SmallText(labels[item.userId] ?: "A member", color = Clear30Colors.text.copy(alpha = 0.75f))
-                    SmallText(verb)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun GroupNotesSection(notes: List<org.clear30.data.model.Clear30GroupNote>, onPost: (String) -> Unit) {
-    var draft by remember { mutableStateOf("") }
-    Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Heading2("Notes")
-            androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
-            TinyText("${notes.size} total", color = Clear30Colors.text.copy(alpha = 0.5f))
-        }
-        if (notes.isEmpty()) {
-            // Richer empty state — gradient card + emoji + clear next-step copy.
-            Clear30Card(modifier = Modifier.fillMaxWidth(), gradient = Clear30Gradients.community) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                ) {
-                    SmallText("💬", color = androidx.compose.ui.graphics.Color.White)
-                    SmallText("Be the first to share", color = androidx.compose.ui.graphics.Color.White)
-                    TinyText(
-                        "Notes appear here for everyone in the group.",
-                        color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.75f),
-                    )
-                }
-            }
-        } else {
-            // Paginate locally — show 5, then "Show more" expands to all.
-            var showAll by remember { mutableStateOf(false) }
-            val sorted = notes.sortedByDescending { it.timestamp }
-            val visible = if (showAll || sorted.size <= 5) sorted else sorted.take(5)
-            visible.forEach { note ->
-                Clear30Card(modifier = Modifier.fillMaxWidth()) {
-                    Column {
-                        val entry = remember(note.fromMemberID) {
-                            org.clear30.data.UserDirectory.lookup(note.fromMemberID)
-                        }
-                        TinyText(entry.displayName, color = Clear30Colors.text.copy(alpha = 0.5f))
-                        SmallText(note.message)
-                    }
-                }
-            }
-            if (!showAll && sorted.size > 5) {
-                TinyText(
-                    "Show ${sorted.size - 5} more",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showAll = true }
-                        .padding(vertical = 6.dp),
-                    color = Clear30Colors.green,
-                )
-            }
-        }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-            OutlinedTextField(draft, { draft = it }, modifier = Modifier.weight(1f),
-                placeholder = { Text("Share a note…") })
-            DefaultButton("Post", gradient = Clear30Gradients.clear30) {
-                if (draft.isNotBlank()) { onPost(draft); draft = "" }
-            }
-        }
-    }
-}
-
-/** The four group tabs (iOS GroupAll pill picker). */
+/** The four group tabs (iOS GroupViewType). */
 private enum class GroupSection(val title: String, val symbol: String) {
     MEMBERS("Members", "person.2.fill"),
     CHAT("Chat", "message.fill"),
@@ -371,33 +270,6 @@ private fun CircleIconButton(icon: String, onClick: () -> Unit) {
     }
 }
 
-/** Pill-picker for the four group tabs. */
-@Composable
-private fun GroupSectionPicker(current: GroupSection, gradient: androidx.compose.ui.graphics.Brush, onSelect: (GroupSection) -> Unit) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-        GroupSection.entries.forEach { s ->
-            val selected = s == current
-            Column(
-                Modifier.weight(1f)
-                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(99.dp))
-                    .background(if (selected) gradient else Clear30Gradients.gray)
-                    .clickable { org.clear30.views.theme.Haptics.lightImpact(); onSelect(s) }
-                    .padding(vertical = Dimens.cardSpacing / 1.5f),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                androidx.compose.material3.Icon(
-                    org.clear30.views.components.sfSymbol(s.symbol),
-                    contentDescription = s.title,
-                    tint = if (selected) Color.White else Clear30Colors.text.copy(alpha = 0.5f),
-                    modifier = Modifier.size(16.dp),
-                )
-                org.clear30.views.components.MiniText(s.title, color = if (selected) Color.White else Clear30Colors.text.copy(alpha = 0.5f))
-            }
-        }
-    }
-}
-
 /** A full-bleed benefit slide for the not-in-a-group carousel (iOS GroupCreation). */
 @Composable
 private fun GroupBenefitSlide(imageRes: Int, title: String, body: String) {
@@ -415,73 +287,142 @@ private fun GroupBenefitSlide(imageRes: Int, title: String, body: String) {
             contentScale = androidx.compose.ui.layout.ContentScale.Fit,
         )
         Spacer(Modifier.weight(1f))
-        org.clear30.views.components.Heading3(title)
+        Heading3(title)
         SmallText(body)
     }
 }
 
+// MARK: - Members tab (iOS GroupMembers.swift)
+
 /**
- * Members tab — month swiper + month stats + calendar, inner circle, leaderboard
- * roster, recent activity (iOS GroupMembers.swift).
+ * Members tab — month swiper → month stats → Inner Circle → other members
+ * (iOS GroupMembers.swift body order :63-80). Member cards carry the badge
+ * actions (note / ping); card bodies themselves are not tappable, like iOS.
  */
 @Composable
 private fun MembersTab(
     group: Clear30Group,
     userInfo: UserInfo,
     controller: GroupController,
-    onMemberTap: (Clear30GroupMember) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     // Months between the earliest member join month and now (iOS GroupMembers.init).
     val months = remember(group.members) { monthsForGroup(group) }
     var monthIndex by remember(months.size) { androidx.compose.runtime.mutableIntStateOf(months.lastIndex) }
     val currentMonth = months[monthIndex.coerceIn(0, months.lastIndex)]
+    val tz = kotlinx.datetime.TimeZone.currentSystemDefault()
+    val today = kotlinx.datetime.Clock.System.todayIn(tz)
+    val thisMonth = currentMonth.year == today.year && currentMonth.month == today.monthNumber
 
     var noteTarget by remember { mutableStateOf<Clear30GroupMember?>(null) }
+    var pingTarget by remember { mutableStateOf<Clear30GroupMember?>(null) }
     var showInnerCirclePicker by remember { mutableStateOf(false) }
     var actionError by remember { mutableStateOf<String?>(null) }
 
-    val ping: (Clear30GroupMember) -> Unit = { m ->
-        scope.launch {
-            actionError = org.clear30.data.supabase.SupabaseController
-                .sendGroupPing(group.id, m.memberID, userInfo.userID)?.message
-        }
+    // iOS subscribedStrings: subscription ids that still resolve to a member.
+    val subscribedIds = group.subscribed.orEmpty().map { it.subscribedTo }
+        .filter { id -> group.members.any { it.memberID == id } }
+    val innerCircleMembers = group.members
+        .filter { subscribedIds.contains(it.memberID) }
+        .sortedByDescending { it.daysClearIn(currentMonth) }
+    val otherMembers = group.members
+        .filter { !subscribedIds.contains(it.memberID) }
+        .sortedByDescending { it.daysClearIn(currentMonth) }
+    val daysClearMax = currentMonth.adding(months = 1, days = -1).day
+
+    @Composable
+    fun memberCard(m: Clear30GroupMember) {
+        val isSelf = m.memberID == userInfo.userID
+        GroupMemberCard(
+            member = m,
+            state = if (thisMonth) m.stateForToday() else GroupMemberState.NONE,
+            streak = if (thisMonth) m.streakCount() else null,
+            daysClear = m.daysClearIn(currentMonth),
+            daysClearMax = daysClearMax,
+            onNote = if (isSelf) null else ({ noteTarget = m }),
+            onPing = if (isSelf) null else ({ pingTarget = m }),
+        )
     }
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
-    ) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         // Month swiper (iOS GroupMonthPicker) — chevrons + swipeable month label.
         GroupMonthPicker(months, monthIndex) { monthIndex = it }
+        Spacer(Modifier.height(Dimens.cardSpacing))
 
-        // Month stats (iOS GroupMembers.swift:111-118).
+        // Month stats (iOS GroupMembers.swift:111-118) — two EmojiTextCards on
+        // the group gradient.
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
             MonthStatCard("${group.monthCheckIns(currentMonth, sober = false)}", "Smoked Check Ins", group.gradient, Modifier.weight(1f))
             MonthStatCard("${group.monthCheckIns(currentMonth, sober = true)}", "Sober Check Ins", group.gradient, Modifier.weight(1f))
         }
+        Spacer(Modifier.height(Dimens.cardSpacing * 2))
 
-        Clear30Card(modifier = Modifier.fillMaxWidth()) { GroupCalendar(group, userInfo, month = currentMonth) }
-        InnerCircleSection(
-            group, userInfo,
-            onEdit = { showInnerCirclePicker = true },
-            onNote = { noteTarget = it },
-            onPing = ping,
+        // Inner Circle (iOS GroupMembers.swift:120-155). When the user is alone
+        // in the group iOS swaps the whole section for an "Invite to Group" button.
+        if (group.members.any { it.memberID != userInfo.userID }) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                SmallText("Inner Circle", color = Clear30Colors.text.copy(alpha = 0.5f))
+                Spacer(Modifier.weight(1f))
+                if (subscribedIds.isNotEmpty()) {
+                    org.clear30.views.components.IconButton("person.fill.badge.plus", height = 15.dp, padding = 0.dp, tint = Clear30Colors.text.copy(alpha = 0.5f)) {
+                        showInnerCirclePicker = true
+                    }
+                }
+            }
+            Spacer(Modifier.height(Dimens.cardSpacing / 2))
+            if (subscribedIds.isEmpty()) {
+                GroupTextIconButton("Add to Inner Circle", "person.fill.badge.plus") { showInnerCirclePicker = true }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
+                    innerCircleMembers.forEach { m -> memberCard(m) }
+                }
+            }
+        } else {
+            GroupTextIconButton("Invite to Group", "person.fill.badge.plus", gradient = group.gradient) {
+                shareGroupInvite(context, group)
+                org.clear30.data.Logger.logEvent(userInfo.loggingID, org.clear30.data.LogEventType.sharedGroupCode)
+            }
+        }
+        Spacer(Modifier.height(Dimens.cardSpacing * 2))
+
+        // Other members (iOS GroupMembers.swift:158-172).
+        SmallText(
+            if (innerCircleMembers.isEmpty()) "Members" else "Other members",
+            color = Clear30Colors.text.copy(alpha = 0.5f),
         )
-        GroupLeaderboard(group, userInfo, onMemberTap = onMemberTap, onNote = { noteTarget = it }, onPing = ping)
-        GroupActivitySection(group)
-        actionError?.let { msg -> SmallText(msg, color = Clear30Colors.red2.copy(alpha = 0.75f)) }
-        Spacer(Modifier.size(Dimens.cardSpacing))
+        Spacer(Modifier.height(Dimens.cardSpacing / 2))
+        Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
+            otherMembers.forEach { m -> memberCard(m) }
+        }
+
+        actionError?.let { msg ->
+            SmallText(msg, Modifier.padding(top = Dimens.cardSpacing), color = Clear30Colors.red2.copy(alpha = 0.75f))
+        }
+        Spacer(Modifier.height(Dimens.cardSpacing))
     }
 
     noteTarget?.let { member ->
-        SendNoteDialog(
+        SendNotePopup(
+            group = group,
             member = member,
             onDismiss = { noteTarget = null },
             onSend = { msg ->
-                noteTarget = null
                 scope.launch { actionError = controller.addNote(msg, member.memberID) }
+            },
+        )
+    }
+    pingTarget?.let { member ->
+        PingConfirmDialog(
+            member = member,
+            onDismiss = { pingTarget = null },
+            onConfirm = {
+                scope.launch {
+                    actionError = SupabaseController
+                        .sendGroupPing(group.id, member.memberID, userInfo.userID)
+                        ?.let { "Could not send ping. ${it.message}".trim() }
+                }
             },
         )
     }
@@ -493,7 +434,7 @@ private fun MembersTab(
             onSave = { ids ->
                 showInnerCirclePicker = false
                 scope.launch {
-                    actionError = org.clear30.data.supabase.SupabaseController
+                    actionError = SupabaseController
                         .updateGroupSubscriptions(group.id, userInfo.userID, ids)?.message
                     controller.refresh()
                 }
@@ -502,29 +443,199 @@ private fun MembersTab(
     }
 }
 
+/**
+ * GroupMemberCard (iOS GroupCards.swift:10-57): emoji avatar + name +
+ * right-aligned "X/Y days clear", with the badge row below. Badge taps carry
+ * the note / ping actions; pass null for the current user's own card.
+ */
+@Composable
+private fun GroupMemberCard(
+    member: Clear30GroupMember,
+    state: GroupMemberState,
+    streak: Int?,
+    daysClear: Int,
+    daysClearMax: Int,
+    onNote: (() -> Unit)?,
+    onPing: (() -> Unit)?,
+) {
+    Clear30Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.fillMaxWidth()) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+            ) {
+                GroupMemberEmoji(member.emoji)
+                SmallText(member.name, Modifier.weight(1f))
+                TinyText("$daysClear/$daysClearMax days clear", color = Clear30Colors.text.copy(alpha = 0.5f))
+            }
+
+            // Badges (iOS GroupMemberCardBadges, GroupCards.swift:59-145).
+            val showStreak = streak != null && streak > 1
+            if (showStreak || state != GroupMemberState.NONE) {
+                Row(
+                    Modifier.padding(top = Dimens.cardSpacing / 2),
+                    horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+                ) {
+                    if (showStreak) {
+                        MemberBadge("🔥", "$streak", gradient = Clear30Gradients.clear30)
+                    }
+                    val complete = CheckInDefaults.weed.completeOption
+                    val incomplete = CheckInDefaults.weed.incompleteOption
+                    when (state) {
+                        GroupMemberState.SOBER ->
+                            MemberBadge(complete.emoji, "${complete.name}!", gradient = Clear30Gradients.clear30, onClick = onNote)
+                        GroupMemberState.SMOKED ->
+                            MemberBadge(incomplete.emoji, "${incomplete.name}.", onClick = onNote)
+                        GroupMemberState.NOT_CHECK_IN ->
+                            MemberBadge("🕑", "Didn't check in.", gradient = Clear30Gradients.red, onClick = onPing)
+                        GroupMemberState.NONE -> {}
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * One badge (iOS GroupMemberCardBadge → TinyTextButton with a 12-radius card,
+ * no shadow). Non-null [onClick] makes it tappable; null renders it inert
+ * (the current user's own card).
+ */
+@Composable
+private fun MemberBadge(
+    emoji: String,
+    text: String,
+    gradient: Brush? = null,
+    onClick: (() -> Unit)? = null,
+) {
+    val tappable = if (onClick != null) Modifier.pressScale { onClick() } else Modifier
+    TinyText(
+        "$emoji $text",
+        modifier = tappable
+            .cardStyle(
+                color = Clear30Colors.opacityGray,
+                shadowColor = Color.Transparent,
+                cornerRadius = 12.dp,
+                gradient = gradient,
+                padding = false,
+            )
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        color = if (gradient != null) Color.White else Clear30Colors.text,
+        maxLines = 1,
+    )
+}
+
+/** Member emoji avatar (iOS GroupMemberEmoji): 35dp opacity-gray circle + emoji. */
+@Composable
+internal fun GroupMemberEmoji(emoji: String) {
+    Box(
+        Modifier.size(35.dp).clip(CircleShape).background(Clear30Colors.opacityGray),
+        contentAlignment = Alignment.Center,
+    ) {
+        DefaultText(emoji)
+    }
+}
+
+/**
+ * TextIconButton (iOS Buttons.swift) — self-sized card button with trailing
+ * icon, centered in its row. Gradient fill = white content; otherwise text at
+ * half opacity (the "Add to Inner Circle" look).
+ */
+@Composable
+private fun GroupTextIconButton(
+    text: String,
+    icon: String,
+    gradient: Brush? = null,
+    onClick: () -> Unit,
+) {
+    val foreground = if (gradient != null) Color.White else Clear30Colors.text.copy(alpha = 0.5f)
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Row(
+            Modifier
+                .pressScale { onClick() }
+                .cardStyle(gradient = gradient),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+        ) {
+            DefaultText(text, color = foreground)
+            androidx.compose.material3.Icon(
+                org.clear30.views.components.sfSymbol(icon),
+                contentDescription = null,
+                tint = foreground,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+// MARK: - Member day-info helpers (iOS Clear30GroupMember extensions)
+
+/** iOS GroupMemberState. */
+private enum class GroupMemberState { SOBER, SMOKED, NOT_CHECK_IN, NONE }
+
+private fun dayKey(date: LocalDate): String = "%04d-%02d-%02d".format(date.year, date.monthNumber, date.dayOfMonth)
+
+/** Day info from the member's join date onward (iOS `filteredDayInfo`). */
+private fun Clear30GroupMember.filteredDayInfo(): Map<String, ProgramDayInfo> {
+    val info = dayInfo ?: return emptyMap()
+    val joinKey = joinDate?.toLocalDateTime(TimeZone.currentSystemDefault())?.date?.let { dayKey(it) }
+        ?: return info
+    return info.filterKeys { it >= joinKey }
+}
+
+/** iOS `getState(for: Date())` — the member's check-in state for today. */
+private fun Clear30GroupMember.stateForToday(): GroupMemberState {
+    val today = kotlinx.datetime.Clock.System.todayIn(TimeZone.currentSystemDefault())
+    return when (filteredDayInfo()[dayKey(today)]?.sober) {
+        true -> GroupMemberState.SOBER
+        false -> GroupMemberState.SMOKED
+        null -> GroupMemberState.NOT_CHECK_IN // today is always "today" here
+    }
+}
+
+/** Consecutive sober days ending today (iOS `streak`). */
+private fun Clear30GroupMember.streakCount(): Int {
+    val info = filteredDayInfo()
+    var day = kotlinx.datetime.Clock.System.todayIn(TimeZone.currentSystemDefault())
+    if (info[dayKey(day)]?.sober != true) return 0
+    var count = 0
+    while (info[dayKey(day)]?.sober == true) {
+        count++
+        day = day.minus(DatePeriod(days = 1))
+    }
+    return count
+}
+
+/** Sober days within [month] (iOS `daysSoberCountFiltered(start:end:)`). */
+private fun Clear30GroupMember.daysClearIn(month: PlainDate): Int {
+    val prefix = "%04d-%02d-".format(month.year, month.month)
+    return filteredDayInfo().count { it.key.startsWith(prefix) && it.value.sober == true }
+}
+
 /** First-of-month dates from the earliest member join month through today. */
-private fun monthsForGroup(group: Clear30Group): List<org.clear30.data.model.PlainDate> {
-    val tz = kotlinx.datetime.TimeZone.currentSystemDefault()
+private fun monthsForGroup(group: Clear30Group): List<PlainDate> {
+    val tz = TimeZone.currentSystemDefault()
     val today = kotlinx.datetime.Clock.System.todayIn(tz)
     val start = group.members.mapNotNull { it.joinDate }.minOrNull()
         ?.toLocalDateTime(tz)?.date ?: today
-    val months = mutableListOf<org.clear30.data.model.PlainDate>()
+    val months = mutableListOf<PlainDate>()
     var y = start.year
     var m = start.monthNumber
     while (y < today.year || (y == today.year && m <= today.monthNumber)) {
-        months.add(org.clear30.data.model.PlainDate(y, m, 1))
+        months.add(PlainDate(y, m, 1))
         m++
         if (m > 12) { m = 1; y++ }
     }
-    if (months.isEmpty()) months.add(org.clear30.data.model.PlainDate(today.year, today.monthNumber, 1))
+    if (months.isEmpty()) months.add(PlainDate(today.year, today.monthNumber, 1))
     return months
 }
 
 /** Group-wide sober/smoked check-in count within a month (iOS `daysSober(month:)` / `daysSmoked(month:)`). */
-private fun Clear30Group.monthCheckIns(month: org.clear30.data.model.PlainDate, sober: Boolean): Int {
+private fun Clear30Group.monthCheckIns(month: PlainDate, sober: Boolean): Int {
     val prefix = "%04d-%02d-".format(month.year, month.month)
     return members.sumOf { m ->
-        m.dayInfo?.count { it.key.startsWith(prefix) && it.value.sober == sober } ?: 0
+        m.filteredDayInfo().count { it.key.startsWith(prefix) && it.value.sober == sober }
     }
 }
 
@@ -534,7 +645,7 @@ private val MONTH_NAMES = listOf(
 )
 
 /** "🎃 October" — iOS `Date.monthWithEmoji` (CalendarUtils.swift). */
-private fun monthWithEmoji(month: org.clear30.data.model.PlainDate): String {
+private fun monthWithEmoji(month: PlainDate): String {
     val emoji = when (month.month) {
         1 -> "❄️"; 2 -> "💘"; 3 -> "🍀"; 4 -> "🌷"; 5 -> "🌸"; 6 -> "☀️"
         7 -> "🎆"; 8 -> "🏖️"; 9 -> "🍎"; 10 -> "🎃"; 11 -> "🦃"; 12 -> "🎄"
@@ -548,7 +659,7 @@ private fun monthWithEmoji(month: org.clear30.data.model.PlainDate): String {
  * chevrons around a swipeable month label; chevrons vanish at the ends.
  */
 @Composable
-private fun GroupMonthPicker(months: List<org.clear30.data.model.PlainDate>, index: Int, onIndexChange: (Int) -> Unit) {
+private fun GroupMonthPicker(months: List<PlainDate>, index: Int, onIndexChange: (Int) -> Unit) {
     val pagerState = rememberPagerState(initialPage = index, pageCount = { months.size })
     LaunchedEffect(pagerState.currentPage) {
         if (pagerState.currentPage != index) onIndexChange(pagerState.currentPage)
@@ -571,7 +682,7 @@ private fun GroupMonthPicker(months: List<org.clear30.data.model.PlainDate>, ind
             }
         }
         HorizontalPager(state = pagerState, modifier = Modifier.weight(1f)) { page ->
-            org.clear30.views.components.Heading3(monthWithEmoji(months[page]), Modifier.fillMaxWidth())
+            Heading3(monthWithEmoji(months[page]), Modifier.fillMaxWidth())
         }
         if (months.size > 1) {
             if (index < months.lastIndex) {
@@ -587,89 +698,65 @@ private fun GroupMonthPicker(months: List<org.clear30.data.model.PlainDate>, ind
 
 /** One of the two month stat cards (iOS EmojiTextCard on the group gradient). */
 @Composable
-private fun MonthStatCard(title: String, subtitle: String, gradient: androidx.compose.ui.graphics.Brush, modifier: Modifier = Modifier) {
+private fun MonthStatCard(title: String, subtitle: String, gradient: Brush, modifier: Modifier = Modifier) {
     Clear30Card(modifier = modifier, gradient = gradient) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            org.clear30.views.components.Heading3(title, color = Color.White)
+            Heading3(title, color = Color.White)
             SmallText(subtitle, color = Color.White, maxLines = 1)
         }
     }
 }
 
+// MARK: - Send note / ping (iOS GroupSendNote.swift + GroupController.sendPing)
+
 /**
- * Inner Circle (iOS GroupMembers.swift:120-155): the members whose check-ins the
- * user subscribed to, with an add/edit picker. Hidden while the user is alone in
- * the group (iOS shows the invite button instead — the header's "+" button
- * covers that here).
+ * Send-note popup (iOS GroupSendMessage): a card with "Send a note to" + the
+ * gradient note icon, the recipient, a bordered multiline input, and
+ * Cancel / Send buttons (Send on the group gradient).
  */
 @Composable
-private fun InnerCircleSection(
+internal fun SendNotePopup(
     group: Clear30Group,
-    userInfo: UserInfo,
-    onEdit: () -> Unit,
-    onNote: (Clear30GroupMember) -> Unit,
-    onPing: (Clear30GroupMember) -> Unit,
+    member: Clear30GroupMember,
+    onDismiss: () -> Unit,
+    onSend: (String) -> Unit,
 ) {
-    if (group.members.none { it.memberID != userInfo.userID }) return
-    val subscribedIds = group.subscribed.orEmpty().map { it.subscribedTo }
-
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            SmallText("Inner Circle", color = Clear30Colors.text.copy(alpha = 0.5f))
-            Spacer(Modifier.weight(1f))
-            if (subscribedIds.isNotEmpty()) {
-                org.clear30.views.components.IconButton("person.fill.badge.plus", height = 15.dp, padding = 0.dp, tint = Clear30Colors.text.copy(alpha = 0.5f), onClick = onEdit)
+    var note by remember { mutableStateOf("") }
+    Dialog(onDismissRequest = onDismiss) {
+        Column(Modifier.fillMaxWidth().cardStyle()) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                SmallText("Send a note to", color = Clear30Colors.text.copy(alpha = 0.5f), maxLines = 1)
+                Spacer(Modifier.weight(1f))
+                GradientIcon("note.text", group.gradient, 20.dp)
             }
-        }
-        if (subscribedIds.isEmpty()) {
-            // iOS TextIconButton("Add to Inner Circle", person.fill.badge.plus).
-            Clear30Card(modifier = Modifier.fillMaxWidth().pressScale { onEdit() }) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-                    androidx.compose.material3.Icon(
-                        org.clear30.views.components.sfSymbol("person.fill.badge.plus"),
-                        contentDescription = null,
-                        tint = Clear30Colors.text.copy(alpha = 0.5f),
-                        modifier = Modifier.size(18.dp),
-                    )
-                    SmallText("Add to Inner Circle", color = Clear30Colors.text.copy(alpha = 0.5f))
-                }
-            }
-        } else {
-            group.members
-                .filter { subscribedIds.contains(it.memberID) }
-                .sortedByDescending { it.daysSoberCount }
-                .forEach { m ->
-                    Clear30Card(modifier = Modifier.fillMaxWidth()) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-                            SmallText(m.emoji)
-                            SmallText(m.name)
-                            Spacer(Modifier.weight(1f))
-                            TinyText("${m.daysSoberCount} days clear", color = Clear30Colors.text.copy(alpha = 0.5f))
-                            if (m.memberID != userInfo.userID) {
-                                org.clear30.views.components.IconButton("message.fill", height = 15.dp, padding = Dimens.cardSpacing / 3, tint = Clear30Colors.text.copy(alpha = 0.5f)) { onNote(m) }
-                                org.clear30.views.components.IconButton("bell.fill", height = 15.dp, padding = Dimens.cardSpacing / 3, tint = Clear30Colors.text.copy(alpha = 0.5f)) { onPing(m) }
-                            }
-                        }
+            Spacer(Modifier.height(4.dp))
+            DefaultText("${member.emoji} ${member.name}".trim())
+            Spacer(Modifier.height(10.dp))
+            MultiLineInput(note, { note = it }, placeholder = "Note", modifier = Modifier.fillMaxWidth())
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
+                StretchedButton("Cancel", weight = FontWeight.Normal, modifier = Modifier.weight(1f)) { onDismiss() }
+                StretchedButton("Send", gradient = group.gradient, weight = FontWeight.Normal, modifier = Modifier.weight(1f)) {
+                    if (note.isNotBlank()) {
+                        onSend(note.trim())
+                        onDismiss()
                     }
                 }
+            }
         }
     }
 }
 
-/** Compose-a-note dialog backing the leaderboard/inner-circle message action. */
+/** Yes/no ping confirm (iOS GroupController.sendPing alert). */
 @Composable
-private fun SendNoteDialog(member: Clear30GroupMember, onDismiss: () -> Unit, onSend: (String) -> Unit) {
-    var draft by remember { mutableStateOf("") }
+private fun PingConfirmDialog(member: Clear30GroupMember, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    val label = "${member.emoji} ${member.name}".trim()
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Send a note to ${member.name}") },
-        text = {
-            OutlinedTextField(draft, { draft = it }, placeholder = { Text("Something encouraging…") })
-        },
-        confirmButton = {
-            TextButton(onClick = { if (draft.isNotBlank()) onSend(draft.trim()) }, enabled = draft.isNotBlank()) { Text("Send") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        title = { Text("Ping $label") },
+        text = { Text("Do you want to ping $label to remind them to check in?") },
+        confirmButton = { TextButton(onClick = { onConfirm(); onDismiss() }) { Text("Yes") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("No") } },
     )
 }
 
@@ -689,7 +776,7 @@ private fun InnerCirclePickerDialog(
         title = { Text("Inner Circle") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-                Text("Get notified when these members check in.")
+                Text("Add to inner circle to pin members and see their status in your \"Today\" feed.")
                 group.members.filter { it.memberID != userInfo.userID }.forEach { m ->
                     Row(
                         Modifier.fillMaxWidth().clickable {
@@ -707,22 +794,74 @@ private fun InnerCirclePickerDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onSave(selected.toList()) }) { Text("Save") } },
+        confirmButton = { TextButton(onClick = { onSave(selected.toList()) }) { Text("Done") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
 
-/** Notes tab — the group note inbox + composer. */
+// MARK: - Notes tab (iOS GroupNoteInbox.swift) — READ-ONLY inbox
+
+/**
+ * Notes tab — the read-only inbox of notes other members sent the user.
+ * Sending happens from the member-card badges via [SendNotePopup], never here.
+ */
 @Composable
-private fun NotesTab(group: Clear30Group, onPost: (String) -> Unit) {
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
-    ) {
-        GroupNotesSection(notes = group.notes.orEmpty(), onPost = onPost)
-        Spacer(Modifier.size(Dimens.cardSpacing))
+private fun NotesTab(group: Clear30Group) {
+    val pairs = remember(group.notes, group.members) {
+        group.notes.orEmpty()
+            .mapNotNull { note ->
+                group.members.firstOrNull { it.memberID == note.fromMemberID }?.let { note to it }
+            }
+            .sortedByDescending { it.first.timestamp ?: Instant.DISTANT_PAST }
+    }
+    if (pairs.isEmpty()) {
+        // iOS GroupNoteInbox empty state (GroupNoteInbox.swift:33-48).
+        Column(
+            Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Spacer(Modifier.weight(1f))
+            Heading3("Group Notes", textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Spacer(Modifier.height(Dimens.cardSpacing / 2))
+            SmallText(
+                "When members send you notes, they will appear here.",
+                color = Clear30Colors.text.copy(alpha = 0.5f),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+            Spacer(Modifier.weight(1f))
+        }
+    } else {
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+        ) {
+            pairs.forEach { (note, from) -> NoteCard(group.gradient, note, from) }
+            Spacer(Modifier.height(Dimens.cardSpacing))
+        }
     }
 }
+
+/** NoteCard (iOS GroupNoteInbox.swift:55-94): gradient note icon + timestamp, message, sender. */
+@Composable
+private fun NoteCard(gradient: Brush, note: Clear30GroupNote, from: Clear30GroupMember) {
+    Clear30Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                GradientIcon("note.text", gradient, 20.dp)
+                Spacer(Modifier.weight(1f))
+                note.timestamp?.let {
+                    TinyText(groupNoteDateString(it), color = Clear30Colors.text.copy(alpha = 0.5f), maxLines = 1)
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            SmallText(note.message)
+            Spacer(Modifier.height(3.dp))
+            SmallText("from ${from.emoji} ${from.name}".trim(), color = Clear30Colors.text.copy(alpha = 0.5f))
+        }
+    }
+}
+
+// MARK: - Settings tab (iOS GroupSettings.swift)
 
 /** Settings tab — edit name + color, remove members, leave (iOS GroupSettings). */
 @Composable
@@ -735,6 +874,15 @@ private fun GroupSettingsTab(
 ) {
     var name by remember(group.id) { mutableStateOf(group.name ?: "") }
     var hue by remember(group.id) { androidx.compose.runtime.mutableFloatStateOf(group.hue.toFloat()) }
+
+    // Debounced hue persistence (iOS scheduleHueUpdate: 1s after the last change).
+    LaunchedEffect(hue) {
+        if (kotlin.math.abs(hue - group.hue.toFloat()) > 0.0001f) {
+            kotlinx.coroutines.delay(1_000)
+            controller.rename(name.trim().ifEmpty { group.name ?: "" }, hue.toDouble())
+        }
+    }
+
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
@@ -751,34 +899,51 @@ private fun GroupSettingsTab(
                 }
             },
         )
-        SmallText("Group color", color = Clear30Colors.text.copy(alpha = 0.5f))
-        androidx.compose.material3.Slider(
-            value = hue,
-            onValueChange = { hue = it },
-            valueRange = 0f..1f,
-            onValueChangeFinished = { scope.launch { controller.rename(name, hue.toDouble()) } },
-        )
+
+        // iOS GroupSettings.swift:68-84: "Group color" card — label + live circle
+        // swatch on top, the hue-gradient slider underneath.
+        Clear30Card(modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    DefaultText("Group color")
+                    Spacer(Modifier.weight(1f))
+                    Box(
+                        Modifier.size(30.dp).clip(CircleShape)
+                            .background(Color.hsv(hue.coerceIn(0f, 1f) * 360f, GROUP_SATURATION.toFloat(), GROUP_BRIGHTNESS.toFloat())),
+                    )
+                }
+                HuePicker(
+                    hue = hue,
+                    onHueChange = { hue = it },
+                    saturation = GROUP_SATURATION.toFloat(),
+                    brightness = GROUP_BRIGHTNESS.toFloat(),
+                    modifier = Modifier.padding(top = 7.dp),
+                )
+            }
+        }
+
+        Spacer(Modifier.height(Dimens.cardSpacing / 2))
         SmallText("Members", color = Clear30Colors.text.copy(alpha = 0.5f))
         group.members.forEach { m ->
             Clear30Card(modifier = Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-                    SmallText(m.emoji)
+                    GroupMemberEmoji(m.emoji)
                     SmallText(m.name)
                     Spacer(Modifier.weight(1f))
                     if (m.memberID != userInfo.userID) {
                         androidx.compose.material3.Icon(
-                            org.clear30.views.components.sfSymbol("minus.circle.fill"),
+                            org.clear30.views.components.sfSymbol("minus.circle"),
                             contentDescription = "Remove",
-                            tint = Clear30Colors.red2.copy(alpha = 0.75f),
-                            modifier = Modifier.size(22.dp).clickable { scope.launch { controller.removeMember(m.memberID) } },
+                            tint = Clear30Colors.text.copy(alpha = 0.5f),
+                            modifier = Modifier.size(25.dp).clickable { scope.launch { controller.removeMember(m.memberID) } },
                         )
                     }
                 }
             }
         }
-        Spacer(Modifier.size(Dimens.cardSpacing / 2))
+        Spacer(Modifier.height(Dimens.cardSpacing / 2))
         DefaultButton("Leave group", gradient = Clear30Gradients.red, modifier = Modifier.fillMaxWidth()) { onLeave() }
-        Spacer(Modifier.size(Dimens.cardSpacing))
+        Spacer(Modifier.height(Dimens.cardSpacing))
     }
 }
 
@@ -797,7 +962,7 @@ private fun GroupNameCard(name: String, onChange: (String) -> Unit, onCommit: ()
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
         ) {
-            org.clear30.views.components.DefaultText("Group name")
+            DefaultText("Group name")
             androidx.compose.foundation.text.BasicTextField(
                 value = name,
                 onValueChange = onChange,
@@ -826,65 +991,12 @@ private fun GroupNameCard(name: String, onChange: (String) -> Unit, onCommit: ()
     }
 }
 
-private fun shareGroupInvite(context: android.content.Context, group: Clear30Group) {
-    val link = "https://clear30.org/group/${group.id}"
-    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(
-            android.content.Intent.EXTRA_TEXT,
-            "Join my Clear30 group: ${group.name ?: "Group"}\n$link",
-        )
-    }
-    context.startActivity(android.content.Intent.createChooser(intent, "Invite a friend").apply {
-        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-    })
-}
-
-@Composable
-private fun MemberRow(member: Clear30GroupMember) {
-    Clear30Card(modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-            SmallText(member.emoji)
-            SmallText(member.name)
-            Spacer(Modifier.weight(1f))
-            TinyText("${member.daysCheckedIn} days", color = Clear30Colors.text.copy(alpha = 0.5f))
-        }
-    }
-}
-
-@Composable
-private fun JoinGroupDialog(busy: Boolean, onDismiss: () -> Unit, onSubmit: (String) -> Unit) {
-    var code by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Join a group") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-                Text("Paste the group code from a friend.")
-                OutlinedTextField(code, { code = it }, label = { Text("Group code") }, singleLine = true)
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onSubmit(code) },
-                enabled = !busy && code.isNotBlank(),
-            ) { Text(if (busy) "Joining…" else "Join") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancel") } },
-    )
-}
-
 @Composable
 private fun LeaveGroupDialog(busy: Boolean, onDismiss: () -> Unit, onConfirm: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Step away from the group?") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("You'll lose access to the group's calendar, notes, and member updates.")
-                Text("Your own check-ins stay with you. You can rejoin anytime with the same code.")
-            }
-        },
+        title = { Text("Leave group?") },
+        text = { Text("Are you sure you want to leave the group?") },
         confirmButton = {
             TextButton(onClick = onConfirm, enabled = !busy) {
                 Text(if (busy) "Leaving…" else "Yes, leave", color = Clear30Colors.red2)
@@ -892,4 +1004,51 @@ private fun LeaveGroupDialog(busy: Boolean, onDismiss: () -> Unit, onConfirm: ()
         },
         dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text("Stay") } },
     )
+}
+
+private fun shareGroupInvite(context: android.content.Context, group: Clear30Group) {
+    val link = "https://clear30.org/group/${group.id}"
+    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(
+            android.content.Intent.EXTRA_TEXT,
+            "Join my Clear30 group! 🍃\n$link",
+        )
+    }
+    context.startActivity(android.content.Intent.createChooser(intent, "Invite a friend").apply {
+        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+    })
+}
+
+// MARK: - Shared date formatting (iOS CalendarUtils.swift)
+
+private val SHORT_MONTHS = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+private fun daySuffix(day: Int): String = when {
+    day in 11..13 -> "th"
+    day % 10 == 1 -> "st"
+    day % 10 == 2 -> "nd"
+    day % 10 == 3 -> "rd"
+    else -> "th"
+}
+
+/** "Jan 15th" (iOS `monthDayWithSuffix`). */
+internal fun monthDayWithSuffix(date: LocalDate): String =
+    "${SHORT_MONTHS[date.monthNumber - 1]} ${date.dayOfMonth}${daySuffix(date.dayOfMonth)}"
+
+/** Same calendar week (Sunday-start, matching the iOS US calendar). */
+internal fun Instant.isSameWeekAs(other: Instant): Boolean {
+    val tz = TimeZone.currentSystemDefault()
+    fun startOfWeek(d: LocalDate): LocalDate = d.minus(DatePeriod(days = d.dayOfWeek.isoDayNumber % 7))
+    return startOfWeek(toLocalDateTime(tz).date) == startOfWeek(other.toLocalDateTime(tz).date)
+}
+
+/** "Mon" if this week, else "Jan 15th" (iOS `groupNoteDateString`). */
+internal fun groupNoteDateString(timestamp: Instant): String {
+    val date = timestamp.toLocalDateTime(TimeZone.currentSystemDefault()).date
+    return if (timestamp.isSameWeekAs(org.clear30.util.now())) {
+        date.dayOfWeek.name.lowercase().replaceFirstChar { it.uppercase() }.take(3)
+    } else {
+        monthDayWithSuffix(date)
+    }
 }

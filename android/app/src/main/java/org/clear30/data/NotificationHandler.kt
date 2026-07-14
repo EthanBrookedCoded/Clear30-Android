@@ -182,14 +182,11 @@ object NotificationHandler {
     // MARK: - Health milestones
 
     /**
-     * Schedule one notification per health category at its next milestone
-     * unlock (iOS `NotificationHandlerHealth.scheduleHealthNotifications`).
+     * Schedule one notification per health category at its next step's real
+     * unlock instant (iOS `NotificationHandlerHealth.scheduleHealthNotifications`
+     * — `nextStepDate` = category start + setback + step days + minute offset).
      * Full replace of any pending health work — idempotent; called after
-     * check-ins, timeline mutations, and on tab load. Fire time = the
-     * milestone's unlock day at 10:00 local (iOS uses the per-category start
-     * time + minute_offset — this anchors on the content-unlock convention
-     * instead; WorkManager is inexact under Doze anyway, day granularity is
-     * the contract).
+     * check-ins, timeline mutations, and on tab load.
      */
     fun scheduleHealthNotifications(userInfo: UserInfo, program: Program) {
         val settings = userInfo.notificationSettings ?: return
@@ -202,38 +199,29 @@ object NotificationHandler {
 
         wm().cancelAllWorkByTag(NotificationPostWorker.TAG_HEALTH)
 
-        val currentDay = program.currentDay
-        val tz = TimeZone.currentSystemDefault()
         val nowMs = System.currentTimeMillis()
+        program.healthProgress.forEach { healthProgress ->
+            val nextStep = healthProgress.nextStep ?: return@forEach
+            val nextStepDate = healthProgress.nextStepDate ?: return@forEach
+            val fireAt = nextStepDate.toEpochMilliseconds()
+            if (fireAt <= nowMs) return@forEach
 
-        program.healthProgress
-            .filter { it.unlockedOnDay + it.setbackDays > currentDay }
-            .groupBy { it.category }
-            .forEach { (category, milestones) ->
-                val next = milestones.minByOrNull { it.unlockedOnDay + it.setbackDays } ?: return@forEach
-                val title = next.notificationTitle?.replace("_CLIENTNAME_", userInfo.name) ?: return@forEach
-                val body = next.notificationBody?.replace("_CLIENTNAME_", userInfo.name) ?: return@forEach
+            // iOS generateHealthNotificationContent — step copy or nothing.
+            val title = nextStep.notificationTitle?.replace("_CLIENTNAME_", userInfo.name) ?: return@forEach
+            val body = nextStep.notificationBody?.replace("_CLIENTNAME_", userInfo.name) ?: return@forEach
 
-                // Unlock day at 10:00 local.
-                val daysAhead = (next.unlockedOnDay + next.setbackDays) - currentDay
-                val fireLocal = LocalTime(10, 0).atDate(
-                    Clock.System.now().toLocalDateTime(tz).date.plus(DatePeriod(days = daysAhead)),
-                )
-                val fireAt = fireLocal.toInstant(tz).toEpochMilliseconds()
-                if (fireAt <= nowMs) return@forEach
-
-                val req = OneTimeWorkRequestBuilder<NotificationPostWorker>()
-                    .setInitialDelay(fireAt - nowMs, TimeUnit.MILLISECONDS)
-                    .addTag(NotificationPostWorker.TAG_HEALTH)
-                    .setInputData(workDataOf(
-                        NotificationPostWorker.KEY_CHANNEL to Clear30Application.CHANNEL_HEALTH,
-                        NotificationPostWorker.KEY_TITLE to title,
-                        NotificationPostWorker.KEY_BODY to body,
-                        NotificationPostWorker.KEY_NOTIF_ID to (NOTIF_ID_HEALTH + category.ordinal),
-                    ))
-                    .build()
-                wm().enqueueUniqueWork("health_${category.rawValue}", ExistingWorkPolicy.REPLACE, req)
-            }
+            val req = OneTimeWorkRequestBuilder<NotificationPostWorker>()
+                .setInitialDelay(fireAt - nowMs, TimeUnit.MILLISECONDS)
+                .addTag(NotificationPostWorker.TAG_HEALTH)
+                .setInputData(workDataOf(
+                    NotificationPostWorker.KEY_CHANNEL to Clear30Application.CHANNEL_HEALTH,
+                    NotificationPostWorker.KEY_TITLE to title,
+                    NotificationPostWorker.KEY_BODY to body,
+                    NotificationPostWorker.KEY_NOTIF_ID to (NOTIF_ID_HEALTH + healthProgress.category.order),
+                ))
+                .build()
+            wm().enqueueUniqueWork("health_${healthProgress.category.name}", ExistingWorkPolicy.REPLACE, req)
+        }
     }
 
     // MARK: - Bulk

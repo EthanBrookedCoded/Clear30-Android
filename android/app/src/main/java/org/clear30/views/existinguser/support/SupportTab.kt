@@ -81,6 +81,9 @@ private sealed interface SupportRoute {
     ) : SupportRoute
     data class Symptom(val key: String, val info: org.clear30.data.model.SymptomInfo) : SupportRoute
     data class OpenMessage(val message: org.clear30.data.model.ProgramMessage) : SupportRoute
+    data object SchoolInfo : SupportRoute
+    data class SchoolActivityDetail(val activity: org.clear30.data.model.SchoolDataActivity) : SupportRoute
+    data class SchoolResourceDetail(val resource: org.clear30.data.model.SchoolDataResource) : SupportRoute
 }
 
 @Composable
@@ -181,6 +184,55 @@ fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30
         is SupportRoute.OpenMessage -> {
             org.clear30.views.existinguser.today.MessageDetail(program, route.message, userInfo, journalEntries, onBack = back); return
         }
+        is SupportRoute.SchoolInfo -> {
+            val schoolData = userInfo.schoolData
+            if (schoolData == null) back()
+            else SchoolInfoScreen(
+                schoolData = schoolData,
+                program = program,
+                userInfo = userInfo,
+                onBack = back,
+                onOpenMessage = { push(SupportRoute.OpenMessage(it)) },
+                onOpenActivity = { push(SupportRoute.SchoolActivityDetail(it)) },
+                onOpenResource = { push(SupportRoute.SchoolResourceDetail(it)) },
+            )
+            return
+        }
+        is SupportRoute.SchoolActivityDetail -> {
+            val a = route.activity
+            SchoolInfoDetailScreen(
+                title = a.title,
+                gradient = userInfo.schoolData?.schoolGradient() ?: Clear30Gradients.clear30,
+                orgName = a.org_name,
+                subtitle = a.subtitle,
+                date = a.date_time,
+                repeats = a.repeats,
+                location = a.location,
+                phoneNumber = a.phone_number,
+                email = a.email,
+                link = a.link,
+                facilitatedBy = a.facilitated_by,
+                subLinks = a.sub_links,
+                description = a.description,
+                onBack = back,
+            )
+            return
+        }
+        is SupportRoute.SchoolResourceDetail -> {
+            val r = route.resource
+            SchoolInfoDetailScreen(
+                title = r.title,
+                gradient = userInfo.schoolData?.schoolGradient() ?: Clear30Gradients.clear30,
+                subtitle = r.subtitle,
+                location = r.location,
+                phoneNumber = r.phone_number,
+                link = r.link,
+                description = r.description,
+                badge = r.badge,
+                onBack = back,
+            )
+            return
+        }
         is SupportRoute.Hub -> Unit
     }
 
@@ -228,6 +280,12 @@ fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30
         }
 
         SectionDivider()
+
+        // Your School — first item of the library block when the user belongs to
+        // a school (iOS Support2.swift `schoolInfoSection`).
+        if (userInfo.schoolData != null) {
+            SchoolInfoHubSection(userInfo) { push(SupportRoute.SchoolInfo) }
+        }
 
         // Your Library — dynamic content rails (gated on unlocked program content),
         // mirroring iOS Support2.swift. YouTube/Reddit/Claire-prompt/Meditation rails

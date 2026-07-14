@@ -6,10 +6,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
-import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -19,13 +21,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.datetime.Instant
-import org.clear30.data.model.HealthCategory
 import org.clear30.data.model.Program
+import org.clear30.data.model.ProgramHealthProgress
 import org.clear30.data.model.UserInfo
-import org.clear30.util.adding
-import org.clear30.util.daysTo
+import org.clear30.data.model.nextIncreaseCategory
 import org.clear30.util.now
 import org.clear30.views.components.Clear30Card
 import org.clear30.views.components.Heading3
@@ -35,149 +37,120 @@ import org.clear30.views.components.cardStyle
 import org.clear30.views.components.pressScale
 import org.clear30.views.components.sfSymbol
 import org.clear30.views.theme.Clear30Colors
+import org.clear30.views.theme.Clear30Gradients
 import org.clear30.views.theme.Dimens
-import androidx.compose.material3.Icon
-import androidx.compose.ui.unit.Dp
+import org.clear30.views.theme.colorFromHex
 
 /**
- * HealthCardsRow — ported 1:1 from the iOS `HealthCard` row in
- * `Profile.swift` `yourProgressView`. A horizontal row of white cards, each a
- * ~270° circular gauge (open at the bottom) showing the recovery percentage,
- * with the category icon + name beneath.
+ * HealthCardsRow + HealthGaugeCard — ported 1:1 from iOS `HealthCard.swift`
+ * and the `yourProgressView` row in `Profile.swift:260-272`.
  *
- * The Android program model stores health as per-milestone rows (no backend
- * per-step percentage), so the percentage is derived from how many of a
- * category's milestones have unlocked. When no health data has synced yet we
- * still render Brain / Lungs / Heart so the layout matches iOS visually.
+ * Each category renders a ~270° gauge (gap at the bottom) at the backend
+ * `currentStep.percentage`, with a ghost ring at the personal-best percentage,
+ * the category icon + name beneath, and one of two overlay badges: the `hasNew`
+ * "+X% >" pill (new step unlocked since last visit — card flips to the category
+ * gradient) or the "in X hours" time badge on the single soonest-updating
+ * category. Always tappable, even at 0% — routes to that category's timeline.
  */
 @Composable
-fun HealthCardsRow(program: Program, userInfo: UserInfo, onOpenTimeline: () -> Unit) {
-    val gauges = buildGauges(program)
-    // iOS shows the "in X hours" badge only on the single soonest-updating
-    // category (`nextIncreaseCategory` = min by nextStepDate,
-    // ProgramHealthProgress.swift:193-195) — never one badge per card.
-    val soonest = gauges.take(3).mapNotNull { it.nextIncrease }.minOrNull()
-    val soonestIndex = gauges.take(3).indexOfFirst { it.nextIncrease != null && it.nextIncrease == soonest }
+fun HealthCardsRow(program: Program, userInfo: UserInfo, onOpenTimeline: (ProgramHealthProgress) -> Unit) {
+    val sorted = program.healthProgress.sortedBy { it.category.order }
+    if (sorted.isEmpty()) return
+    val soonest = program.healthProgress.nextIncreaseCategory
     Row(
         Modifier.fillMaxWidth().padding(vertical = Dimens.cardSpacing / 4),
         horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
     ) {
-        gauges.take(3).forEachIndexed { index, g ->
+        sorted.forEach { hp ->
             HealthGaugeCard(
-                g,
-                showTimeLeft = index == soonestIndex,
-                onClick = onOpenTimeline,
+                hp,
+                showTimeLeft = soonest?.category?.name == hp.category.name,
+                onClick = { onOpenTimeline(hp) },
                 modifier = Modifier.weight(1f),
             )
         }
     }
 }
 
-private data class HealthGauge(
-    val name: String,
-    val icon: String,
-    val percentage: Int,
-    val gradient: Brush,
-    val tint: Color,
-    /** When this gauge next ticks up — drives the iOS-style time badge. */
-    val nextIncrease: Instant? = null,
+/** Category gradient from the backend hex pair (iOS `ProgramHealthProgress.gradient`). */
+internal fun ProgramHealthProgress.gradientBrush(): Brush = Clear30Gradients.linear(
+    listOf(colorFromHex(category.color1), colorFromHex(category.color2)),
+    Clear30Gradients.bottomLeading,
+    Clear30Gradients.topTrailing,
 )
 
-private fun buildGauges(program: Program): List<HealthGauge> {
-    // Drive everything off DAYS WITHOUT WEED so the gauges climb as the streak grows.
-    val days = program.lastSmoked.daysTo(now()).coerceAtLeast(0)
-    val categories = program.healthProgress.map { it.category }.distinct()
-    if (categories.isNotEmpty()) {
-        return categories.sortedBy { it.ordinal }.map { cat ->
-            val items = program.healthProgress.filter { it.category == cat }
-            val unlocked = items.count { days - it.setbackDays >= it.unlockedOnDay }
-            val pct = if (items.isEmpty()) 0 else (unlocked * 100 / items.size)
-            // Earliest still-locked milestone → its unlock date (iOS nextStepDate).
-            val next = items.filter { days - it.setbackDays < it.unlockedOnDay }
-                .minOfOrNull { it.unlockedOnDay + it.setbackDays }
-                ?.let { program.lastSmoked.adding(days = it) }
-            cat.toGauge(pct, next)
-        }
-    }
-    // No synced data — ramp each organ up over its own recovery window so the
-    // percentages rise as days-without-weed accumulate (Brain slowest → Heart fastest),
-    // all reaching 100% over time (e.g. 238 days → all 100%).
-    fun pctOver(window: Int) = (days * 100 / window).coerceIn(0, 100)
-    // The ramp steps once per day, so the next increase is the next day boundary.
-    fun nextOver(window: Int): Instant? =
-        if (days >= window) null else program.lastSmoked.adding(days = days + 1)
-    return listOf(
-        HealthCategory.BRAIN.toGauge(pctOver(90), nextOver(90)),
-        HealthCategory.LUNGS.toGauge(pctOver(30), nextOver(30)),
-        HealthCategory.OTHER.toGauge(pctOver(14), nextOver(14)),
-    )
-}
-
-private fun HealthCategory.toGauge(pct: Int, next: Instant? = null): HealthGauge = when (this) {
-    HealthCategory.BRAIN -> HealthGauge("Brain", "brain.head.profile", pct, pinkGradient, pink1, next)
-    HealthCategory.LUNGS -> HealthGauge("Lungs", "lungs.fill", pct, salmonGradient, salmon1, next)
-    HealthCategory.HEART -> HealthGauge("Heart", "heart.fill", pct, redGradient, red1, next)
-    HealthCategory.SLEEP -> HealthGauge("Sleep", "moon.fill", pct, sleepGradient, sleep1, next)
-    HealthCategory.MOOD -> HealthGauge("Mood", "face.smiling", pct, moodGradient, mood1, next)
-    HealthCategory.ENERGY -> HealthGauge("Energy", "bolt.fill", pct, energyGradient, energy1, next)
-    HealthCategory.MEMORY -> HealthGauge("Memory", "sparkles", pct, memoryGradient, memory1, next)
-    HealthCategory.OTHER -> HealthGauge("Heart", "heart.fill", pct, redGradient, red1, next)
-}
-
-// Category colors (iOS health categories are backend-defined; these match the
-// brand palette in the reference screenshots).
-private val pink1 = Color(0xFFEC6AAE)
-private val pinkGradient = Brush.linearGradient(listOf(pink1, Color(0xFFF488BC)))
-private val salmon1 = Color(0xFFF47C7C)
-private val salmonGradient = Brush.linearGradient(listOf(salmon1, Color(0xFFF96B6B)))
-private val red1 = Color(0xFFF65555)
-private val redGradient = Brush.linearGradient(listOf(red1, Color(0xFFFB5151)))
-private val sleep1 = Color(0xFF7C6FF4)
-private val sleepGradient = Brush.linearGradient(listOf(sleep1, Color(0xFF9B8BF6)))
-private val mood1 = Color(0xFF5BB4A9)
-private val moodGradient = Brush.linearGradient(listOf(mood1, Color(0xFF6FD3A0)))
-private val energy1 = Color(0xFFF5A623)
-private val energyGradient = Brush.linearGradient(listOf(energy1, Color(0xFFF7B84D)))
-private val memory1 = Color(0xFF9B59E8)
-private val memoryGradient = Brush.linearGradient(listOf(memory1, Color(0xFFB37CF0)))
+internal val ProgramHealthProgress.color1: Color get() = colorFromHex(category.color1)
+internal val ProgramHealthProgress.color2: Color get() = colorFromHex(category.color2)
 
 @Composable
 private fun HealthGaugeCard(
-    gauge: HealthGauge,
+    healthProgress: ProgramHealthProgress,
     showTimeLeft: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val percentage = healthProgress.currentStep?.percentage ?: 0
+    val gradient = healthProgress.gradientBrush()
+    val hasNew = healthProgress.hasNew
+    val bestPercentage = healthProgress.bestStep?.percentage
+
     // iOS wraps the whole card (badge included) in a Button — always tappable,
-    // even at 0% (HealthCard.swift:26), routing to the health timeline detail.
-    // pressScale fires the same medium-impact haptic as the iOS tap.
+    // even at 0% (HealthCard.swift:26). pressScale fires the medium haptic.
     Box(modifier.pressScale { onClick() }) {
-        Clear30Card(modifier = Modifier.fillMaxWidth()) {
+        Clear30Card(
+            modifier = Modifier.fillMaxWidth(),
+            shadowColor = if (hasNew) darker(healthProgress.color1, 7.5f).copy(alpha = 0.75f) else Clear30Colors.shadow,
+            gradient = if (hasNew) gradient else null,
+            outlineGradient = if (hasNew) Clear30Gradients.white else null,
+            outlineOpacity = 0.5f,
+        ) {
             Column(
                 Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = Dimens.cardSpacing / 2)) {
-                    GaugeArc(gauge.percentage / 100f, gauge.gradient, size = 70.dp)
-                    Heading3("${gauge.percentage}%")
+                    HealthGaugeArc(
+                        progress = percentage / 100f,
+                        strokeBrush = if (hasNew) Clear30Gradients.white else gradient,
+                        trackColor = if (hasNew) Color.White.copy(alpha = 0.25f) else Clear30Colors.opacityGray,
+                        secondaryProgress = bestPercentage,
+                        secondaryColor = if (hasNew) Color.White.copy(alpha = 0.25f)
+                        else healthProgress.color1.copy(alpha = 0.25f),
+                        secondaryBaseColor = if (hasNew) Color.Transparent else Clear30Colors.button,
+                        size = 70.dp,
+                    )
+                    Heading3("$percentage%")
                 }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-                    Icon(sfSymbol(gauge.icon), contentDescription = null, tint = gauge.tint, modifier = Modifier.size(15.dp))
-                    SmallText(gauge.name)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+                ) {
+                    Icon(
+                        sfSymbol(healthProgress.category.sfSymbol),
+                        contentDescription = null,
+                        tint = if (hasNew) Color.White else healthProgress.color1,
+                        modifier = Modifier.size(15.dp),
+                    )
+                    SmallText(healthProgress.category.name)
                 }
             }
         }
-        // Time-to-next-increase badge — iOS `timeBadge` overlay: a gradient pill
-        // rotated -3°, sticking slightly past the bottom-trailing corner. Only
-        // the soonest-updating category shows it (showTimeLeft).
-        if (showTimeLeft) gauge.nextIncrease?.let { next ->
+        // Badge overlays — iOS HealthCard.swift:68-84: hasNew → the "+X% >" new
+        // badge top-trailing; else the "in X hours" time badge bottom-trailing on
+        // the soonest-updating category only. Both rotated -3°, nudged past the corner.
+        val newDelta = healthProgress.newDelta
+        val nextStepDate = healthProgress.nextStepDate
+        if (hasNew && newDelta != null) {
+            NewBadge(
+                delta = newDelta,
+                modifier = Modifier.align(Alignment.TopEnd).offset(x = 3.dp, y = (-6).dp).rotate(-3f),
+            )
+        } else if (!hasNew && showTimeLeft && nextStepDate != null) {
             TimeBadge(
-                text = relativeFutureString(next),
-                gradient = gauge.gradient,
-                modifier = Modifier.align(Alignment.BottomEnd)
-                    .offset(x = 3.dp, y = 6.dp)
-                    .rotate(-3f),
+                text = relativeFutureString(nextStepDate),
+                gradient = gradient,
+                modifier = Modifier.align(Alignment.BottomEnd).offset(x = 3.dp, y = 6.dp).rotate(-3f),
             )
         }
     }
@@ -198,8 +171,33 @@ private fun TimeBadge(text: String, gradient: Brush, modifier: Modifier = Modifi
     }
 }
 
+/** iOS `newBadge` — plain pill: ↑ (brand blue; iOS tints with the clear30 gradient) + "+X%" + chevron. */
+@Composable
+private fun NewBadge(delta: Int, modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .cardStyle(shadowColor = Clear30Colors.shadow, padding = false)
+            .padding(horizontal = 7.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            sfSymbol("arrow.up"),
+            contentDescription = null,
+            tint = Clear30Colors.blue,
+            modifier = Modifier.size(9.dp).padding(end = 1.dp),
+        )
+        MiniText("$delta%", color = Clear30Colors.text, modifier = Modifier.padding(end = Dimens.cardSpacing / 4))
+        Icon(
+            sfSymbol("chevron.right"),
+            contentDescription = null,
+            tint = Clear30Colors.text.copy(alpha = 0.5f),
+            modifier = Modifier.size(7.dp),
+        )
+    }
+}
+
 /** iOS `Date.relativeTimeString()` (future half) — "in 3 hours", "in 2 days", … */
-private fun relativeFutureString(date: Instant): String {
+internal fun relativeFutureString(date: Instant): String {
     val seconds = (date - now()).inWholeSeconds.coerceAtLeast(0)
     val minutes = seconds / 60
     val hours = minutes / 60
@@ -218,36 +216,52 @@ private fun relativeFutureString(date: Instant): String {
     }
 }
 
-/** Full 360° progress ring (iOS `RewardCircularProgressBar`, lineWidth 12), filling clockwise from the top. */
+/** iOS `Color.darker(by:)` — darken by a percentage. */
+private fun darker(color: Color, by: Float): Color {
+    val f = 1f - by / 100f
+    return Color(color.red * f, color.green * f, color.blue * f, color.alpha)
+}
+
+/**
+ * iOS `RewardCircularProgressBar` as used by HealthCard: a 270° arc with the
+ * gap centered at the bottom, lineWidth 12, round caps, plus the personal-best
+ * ghost ring layered between the track and the live fill.
+ */
 @Composable
-private fun GaugeArc(progress: Float, gradient: Brush, size: Dp) {
-    val p = progress.coerceIn(0f, 1f)
+private fun HealthGaugeArc(
+    progress: Float,
+    strokeBrush: Brush,
+    trackColor: Color,
+    secondaryProgress: Int?,
+    secondaryColor: Color,
+    secondaryBaseColor: Color,
+    size: Dp,
+) {
+    val fillAmount = 0.75f
+    val sweepMax = 360f * fillAmount
+    val startAngle = 90f + (360f * (1f - fillAmount)) / 2f // gap centered at the bottom
     Canvas(Modifier.size(size)) {
-        val stroke = 12f
+        val stroke = 12.dp.toPx()
         val inset = stroke / 2
         val arcSize = Size(this.size.width - stroke, this.size.height - stroke)
         val topLeft = Offset(inset, inset)
-        // Track (full ring)
-        drawArc(
-            color = Clear30Colors.opacityGray,
-            startAngle = 0f,
-            sweepAngle = 360f,
-            useCenter = false,
-            topLeft = topLeft,
-            size = arcSize,
-            style = Stroke(width = stroke),
-        )
-        // Fill — clockwise from the top
-        if (p > 0f) {
-            drawArc(
-                brush = gradient,
-                startAngle = -90f,
-                sweepAngle = 360f * p,
-                useCenter = false,
-                topLeft = topLeft,
-                size = arcSize,
-                style = Stroke(width = stroke, cap = StrokeCap.Round),
+        fun arc(brush: Brush?, color: Color?, sweep: Float) {
+            if (sweep <= 0f) return
+            if (brush != null) drawArc(
+                brush = brush, startAngle = startAngle, sweepAngle = sweep, useCenter = false,
+                topLeft = topLeft, size = arcSize, style = Stroke(width = stroke, cap = StrokeCap.Round),
+            ) else drawArc(
+                color = color!!, startAngle = startAngle, sweepAngle = sweep, useCenter = false,
+                topLeft = topLeft, size = arcSize, style = Stroke(width = stroke, cap = StrokeCap.Round),
             )
         }
+        // Track → personal-best ghost (opaque base + tint) → live fill.
+        arc(null, trackColor, sweepMax)
+        secondaryProgress?.let { best ->
+            val sweep = sweepMax * (best / 100f).coerceIn(0f, 1f)
+            arc(null, secondaryBaseColor, sweep)
+            arc(null, secondaryColor, sweep)
+        }
+        arc(strokeBrush, null, sweepMax * progress.coerceIn(0f, 1f))
     }
 }

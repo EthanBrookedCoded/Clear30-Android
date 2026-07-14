@@ -53,7 +53,12 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Autorenew
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Air
+import androidx.compose.material.icons.rounded.AccountBalance
+import androidx.compose.material.icons.rounded.DirectionsRun
+import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.Psychology
+import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.SentimentSatisfied
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.Lightbulb
@@ -182,9 +187,14 @@ fun sfSymbol(name: String): ImageVector = when (name) {
     "ellipsis", "ellipsis.circle" -> Icons.Rounded.MoreHoriz
     "arrow.up", "arrow.up.circle" -> Icons.Rounded.ArrowUpward
     "lungs.fill", "lungs" -> Icons.Rounded.Air
-    "brain.head.profile", "brain.head.profile.fill", "brain" -> Icons.Rounded.Psychology
+    "brain.head.profile", "brain.head.profile.fill", "brain", "brain.fill" -> Icons.Rounded.Psychology
     "face.smiling", "face.smiling.fill" -> Icons.Rounded.SentimentSatisfied
     "clock.fill", "clock", "clock.badge" -> Icons.Rounded.Schedule
+    "globe" -> Icons.Rounded.Public
+    "figure.run" -> Icons.Rounded.DirectionsRun
+    "building.columns.fill", "building.columns" -> Icons.Rounded.AccountBalance
+    "location.fill", "location" -> Icons.Rounded.LocationOn
+    "link" -> Icons.Rounded.Link
     // ── Achievement icons (achievements.definitions sf_symbols) ──
     "leaf.arrow.circlepath" -> Icons.Rounded.Eco
     "wind" -> Icons.Rounded.Air

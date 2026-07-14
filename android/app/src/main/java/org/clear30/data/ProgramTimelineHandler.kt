@@ -36,10 +36,10 @@ import org.clear30.util.now
  * Peripheral iOS calls with no Android port yet are intentionally omitted and
  * called out inline: `NotificationHandler.*` (notifications — TODO), `WidgetCenter`
  * (widget refresh), `AlertHandler` (errors are returned as strings instead), and
- * `ExperimentController` (unused here). Health-ring resets collapse to
- * [Program.updateHealthSetbackDays] — Android has no per-entry health start date,
- * so the timeline recomputes from `program.startDate` on load (see MESSAGE_TIMELINE
- * §6.1). `CheckInLogger.resetLastSmoked` collapses to setting `program.lastSmoked`.
+ * `ExperimentController` (unused here). Health-ring resets mirror iOS 1:1 since P7
+ * ([Program.resetHealthProgress] / [Program.adjustHealthProgressStartDate] /
+ * [Program.updateHealthProgressStartDates]).
+ * `CheckInLogger.resetLastSmoked` collapses to setting `program.lastSmoked`.
  */
 object ProgramTimelineHandler {
 
@@ -263,7 +263,7 @@ object ProgramTimelineHandler {
         }
 
         program.contentInfo = content
-        program.updateHealthSetbackDays() // iOS resetHealthProgress(on: breakDay1)
+        program.resetHealthProgress(on = mainBreak.startDate.adding(days = 1)) // iOS resetHealthProgress(on: breakDay1)
         finish(program)
         return null
     }
@@ -358,7 +358,7 @@ object ProgramTimelineHandler {
         }
         if (program.breaks.size == 1) program.lastSmoked = now()
         program.breaks.minByOrNull { it.startDate }?.let { program.startDate = minOf(it.startDate, program.startDate) }
-        program.updateHealthSetbackDays()
+        program.updateHealthProgressStartDates(now()) // iOS day0StartNow step 11
         finish(program)
     }
 
@@ -382,7 +382,7 @@ object ProgramTimelineHandler {
 
         target.startDate = startDate.adding(days = daysFromStart)
         target.moneySavedAdjustment = 0
-        program.updateHealthSetbackDays()
+        program.resetHealthProgress(on = target.startDate.adding(days = 1)) // iOS restartBreak 4b
 
         val info = program.dayInfo[nowPlain]
         program.dayInfo[nowPlain] = (info ?: ProgramDayInfo()).copy(popInType = PopInType.RestartedBreak)
@@ -447,11 +447,15 @@ object ProgramTimelineHandler {
             }
         }
 
-        // Pull the program start back if a break now precedes it.
-        program.breaks.minByOrNull { it.startDate }?.let { earliest ->
-            if (earliest.startDate.justDay < program.startDate.justDay) program.startDate = earliest.startDate.justDay
+        // Pull the program start back if a break now precedes it (iOS step 7 —
+        // the health anchors shift with it; otherwise only setbacks recompute).
+        val earliest = program.breaks.minByOrNull { it.startDate }
+        if (earliest != null && earliest.startDate.justDay < program.startDate.justDay) {
+            program.startDate = earliest.startDate.justDay
+            program.adjustHealthProgressStartDate(days)
+        } else {
+            program.updateHealthSetbackDays()
         }
-        program.updateHealthSetbackDays()
         finish(program)
     }
 
@@ -482,7 +486,7 @@ object ProgramTimelineHandler {
 
         current.startDate = newStart
         current.moneySavedAdjustment = 0
-        program.updateHealthSetbackDays()
+        program.resetHealthProgress(on = current.startDate.adding(days = 1)) // iOS 7b
         program.lastSmoked = current.startDate.adding(days = 1) // iOS resetLastSmoked(setTo: breakDay1)
         finish(program)
     }

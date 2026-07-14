@@ -6,6 +6,7 @@ import org.clear30.util.adding
 import org.clear30.util.daysTo
 import org.clear30.util.justDay
 import org.clear30.util.now
+import org.clear30.util.withCurrentTime
 import kotlin.math.ceil
 
 /**
@@ -39,6 +40,10 @@ class Program(
     var popUps: MutableList<ProgramPopUp>? = mutableListOf(),
 
     // Achievements
+    // Serial name bumped when the model went from a flattened milestone list to
+    // the iOS per-category structure (P7) — old-shape persisted data is ignored
+    // and refetched instead of breaking the whole Program decode.
+    @kotlinx.serialization.SerialName("healthProgressV2")
     var healthProgress: MutableList<ProgramHealthProgress> = mutableListOf(),
     var latestUpdate: Instant? = null,
 
@@ -128,6 +133,12 @@ class Program(
     /** Days checked in as smoked (iOS `numDaysSmoked`). */
     val numDaysSmoked: Int get() = dayInfo.values.count { it.sober == false }
 
+    /** Smoked days on/after [since] (iOS `numDaysSmoked(since:)`). */
+    fun numDaysSmoked(since: Instant): Int {
+        val plain = PlainDate.from(since)
+        return dayInfo.count { plain <= it.key && it.value.sober == false }
+    }
+
     /** Days with ANY weed check-in, sober or not (iOS `numDaysCheckedIn`). */
     val numDaysCheckedIn: Int get() = dayInfo.values.count { it.sober != null }
 
@@ -168,14 +179,39 @@ class Program(
     }
 
     /**
-     * Recompute each health milestone's setback (iOS `updateProgramHealthSetbackDays`).
-     * The health timeline renders `currentDay - setbackDays`, so each logged slip pushes
-     * the whole timeline back by a day. Android's ProgramHealthProgress has no per-entry
-     * start date, so every entry shares the program-wide smoked-day count.
+     * Recompute each category's setback from smoked days since its start date,
+     * promoting the personal best first (iOS `updateProgramHealthSetbackDays`).
+     * Each logged slip pushes the whole timeline back by a day.
      */
     fun updateHealthSetbackDays() {
-        val smoked = numDaysSmoked
-        healthProgress.forEach { it.setbackDays = smoked }
+        healthProgress.forEach { it.updateSetbackDays(numDaysSmoked(since = it.startDate)) }
+    }
+
+    /** Shift every category's anchor by [days] (iOS `adjustHealthProgressStartDate`). */
+    fun adjustHealthProgressStartDate(days: Int) {
+        healthProgress.forEach {
+            it.startDate = it.startDate.adding(days = days)
+            it.lastVisited = it.lastVisited.adding(days = days)
+        }
+        updateHealthSetbackDays()
+    }
+
+    /** Re-anchor every category on [date] (iOS `updateHealthProgressStartDates`). */
+    fun updateHealthProgressStartDates(date: Instant) {
+        healthProgress.forEach { it.startDate = date }
+        updateHealthSetbackDays()
+    }
+
+    /** Full reset onto [on] — clears bests and visited state (iOS `resetHealthProgress(on:)`). */
+    fun resetHealthProgress(on: Instant) {
+        val start = on.withCurrentTime()
+        val visited = now()
+        healthProgress.forEach {
+            it.startDate = start
+            it.lastVisited = visited
+            it.personalBestStepID = null
+        }
+        updateHealthSetbackDays()
     }
 
     /** Auto-calculated $ saved over a break (iOS `getAutoCalculatedMoneySavedOverBreak`):

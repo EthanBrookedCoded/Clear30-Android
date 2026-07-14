@@ -85,7 +85,13 @@ fun ProfileTab(
     var showJournal by remember { mutableStateOf(false) }
     var showPreviousBreaks by remember { mutableStateOf(false) }
     var showNewBreak by remember { mutableStateOf(false) }
-    var showHealthTimeline by remember { mutableStateOf(false) }
+    // Tapped health category + whether the tap caught a fresh unlock (iOS
+    // handleHealthProgress: `hasNew` is captured BEFORE lastVisited is stamped —
+    // Swift passes a struct copy; here we capture the flag explicitly).
+    var healthTimeline by remember {
+        mutableStateOf<Pair<org.clear30.data.model.ProgramHealthProgress, Boolean>?>(null)
+    }
+    val scope = rememberCoroutineScope()
     // Bumped after a program mutation (new break) so the cards below recompute —
     // `program` is a plain model, not observable.
     var refresh by remember { mutableIntStateOf(0) }
@@ -130,7 +136,14 @@ fun ProfileTab(
             SectionLabel("Overall Progress")
             UserWhyCard(userInfo)
             DopamineTimer(program, userInfo)
-            HealthCardsRow(program, userInfo) { showHealthTimeline = true }
+            HealthCardsRow(program, userInfo) { hp ->
+                healthTimeline = hp to hp.hasNew
+                // iOS Profile.handleHealthProgress: stamp the visit so the
+                // hasNew highlight clears after this open.
+                hp.lastVisited = now()
+                refresh++
+                scope.launch { runCatching { Clear30Store.save(program) } }
+            }
             AchievementsSection(userInfo)
 
             // ===== Your Program / Your Break =====
@@ -206,10 +219,12 @@ fun ProfileTab(
         PageOverlay(showPreviousBreaks) {
             PreviousBreaksSection(program) { showPreviousBreaks = false }
         }
-        // Health card tap → the health timeline detail (iOS pushes
-        // NavigationDestination.healthProgressTimeline).
-        PageOverlay(showHealthTimeline) {
-            HealthTimelinePage(program, userInfo) { showHealthTimeline = false }
+        // Health card tap → that category's timeline detail (iOS pushes
+        // NavigationDestination.healthProgressTimeline(healthProgress:)).
+        PageOverlay(healthTimeline != null) {
+            healthTimeline?.let { (hp, highlight) ->
+                HealthTimelinePage(hp, userInfo, highlightCurrent = highlight) { healthTimeline = null }
+            }
         }
     }
 }

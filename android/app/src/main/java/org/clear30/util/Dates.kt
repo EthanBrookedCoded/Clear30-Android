@@ -7,6 +7,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.daysUntil
 import kotlinx.datetime.plus
+import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 
 /**
@@ -26,6 +27,10 @@ fun Instant.isSameDay(other: Instant): Boolean {
 
 val Instant.isToday: Boolean get() = isSameDay(now())
 
+/** True when both instants fall on the same weekday (Swift `isSameDayOfWeek(as:)`). */
+fun Instant.isSameDayOfWeek(other: Instant): Boolean =
+    toLocalDateTime(tz).dayOfWeek == other.toLocalDateTime(tz).dayOfWeek
+
 fun Instant.adding(days: Int = 0, seconds: Long = 0): Instant {
     var result = this
     if (days != 0) result = result.plus(days, DateTimeUnit.DAY, tz)
@@ -39,6 +44,20 @@ fun Instant.daysTo(other: Instant): Int =
 
 /** Start of this instant's calendar day (Swift `Date.justDay`). */
 val Instant.justDay: Instant get() = toLocalDateTime(tz).date.atStartOfDayIn(tz)
+
+/** This instant's calendar day at the CURRENT time-of-day (Swift `Date.withCurrentTime`). */
+fun Instant.withCurrentTime(): Instant {
+    val day = toLocalDateTime(tz).date
+    val time = Clock.System.now().toLocalDateTime(tz).time
+    return kotlinx.datetime.LocalDateTime(day, time).toInstant(tz)
+}
+
+/** This instant's calendar day at [other]'s time-of-day (Swift `Date.withTimeFrom`). */
+fun Instant.withTimeFrom(other: Instant): Instant {
+    val day = toLocalDateTime(tz).date
+    val time = other.toLocalDateTime(tz).time
+    return kotlinx.datetime.LocalDateTime(day, time).toInstant(tz)
+}
 
 /** Round to the nearest hour (Swift `Date.nearestHour`). */
 val Instant.nearestHour: Instant
