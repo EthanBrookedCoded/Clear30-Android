@@ -59,6 +59,7 @@ import org.clear30.data.supabase.updateLastSmoked
 import org.clear30.util.adding
 import org.clear30.util.justDay
 import org.clear30.util.now
+import org.clear30.views.components.Clear30Alert
 import org.clear30.views.components.SmallText
 import org.clear30.views.components.cardStyle
 import org.clear30.views.components.sfSymbol
@@ -297,33 +298,30 @@ fun BreakStartCountdown(
 
     // iOS Profile.day0StartNow: yes/no alert before pulling the start forward.
     if (showConfirm) {
-        androidx.compose.material3.AlertDialog(
+        Clear30Alert(
             onDismissRequest = { showConfirm = false },
-            title = { Text("Start now?") },
-            text = { Text("Your break is set to start ${startsLabel.replaceFirstChar { it.lowercase() }}. Do you want to start it today instead?") },
-            confirmButton = {
-                androidx.compose.material3.TextButton(onClick = {
-                    showConfirm = false
-                    if (busy) return@TextButton
-                    busy = true
-                    // App-lifetime scope: day0StartNow mutates the break in place,
-                    // which swaps this composable out mid-flight — a
-                    // composition-tied scope would cancel the mutation.
-                    org.clear30.Clear30Application.appScope.launch {
-                        try {
-                            runCatching { org.clear30.data.ProgramTimelineHandler.day0StartNow(program) }
-                                .onFailure { android.util.Log.e("BreakStartCountdown", "day0StartNow failed", it) }
-                        } finally {
-                            busy = false
-                            onChanged()
-                        }
+            title = "Start now?",
+            message = "Your break is set to start ${startsLabel.replaceFirstChar { it.lowercase() }}. Do you want to start it today instead?",
+            confirmLabel = "Yes",
+            onConfirm = confirm@{
+                showConfirm = false
+                if (busy) return@confirm
+                busy = true
+                // App-lifetime scope: day0StartNow mutates the break in place,
+                // which swaps this composable out mid-flight — a
+                // composition-tied scope would cancel the mutation.
+                org.clear30.Clear30Application.appScope.launch {
+                    try {
+                        runCatching { org.clear30.data.ProgramTimelineHandler.day0StartNow(program) }
+                            .onFailure { android.util.Log.e("BreakStartCountdown", "day0StartNow failed", it) }
+                    } finally {
+                        busy = false
+                        onChanged()
                     }
-                    Logger.logEvent(userInfo.loggingID, LogEventType.day0StartNow)
-                }) { Text("Yes") }
+                }
+                Logger.logEvent(userInfo.loggingID, LogEventType.day0StartNow)
             },
-            dismissButton = {
-                androidx.compose.material3.TextButton(onClick = { showConfirm = false }) { Text("No") }
-            },
+            dismissLabel = "No",
         )
     }
 }

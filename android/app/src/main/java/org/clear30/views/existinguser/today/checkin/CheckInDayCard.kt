@@ -512,7 +512,7 @@ fun CheckInAmountStepper(
         Modifier
             .clip(RoundedCornerShape(12.dp))
             .background(Clear30Colors.opacityGray)
-            .padding(horizontal = 10.dp, vertical = 5.dp),
+            .padding(horizontal = Dimens.chipHorizontalPadding, vertical = Dimens.chipVerticalPadding),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
     ) {

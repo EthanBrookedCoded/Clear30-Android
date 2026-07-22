@@ -93,12 +93,18 @@ fun ReviewsSlide(userInfo: UserInfo, onNext: () -> Unit) {
     // Mirrors the iOS first-paint state (empty), populated post-fetch.
     val reviews = remember { placeholderReviews }
 
+    // iOS scrollShadowFix pattern: the column keeps horizontalPadding −
+    // scrollShadowFix and the scroll content re-pads scrollShadowFix INSIDE the
+    // scroll clip, so the review cards' soft shadows aren't cut at the sides.
     Column(
         Modifier
             .fillMaxSize()
             .statusBarsPadding()
             .navigationBarsPadding()
-            .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
+            .padding(
+                horizontal = Dimens.horizontalPadding - Dimens.scrollShadowFix,
+                vertical = Dimens.headingTopPadding,
+            ),
         horizontalAlignment = Alignment.Start,
     ) {
         // ScrollView with the iOS `.fadeOut(fadeLength: 10)` edge treatment —
@@ -109,7 +115,8 @@ fun ReviewsSlide(userInfo: UserInfo, onNext: () -> Unit) {
                 .weight(1f)
                 .fadeOutEdges(10.dp)
                 .verticalScroll(rememberScrollState())
-                .padding(vertical = Dimens.headingTopPadding),
+                .padding(vertical = Dimens.headingTopPadding)
+                .padding(horizontal = Dimens.scrollShadowFix),
             verticalArrangement = Arrangement.Top,
         ) {
             Heading3(
@@ -146,7 +153,9 @@ fun ReviewsSlide(userInfo: UserInfo, onNext: () -> Unit) {
         // TextIconButton "Next" — foreground 0.5 + disabled until the timer fires.
         NextIconButton(
             enabled = canProgress,
-            modifier = Modifier.padding(top = Dimens.cardSpacing),
+            modifier = Modifier
+                .padding(top = Dimens.cardSpacing)
+                .padding(horizontal = Dimens.scrollShadowFix),
             onClick = onNext,
         )
     }

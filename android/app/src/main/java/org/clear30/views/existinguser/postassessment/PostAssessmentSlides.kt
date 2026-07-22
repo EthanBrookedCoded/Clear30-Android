@@ -17,8 +17,6 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,8 +43,10 @@ import org.clear30.data.model.PostAssessmentQuestions
 import org.clear30.data.model.UserInfo
 import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.logCoachReferralEvent
+import org.clear30.views.components.scrollShadowBleed
 import org.clear30.views.components.ConfettiOverlay
 import org.clear30.views.components.Clear30Card
+import org.clear30.views.components.Clear30Sheet
 import org.clear30.views.components.Heading3
 import org.clear30.views.components.InlineVideoPlayer
 import org.clear30.views.components.SmallText
@@ -137,7 +137,14 @@ internal fun PostAssessmentIntro(vm: PostAssessmentViewModel, buttonText: String
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding)) {
-            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+            // scrollShadowBleed + re-pad inside the clip: card shadows survive
+            // the scroll edges (iOS scrollShadowFix pattern).
+            Column(
+                Modifier.weight(1f).fillMaxWidth()
+                    .scrollShadowBleed()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = Dimens.scrollShadowFix),
+            ) {
                 Heading3(title, Modifier.padding(bottom = Dimens.cardSpacing))
                 SmallText(
                     bodyLines.joinToString("\n\n") +
@@ -172,7 +179,12 @@ internal fun PostAssessmentBreakdown(vm: PostAssessmentViewModel, buttonText: St
 
     Column(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding)) {
         Column(
-            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+            // Same scrollShadowFix treatment: the breakdown stat cards keep
+            // their soft shadows at the scroll edges.
+            Modifier.weight(1f).fillMaxWidth()
+                .scrollShadowBleed()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = Dimens.scrollShadowFix),
             verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
         ) {
             Heading3("${b.name} breakdown 📦")
@@ -380,7 +392,6 @@ private fun PhilHeader(modifier: Modifier = Modifier) {
 }
 
 /** The post-flow booking sheet (iOS `CoachReferralBookingSheet`). */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun CoachReferralBookingSheet(userInfo: UserInfo, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
@@ -392,12 +403,13 @@ internal fun CoachReferralBookingSheet(userInfo: UserInfo, onDismiss: () -> Unit
 
     LaunchedEffect(Unit) { log("sheet_shown") }
 
-    ModalBottomSheet(
-        onDismissRequest = {
+    Clear30Sheet(
+        onDismiss = {
             log("sheet_dismissed")
             onDismiss()
         },
-        containerColor = Clear30Colors.background,
+        skipPartiallyExpanded = false,
+        contentPadding = false,
     ) {
         Column(
             Modifier.fillMaxWidth()

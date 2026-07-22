@@ -20,8 +20,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,10 +37,12 @@ import androidx.core.content.FileProvider
 import org.clear30.data.model.PostTag
 import org.clear30.data.model.Program
 import org.clear30.util.extractVideoThumbnail
-import org.clear30.views.components.DefaultButton
 import org.clear30.views.components.Heading3Input
+import org.clear30.views.components.SmallTextEditor
+import org.clear30.views.components.TextIconButton
 import org.clear30.views.components.IconButton
 import org.clear30.views.components.SmallText
+import org.clear30.views.components.pressScale
 import org.clear30.views.components.sfSymbol
 import org.clear30.views.theme.Clear30Colors
 import org.clear30.views.theme.Clear30Gradients
@@ -100,7 +100,7 @@ internal fun CreatePostScreen(
             }
             if (selectedTagIds.size < 2) {
                 Box(
-                    Modifier.size(32.dp).clip(CircleShape).background(Clear30Colors.opacityGray).clickable { showTagPicker = true },
+                    Modifier.size(32.dp).clip(CircleShape).background(Clear30Colors.opacityGray).pressScale { showTagPicker = true },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(sfSymbol("plus"), contentDescription = "Add tag", tint = Clear30Colors.text.copy(alpha = 0.5f), modifier = Modifier.size(14.dp))
@@ -108,11 +108,22 @@ internal fun CreatePostScreen(
             }
         }
 
-        OutlinedTextField(body, { body = it }, placeholder = { Text("Description") }, modifier = Modifier.fillMaxWidth().weight(1f))
+        // iOS CreatePostView: SmallTextEditor(placeholder: "Description") — a
+        // borderless Lexend editor filling the page, NOT a Material outlined box.
+        SmallTextEditor(
+            body, { body = it },
+            placeholder = "Description",
+            modifier = Modifier.fillMaxWidth().weight(1f),
+        )
 
         val canPost = title.isNotBlank() && body.isNotBlank()
         if (canPost) {
-            DefaultButton("Post", gradient = Clear30Gradients.clear30, modifier = Modifier.fillMaxWidth()) {
+            // iOS TextIconButton(text: "Post", gradient: clear30Gradient).
+            TextIconButton(
+                text = "Post",
+                gradient = Clear30Gradients.clear30,
+                modifier = Modifier.padding(bottom = Dimens.headingTopPadding),
+            ) {
                 val names = listOf(forcedTag) + selectedTagIds.mapNotNull { id -> allTags.firstOrNull { it.id == id }?.name }
                 onSubmit(title.trim(), body.trim(), names)
             }
@@ -143,7 +154,7 @@ private fun SolidTagPill(name: String, accent: Color, removable: Boolean, onRemo
             Icon(
                 sfSymbol("xmark"),
                 contentDescription = "Remove",
-                tint = Color.White.copy(alpha = 0.8f),
+                tint = Color.White.copy(alpha = 0.75f),
                 modifier = Modifier.size(12.dp).clickable(onClick = onRemove),
             )
         }

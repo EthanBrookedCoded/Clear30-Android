@@ -261,7 +261,7 @@ private fun SchoolMessageCard(message: ProgramMessage, program: Program, gradien
             val pill: @Composable () -> Unit = {
                 Row(
                     // iOS MessageCard.pill literals: 10pt horizontal, 5pt vertical.
-                    Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    Modifier.padding(horizontal = Dimens.chipHorizontalPadding, vertical = Dimens.chipVerticalPadding),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
                 ) {

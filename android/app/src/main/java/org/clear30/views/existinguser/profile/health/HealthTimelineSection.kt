@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -160,10 +159,12 @@ fun HealthTimelinePage(
         }
     }
 
+    // No statusBarsPadding here: the page renders inside AllTabs' Scaffold
+    // content, which is already inset below the status bar — adding it again
+    // double-padded the top (the "extra top padding" bug).
     Box(Modifier.fillMaxSize().background(Clear30Colors.background)) {
         Column(
             Modifier.fillMaxSize()
-                .statusBarsPadding()
                 .padding(horizontal = Dimens.horizontalPadding)
                 .padding(top = Dimens.headingTopPadding),
         ) {
@@ -503,7 +504,7 @@ private fun HealthInfoCardPlaceholder(date: Instant) {
                 Row(
                     Modifier
                         .cardStyle(shadowColor = Color.Transparent, padding = false)
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                        .padding(horizontal = Dimens.chipHorizontalPadding, vertical = Dimens.chipVerticalPadding),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
                 ) {
@@ -542,7 +543,7 @@ private fun HealthInfoCardCustom(
             Row(
                 Modifier
                     .cardStyle(shadowColor = Color.Transparent, gradient = gradient, outlineGradient = Clear30Gradients.white, outlineOpacity = 0.5f, padding = false)
-                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                    .padding(horizontal = Dimens.chipHorizontalPadding, vertical = Dimens.chipVerticalPadding),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
             ) {
@@ -578,7 +579,7 @@ private fun HealthCardBadge(
                 outlineOpacity = 0.5f,
                 padding = false,
             )
-            .padding(horizontal = 10.dp, vertical = 5.dp),
+            .padding(horizontal = Dimens.chipHorizontalPadding, vertical = Dimens.chipVerticalPadding),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
     ) {

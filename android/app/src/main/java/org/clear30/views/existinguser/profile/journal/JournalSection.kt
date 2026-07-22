@@ -15,10 +15,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -128,11 +126,12 @@ fun JournalSection(
         }
     }
 
+    // No statusBarsPadding: this page renders inside AllTabs' Scaffold content,
+    // which is already inset below the status bar.
     Box(Modifier.fillMaxSize().background(Clear30Colors.background)) {
     Column(
         Modifier.fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .statusBarsPadding()
             .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
         verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
     ) {

@@ -3,7 +3,6 @@ package org.clear30.views.existinguser.profile
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -39,8 +37,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
 import kotlinx.datetime.atDate
 import kotlinx.datetime.plus
@@ -67,6 +63,7 @@ import org.clear30.data.supabase.updateNotificationSettings
 import org.clear30.data.supabase.updateSMSSettings
 import org.clear30.data.supabase.updateUser
 import org.clear30.views.components.Clear30Card
+import org.clear30.views.components.Clear30FullScreenCover
 import org.clear30.views.components.DefaultText
 import org.clear30.views.components.SmallText
 import org.clear30.views.components.pressScale
@@ -225,13 +222,8 @@ fun SettingsSection(userInfo: UserInfo, program: Program, onSignOut: () -> Unit,
 
     // Custom check-in management (today/CustomCheckInSetup) as a full page.
     if (showCustomCheckIn) {
-        Dialog(
-            onDismissRequest = { showCustomCheckIn = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            Box(Modifier.fillMaxSize().background(Clear30Colors.background).statusBarsPadding()) {
-                CustomCheckInSetup(program, userInfo) { showCustomCheckIn = false }
-            }
+        Clear30FullScreenCover(onDismiss = { showCustomCheckIn = false }, statusBarPadding = true) {
+            CustomCheckInSetup(program, userInfo) { showCustomCheckIn = false }
         }
     }
 }
@@ -478,21 +470,16 @@ private fun nextNineAm(): kotlinx.datetime.Instant {
 /** Full-screen settings sub-page (iOS SettingsToggleView push): back header + content. */
 @Composable
 private fun SettingsSubPage(title: String, onBack: () -> Unit, content: @Composable () -> Unit) {
-    Dialog(
-        onDismissRequest = onBack,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
-        Box(Modifier.fillMaxSize().background(Clear30Colors.background).statusBarsPadding()) {
-            Column(
-                Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
-                verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-                    org.clear30.views.components.IconButton("chevron.backward", onClick = onBack)
-                    org.clear30.views.components.Heading1(title)
-                }
-                content()
+    Clear30FullScreenCover(onDismiss = onBack, statusBarPadding = true) {
+        Column(
+            Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
+            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
+                org.clear30.views.components.IconButton("chevron.backward", onClick = onBack)
+                org.clear30.views.components.Heading1(title)
             }
+            content()
         }
     }
 }

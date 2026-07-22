@@ -59,6 +59,25 @@ android {
         buildConfigField("String", "HELIUM_API_KEY", "\"${props.getProperty("HELIUM_API_KEY", "")}\"")
     }
 
+    signingConfigs {
+        create("release") {
+            // Upload key (EAS-managed for the live app). Keystore lives at
+            // app/upload-keystore.jks (git-ignored); passwords in local.properties
+            // (git-ignored). Absent on machines/CI without the secrets — release
+            // builds there fail with a clear "keystore not set", which is intended.
+            val ksProps = org.jetbrains.kotlin.konan.properties.Properties().apply {
+                val f = rootProject.file("local.properties"); if (f.exists()) f.inputStream().use { load(it) }
+            }
+            val ksFile = rootProject.file("app/upload-keystore.jks")
+            if (ksFile.exists() && ksProps.getProperty("RELEASE_STORE_PASSWORD") != null) {
+                storeFile = ksFile
+                storePassword = ksProps.getProperty("RELEASE_STORE_PASSWORD")
+                keyAlias = ksProps.getProperty("RELEASE_KEY_ALIAS")
+                keyPassword = ksProps.getProperty("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
@@ -66,6 +85,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

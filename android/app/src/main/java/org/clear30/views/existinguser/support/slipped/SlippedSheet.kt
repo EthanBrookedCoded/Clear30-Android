@@ -11,13 +11,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,14 +27,14 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
 import org.clear30.data.LogEventExtraDataType
 import org.clear30.data.LogEventType
 import org.clear30.data.Logger
 import org.clear30.data.model.Program
 import org.clear30.data.model.UserInfo
+import org.clear30.views.components.Clear30FullScreenCover
+import org.clear30.views.components.Clear30Sheet
 import org.clear30.views.components.Heading1
 import org.clear30.views.components.Heading2
 import org.clear30.views.components.Heading3
@@ -97,13 +94,10 @@ fun SlippedSheet(
         return a
     }
 
-    Dialog(
-        onDismissRequest = callbacks.onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
-        Box(Modifier.fillMaxSize().background(Clear30Colors.background)) {
+    Clear30FullScreenCover(onDismiss = callbacks.onDismiss, statusBarPadding = true) {
+        Box(Modifier.fillMaxSize()) {
             Column(
-                Modifier.fillMaxSize().statusBarsPadding().verticalScroll(rememberScrollState())
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState())
                     .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.cardSpacing * 2),
                 verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing * 2, Alignment.CenterVertically),
             ) {
@@ -157,7 +151,7 @@ fun SlippedSheet(
             // Close (Android affordance — the iOS sheet is swipe-dismissable).
             IconButton(
                 icon = "xmark",
-                modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(Dimens.cardSpacing),
+                modifier = Modifier.align(Alignment.TopEnd).padding(Dimens.cardSpacing),
             ) { callbacks.onDismiss() }
         }
     }
@@ -183,14 +177,15 @@ fun SlippedSheet(
 
 // MARK: - All options sheet
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SlippedOptionsSheet(
     currentId: SlipActivityID,
     onDismiss: () -> Unit,
     onSelect: (SlipActivityID) -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Clear30Colors.background) {
+    // Own padding (bottom cardSpacing * 2 inside the scroll) instead of the
+    // standard sheet content padding.
+    Clear30Sheet(onDismiss = onDismiss, skipPartiallyExpanded = false, contentPadding = false) {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
                 .padding(horizontal = Dimens.horizontalPadding)

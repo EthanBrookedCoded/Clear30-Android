@@ -3,18 +3,12 @@ package org.clear30.views.existinguser.profile
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
 import org.clear30.data.LogEventType
 import org.clear30.data.Logger
@@ -22,10 +16,9 @@ import org.clear30.data.ProgramTimelineHandler
 import org.clear30.data.model.PlainDate
 import org.clear30.data.model.Program
 import org.clear30.data.model.UserInfo
-import org.clear30.views.components.SmallText
+import org.clear30.views.components.Clear30Alert
+import org.clear30.views.components.Clear30CardDialog
 import org.clear30.views.components.TextIconButton
-import org.clear30.views.theme.Clear30Colors
-import org.clear30.views.theme.Clear30Gradients
 import org.clear30.views.theme.Dimens
 import org.clear30.util.adding
 import org.clear30.util.justDay
@@ -117,28 +110,23 @@ fun ProfileBreakOptions(program: Program, userInfo: UserInfo, revision: Int = 0,
     }
 
     if (showDatePicker) {
-        Dialog(
-            onDismissRequest = { showDatePicker = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = Dimens.horizontalPadding)) {
-                // The user picks their new Day 1 (the day the break "starts"); the
-                // current Day 1 = break start (Day 0) + 1.
-                StartDateCalendarPicker(currentStartDate = PlainDate.from(current.startDate.adding(days = 1))) { picked ->
-                    showDatePicker = false
-                    if (picked == null) return@StartDateCalendarPicker
-                    Logger.logEvent(userInfo.loggingID, LogEventType.changedProgramStartDate)
-                    val todayPlain = PlainDate.from(now())
-                    perform {
-                        // New Day 1 = today → restart (Day 1 = today); else shift the
-                        // whole break by (new Day 0 − old Day 0).
-                        if (picked == todayPlain) {
-                            ProgramTimelineHandler.restartBreak(program)
-                        } else {
-                            val newDay0 = picked.adding(days = -1)
-                            val delta = PlainDate.from(current.startDate).daysTo(newDay0)
-                            if (delta != 0) ProgramTimelineHandler.adjustBreakTime(program, delta)
-                        }
+        Clear30CardDialog(onDismiss = { showDatePicker = false }) {
+            // The user picks their new Day 1 (the day the break "starts"); the
+            // current Day 1 = break start (Day 0) + 1.
+            StartDateCalendarPicker(currentStartDate = PlainDate.from(current.startDate.adding(days = 1))) { picked ->
+                showDatePicker = false
+                if (picked == null) return@StartDateCalendarPicker
+                Logger.logEvent(userInfo.loggingID, LogEventType.changedProgramStartDate)
+                val todayPlain = PlainDate.from(now())
+                perform {
+                    // New Day 1 = today → restart (Day 1 = today); else shift the
+                    // whole break by (new Day 0 − old Day 0).
+                    if (picked == todayPlain) {
+                        ProgramTimelineHandler.restartBreak(program)
+                    } else {
+                        val newDay0 = picked.adding(days = -1)
+                        val delta = PlainDate.from(current.startDate).daysTo(newDay0)
+                        if (delta != 0) ProgramTimelineHandler.adjustBreakTime(program, delta)
                     }
                 }
             }
@@ -154,11 +142,12 @@ private fun ConfirmDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
-    AlertDialog(
+    Clear30Alert(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = { SmallText(body, color = Clear30Colors.text.copy(alpha = 0.5f)) },
-        confirmButton = { TextButton(onClick = onConfirm) { Text(confirm) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        title = title,
+        message = body,
+        confirmLabel = confirm,
+        onConfirm = onConfirm,
+        dismissLabel = "Cancel",
     )
 }

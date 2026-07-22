@@ -24,11 +24,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -71,7 +69,12 @@ import org.clear30.data.model.ProgramResource
 import org.clear30.data.model.UserInfo
 import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.updateContentInfo
+import org.clear30.views.components.Clear30Alert
 import org.clear30.views.components.Clear30Card
+import org.clear30.views.components.Clear30FullScreenCover
+import org.clear30.views.components.Clear30Sheet
+import org.clear30.views.components.scrollShadowBleed
+import org.clear30.views.components.PagerDots
 import org.clear30.views.components.DefaultButton
 import org.clear30.views.components.cardStyle
 import org.clear30.views.components.FeedNativeVideoPlayer
@@ -117,7 +120,6 @@ import org.clear30.views.theme.Dimens
  * appear; tapping opens [onTapOverride] if given (e.g. the Reddit viewer),
  * else a full-screen reader with the same [content].
  */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 internal fun ExpandingFeedCard(
     glow: Brush? = null,
@@ -176,14 +178,9 @@ internal fun ExpandingFeedCard(
     if (readerOpen) {
         if (useBottomSheet) {
             // Same bottom sheet the guides use (iOS `.sheet`).
-            androidx.compose.material3.ModalBottomSheet(
-                onDismissRequest = { readerOpen = false },
-                sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                containerColor = Clear30Colors.background,
-            ) {
+            Clear30Sheet(onDismiss = { readerOpen = false }) {
                 Column(
-                    Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
-                        .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.cardSpacing),
+                    Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
                 ) {
                     content()
@@ -191,29 +188,21 @@ internal fun ExpandingFeedCard(
                 }
             }
         } else {
-            androidx.compose.ui.window.Dialog(
-                onDismissRequest = { readerOpen = false },
-                properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-            ) {
-                androidx.compose.material3.Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = Clear30Colors.background,
-                ) {
-                    Column(Modifier.fillMaxSize()) {
-                        Row(
-                            Modifier.fillMaxWidth().statusBarsPadding()
-                                .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.cardSpacing / 2),
-                        ) {
-                            Spacer(Modifier.weight(1f))
-                            org.clear30.views.components.IconButton("xmark", onClick = { readerOpen = false })
-                        }
-                        Column(
-                            Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                                .padding(horizontal = Dimens.horizontalPadding)
-                                .padding(bottom = Dimens.cardSpacing * 2),
-                            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
-                        ) { content() }
+            Clear30FullScreenCover(onDismiss = { readerOpen = false }, statusBarPadding = true) {
+                Column(Modifier.fillMaxSize()) {
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.cardSpacing / 2),
+                    ) {
+                        Spacer(Modifier.weight(1f))
+                        org.clear30.views.components.IconButton("xmark", onClick = { readerOpen = false })
                     }
+                    Column(
+                        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                            .padding(horizontal = Dimens.horizontalPadding)
+                            .padding(bottom = Dimens.cardSpacing * 2),
+                        verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+                    ) { content() }
                 }
             }
         }
@@ -277,7 +266,7 @@ internal fun VideosFeedCard(videos: List<org.clear30.data.model.ProgramVideo>, f
             )
         }
         if (videos.size > 1) {
-            FeedPagerDots(
+            PagerDots(
                 count = videos.size,
                 current = pagerState.currentPage,
                 modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = Dimens.cardSpacing / 2),
@@ -375,7 +364,7 @@ internal fun CarouselFeedCard(images: List<String>, glow: Brush? = null) {
                 }
             }
             if (images.size > 1) {
-                FeedPagerDots(
+                PagerDots(
                     count = images.size,
                     current = pagerState.currentPage,
                     modifier = Modifier.align(Alignment.CenterHorizontally),
@@ -392,7 +381,6 @@ internal fun CarouselFeedCard(images: List<String>, glow: Brush? = null) {
  * title + body at 0.5, "Tap to see more" pinned at the bottom → a sheet with
  * the full text).
  */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 internal fun GuidesFeedCard(msg: ProgramMessage, glow: Brush? = null) {
     val guides = msg.programPageInfo
@@ -402,7 +390,13 @@ internal fun GuidesFeedCard(msg: ProgramMessage, glow: Brush? = null) {
     Column(Modifier.fillMaxSize()) {
         androidx.compose.foundation.pager.HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxWidth().weight(1f),
+            // This inner pager clips at the feed page's own width, which cut the
+            // guide cards' soft shadows at the sides — bleed the clip outward and
+            // re-pad inside it (iOS scrollShadowFix pattern).
+            modifier = Modifier.fillMaxWidth().weight(1f).scrollShadowBleed(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                horizontal = Dimens.scrollShadowFix,
+            ),
             pageSpacing = Dimens.cardSpacing,
         ) { page ->
             val guide = guides[page]
@@ -427,7 +421,7 @@ internal fun GuidesFeedCard(msg: ProgramMessage, glow: Brush? = null) {
             }
         }
         if (guides.size > 1) {
-            FeedPagerDots(
+            PagerDots(
                 count = guides.size,
                 current = pagerState.currentPage,
                 modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = Dimens.cardSpacing / 2),
@@ -437,16 +431,11 @@ internal fun GuidesFeedCard(msg: ProgramMessage, glow: Brush? = null) {
 
     // Full guide text (iOS `.sheet(item: $currentGuide)`).
     openGuide?.let { guide ->
-        androidx.compose.material3.ModalBottomSheet(
-            onDismissRequest = { openGuide = null },
-            sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = Clear30Colors.background,
-        ) {
+        Clear30Sheet(onDismiss = { openGuide = null }) {
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.cardSpacing),
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
             ) {
                 Heading3(guide.title)
@@ -457,30 +446,6 @@ internal fun GuidesFeedCard(msg: ProgramMessage, glow: Brush? = null) {
     }
 }
 
-/** FeedView `pageDots` — small dots in a translucent capsule, current darker. */
-@Composable
-internal fun FeedPagerDots(count: Int, current: Int, modifier: Modifier = Modifier) {
-    Row(
-        modifier
-            .clip(RoundedCornerShape(99.dp))
-            .background(Clear30Colors.opacityGray)
-            .padding(horizontal = Dimens.cardSpacing / 2, vertical = Dimens.cardSpacing / 4),
-        horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        repeat(count) { index ->
-            androidx.compose.foundation.layout.Box(
-                Modifier
-                    .size(7.dp)
-                    .clip(androidx.compose.foundation.shape.CircleShape)
-                    .background(
-                        if (index == current) Clear30Colors.text.copy(alpha = 0.75f)
-                        else Clear30Colors.text.copy(alpha = 0.25f),
-                    ),
-            )
-        }
-    }
-}
 
 /**
  * FeedCardHeading (iOS TodayFeedViews.swift:22-58): the gradient section title
@@ -909,21 +874,21 @@ internal fun JournalPromptsFeedCard(prompts: List<String>, glow: Brush? = null, 
 @Composable
 internal fun JournalOnTopicDialog(prompt: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var text by remember { mutableStateOf("") }
-    AlertDialog(
+    Clear30Alert(
         onDismissRequest = onDismiss,
-        title = { Text("Journal on this") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-                SmallText(prompt, color = Clear30Colors.text.copy(alpha = 0.75f))
-                OutlinedTextField(
-                    text, { text = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Write your thoughts…") },
-                )
-            }
+        title = "Journal on this",
+        message = prompt,
+        confirmLabel = "Save",
+        onConfirm = { onSave(text.trim()) },
+        confirmEnabled = text.isNotBlank(),
+        dismissLabel = "Cancel",
+        content = {
+            OutlinedTextField(
+                text, { text = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("Write your thoughts…") },
+            )
         },
-        confirmButton = { TextButton(onClick = { onSave(text.trim()) }, enabled = text.isNotBlank()) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
 
@@ -944,7 +909,7 @@ internal fun FeedBadgePill(text: String, gradient: Brush) {
         modifier = Modifier
             .clip(RoundedCornerShape(Dimens.cornerRadius))
             .background(gradient)
-            .padding(horizontal = 10.dp, vertical = 5.dp),
+            .padding(horizontal = Dimens.chipHorizontalPadding, vertical = Dimens.chipVerticalPadding),
         color = Color.White,
     )
 }
@@ -1067,7 +1032,7 @@ internal fun JournalEntriesFeedCard(entries: List<JournalEntry>, glow: Brush? = 
         ) { page ->
             JournalEntryFeedCard(entries[page], glow = glow) { onOpen(entries[page]) }
         }
-        FeedPagerDots(
+        PagerDots(
             count = entries.size,
             current = pagerState.currentPage,
             modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = Dimens.cardSpacing / 2),
@@ -1184,7 +1149,7 @@ private fun CatchUpMessageRow(
                     .padding(start = Dimens.cardSpacing / 2)
                     .clip(RoundedCornerShape(Dimens.cornerRadius))
                     .border(2.dp, Clear30Colors.text.copy(alpha = 0.25f), RoundedCornerShape(Dimens.cornerRadius))
-                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                    .padding(horizontal = Dimens.chipHorizontalPadding, vertical = Dimens.chipVerticalPadding),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TinyText(day)

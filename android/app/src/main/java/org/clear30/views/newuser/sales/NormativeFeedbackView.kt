@@ -39,6 +39,7 @@ import org.clear30.data.model.ProgramNormativeFeedbackScore
 import org.clear30.data.model.ProgramNormativeFeedbackTextSection
 import org.clear30.data.model.UserInfo
 import org.clear30.views.components.Clear30Card
+import org.clear30.views.components.scrollShadowBleed
 import org.clear30.views.components.DefaultText
 import org.clear30.views.components.Heading2
 import org.clear30.views.components.Heading3
@@ -85,7 +86,13 @@ fun NormativeFeedbackView(
         ),
     ) {
         Column(
-            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+            // Widen the scroll clip past the outer 25dp inset and re-pad inside
+            // it so the snapshot cards' soft shadows aren't clipped at the sides
+            // (iOS scrollShadowFix pattern).
+            Modifier.weight(1f).fillMaxWidth()
+                .scrollShadowBleed()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = Dimens.scrollShadowFix),
         ) {
             Heading2("✨ Your Personalized Cannabis Snapshot")
             SmallText(
@@ -158,7 +165,7 @@ private fun ShowMoreButton(showMore: Boolean, modifier: Modifier = Modifier, onC
             .pressScale(onClick = onClick)
             .clip(RoundedCornerShape(12.dp))
             .background(Color.White.copy(alpha = 0.25f))
-            .padding(horizontal = 10.dp, vertical = 5.dp),
+            .padding(horizontal = Dimens.chipHorizontalPadding, vertical = Dimens.chipVerticalPadding),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 4)) {
             TinyText(if (showMore) "Show more" else "Show less", color = Color.White, maxLines = 1)

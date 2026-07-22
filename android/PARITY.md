@@ -1046,6 +1046,213 @@ agent couldn't run tonight). Ranked:**
   group" alert; `ClaireMessage` history loses real timestamp. Details per domain in
   `scratchpad/audit/{A..H}-*.md`.
 
+### 1a-x. Wave 17 — UI standardization pass (Thatcher, 2026-07-22)
+
+*(Thatcher: "standardize and clean up" — sheets/popups, buttons, padding,
+scroll-clipped card shadows. 4 parallel audit agents mapped the app, then 4
+parallel migration agents on disjoint file sets; 57 files touched.)*
+
+- [x] **W79 · P2 — One standard set of presentation containers.** New
+  `views/components/defaults/Popups.kt`: `Clear30Sheet` (bottom sheet — brand
+  background, `Dimens.sheetCornerRadius` = 20dp per iOS `presentationCornerRadius(20)`,
+  brand drag handle, standard content padding, `canDismiss` = iOS
+  `interactiveDismissDisabled`), `Clear30FullScreenCover` (iOS `.fullScreenCover`),
+  `Clear30CardDialog` (centered card), `Clear30Alert` (brand card + Lexend +
+  `pressScale` actions). Migrated ALL 10 `ModalBottomSheet`, ~20 full-screen
+  `Dialog` covers, 4 ad-hoc card dialogs (GameSheet/UserEmojiPicker/SendNotePopup/
+  break-date picker), and all 19 Material `AlertDialog`s. Zero
+  `ModalBottomSheet`/`AlertDialog`/raw `window.Dialog` left outside Popups.kt
+  (the one exception: `ZoomableImageOverlay`'s translucent viewer, deliberate).
+  Fixed en route: the Community "Filter by Tag" sheet was the only one missing
+  `containerColor`, so it rendered the default M3 surface instead of the brand
+  background. VERIFIED on-emulator: Your Why alert + tag-filter sheet.
+- [x] **W80 · P3 — No stock Material buttons.** Audit found the app already had
+  a full custom system (`DefaultButton`/`StretchedButton`/`IconButton`/
+  `TextIconButton`/`GradientActionButton` + `pressScale`) and ZERO stock
+  `Button`/`OutlinedButton`/`FAB` anywhere. Remaining Material usage was ~35
+  `TextButton`s + 1 `IconButton`, all dialog/menu actions — removed with the
+  W79 alert migration. Also converted 5 button-like `.clickable` boxes to
+  `pressScale` so they get the app's press-shrink + haptic (calendar close/
+  month-nav, community circle-icon + add-tag, check-in clear chip).
+- [x] **W81 · P2 — Padding standardization.** Root cause of the "ton of top
+  padding" on the cravings + health-timeline screens: they called
+  `statusBarsPadding()` while rendering INSIDE AllTabs' Scaffold content, which
+  is already inset below the status bar — double top inset. Removed from
+  `HealthTimelinePage`, `CravingHub` (+ its game/breathing sub-routes),
+  `SymptomDetailScreen`'s tip overlay, `PreviousBreaksSection`, `JournalSection`,
+  `ProfileSettingsOverlay`, `TextEntryEditor`. New `Dimens.chipHorizontalPadding`
+  /`chipVerticalPadding` (10/5) replaces the ~20 hard-coded badge-chip insets.
+  VERIFIED on-emulator: both screens' headings now sit tight under the status bar.
+- [x] **W82 · P2 — Card shadows no longer clipped in scroll containers.** New
+  `Modifier.scrollShadowBleed()` in CardStyle.kt: the Compose equivalent of iOS's
+  `+scrollShadowFix inside / -scrollShadowFix outside` trick — widens a scroll
+  node past its parent's inset so the ~7dp `softShadow` survives the clip; re-pad
+  `Dimens.scrollShadowFix` after the scroll modifier to keep content in place.
+  Applied where horizontal padding sat on an ANCESTOR of the scroll (the three
+  AssessmentInfoSlide-hosted slides, NormativeFeedback, both PostAssessment
+  slides, ReviewsSlide, CommunityHeader's two lists, the achievements rail).
+  Lazy lists that padded via an outer modifier switched to `contentPadding`
+  (CommunityTab, the three chat screens, FeatureWishlist).
+
+- [x] **W83 · P2 — Thatcher's follow-ups to the standardization pass.**
+  (a) **Sleep/craving meditation rail + Groups benefit carousel shadows** — both
+  `HorizontalPager`s clipped their cards' soft shadows; fixed with
+  `scrollShadowBleed()` + `contentPadding = scrollShadowFix` (same as W82).
+  (b) **Page dots under the Groups carousel** — DELIBERATE DIVERGENCE (iOS
+  GroupCreation has no dots). While adding them, the feed's `FeedPagerDots` was
+  promoted to the shared `PagerDots` (`components/defaults/PagerDots.kt`) and all
+  6 call sites moved to it.
+  (c) **Community create-post description field** — was a stock Material
+  `OutlinedTextField` (off-brand box + Roboto); now the new shared
+  `SmallTextEditor` in Inputs.kt (borderless Lexend 17 + faint placeholder), the
+  1:1 port of iOS `SmallTextEditor`. The journal body editor (which had
+  hand-rolled the same thing inline) now uses it too.
+  (d) **Post / Share buttons → `TextIconButton`** — iOS CreatePostView uses
+  `TextIconButton(text: "Post", gradient:)` (Android had a pill `DefaultButton`)
+  and TextEntry uses `TextIconButton(text: "Share to Community", imageName:)`
+  (Android had `GradientActionButton`). Both now match iOS.
+  (e) **7 unmapped SF symbols rendered as a black circle** (the `else ->
+  Icons.Rounded.Circle` fallback in SfSymbols.kt) — found while verifying (d):
+  the journal delete button was a filled dot. Mapped `trash`, `lock.fill`,
+  `photo`, `play.rectangle.fill`, `arrow.up.right.square`,
+  `arrow.up.left.and.arrow.down.right`, `circle.fill`. Swept every `sfSymbol(...)`
+  call in the app — 54 used, all now mapped.
+  VERIFIED on-emulator: sleep card shadow, Groups dots+shadow, create-post editor
+  + Post button, journal Share button + trash icon + delete alert.
+
+- [x] **W84 · P2 — Feed card shadows clipped (guides, community posts, message
+  viewer).** Three separate clips, all the same root cause as W82:
+  (a) `MessageDetail`'s `VerticalPager` had NO horizontal contentPadding while its
+  parent Column applied the full `horizontalPadding`, so EVERY card in the
+  specific-message viewer lost its side shadows — now on the TodayTab T9b pattern
+  (column pads `horizontalPadding − scrollShadowFix`, header re-pads the
+  remainder, pager `contentPadding` horizontal = `scrollShadowFix`).
+  (b) `GuidesFeedCard`'s INNER `HorizontalPager` clips at the feed page's own
+  width, cutting the guide cards' shadows independently of the parent fix —
+  `scrollShadowBleed()` + `contentPadding`.
+  (c) `CommunityCarousel`'s inner `HorizontalPager` — same fix (this is the
+  "community posts" case; Community-TAB text posts are flat rows with no card
+  per W19, and its list was already fixed in W82).
+  VERIFIED on-emulator: message/guide/reddit/youtube cards all keep their soft
+  shadows, with the next guide page peeking correctly.
+
+### 1a-xi. Wave 18 — full check-in flow audit vs iOS (Thatcher, 2026-07-22)
+
+*(3 parallel auditor agents diffed the Android check-in against the iOS source:
+gating/when-shown, forced + multi catch-up, and post-check-in side effects. Two
+agents independently found the same P1 data-loss bug, which is what prompted
+fixing the whole ladder rather than patching pieces.)*
+
+**Fixed (W85):**
+- [x] **P1 — Re-opening a logged day WIPED that day's check-ins.** `CheckInSheet`
+  took no initial values, so `OnScreenCheckIn` always started empty and
+  `logCheckIns` did `copy(loggedCheckIns = checkIns)` — replacing the day. The
+  reachable path (day card "+" to add a custom check-in created after the day was
+  logged) forced the user to redo the weed slider and destroyed every existing
+  slip timestamp/amount/method for that day, which then fed `handleLastSmoked`.
+  iOS seeds `initialCheckInValues` and blocks re-answering an existing weed
+  check-in (CheckIn.swift:84-88). Now ported: `SlideToCheckIn` takes
+  `initialCompletion`/`initialAmount` and renders pre-committed.
+- [x] **P1 — The whole post-check-in pipeline died on a tab switch.**
+  `CheckInLogger.persist` ran on TodayTab's `rememberCoroutineScope`, which is
+  disposed on every tab switch — cancelling the Supabase `day_info` push,
+  achievement evaluation, group activity and health-notification reschedule
+  mid-flight. Now on `Clear30Application.appScope`, same rule as the break
+  mutations (§3). iOS uses detached completion handlers.
+- [x] **P1 — Streak achievements survived a slip.** `currentSoberStreak` treated
+  a SMOKED today the same as an unlogged today (stepped past it), so slipping on
+  day 7/14/30 still awarded the streak — and achievements are permanent + pushed
+  to the backend, so the bad award wasn't reversible. Replaced with a 1:1 port of
+  iOS `calculateConsecutiveDays` (newest-first, break on first non-sober or gap).
+- [x] **P1 — Forced check-ins were skippable.** iOS branches 2/3 render the
+  check-in INLINE in place of the whole feed (TodayFeedView.swift:32-33) with no
+  skip and no dismiss; Android showed a back-dismissible cover with a Skip pill,
+  so the enforcement mechanism didn't exist. Added `CheckInSheet(blocking=)`:
+  forced days get `canDismiss=false` and no Skip. Skip is now also today-only
+  (iOS CheckInFullscreen.swift:343).
+- [x] **P1 — Multi catch-up was skippable.** iOS presents it through
+  PopupManager's bare overlay — no X, no scrim tap, no swipe. Removed the X and
+  set `canDismiss=false`.
+- [x] **P2 — Manual "Check In" tap bypassed the ladder.** It assigned
+  `checkInSheetFor = selectedDay` directly, so with a backlog it opened a single
+  day instead of the multi sheet, and with yesterday unlogged it logged today and
+  left the backlog. Now routes through `runCheckInLadder(manual = true)`
+  (iOS `forceShowForSelectedDay`).
+- [x] **P2 — Multi catch-up capped at ~31 days + bailed on empty `dayInfo`.** Both
+  were Android-only. Days older than the window could never be caught up (staying
+  `sober == null` forever and corrupting numDaysSober / numDaysCheckedIn / the
+  health-setback math), and a never-checked-in user (fresh install + restore) got
+  no catch-up at all since the ≥2 threshold reads this list. Now scans the whole
+  program like iOS `datesWithoutCheckIn`.
+- [x] **P2 — Forced-yesterday check-in never showed its reward.** Android gated
+  the reward screen on `isToday`; iOS has no such gate — it rewards whatever day
+  was checked in. Also now skips the reward screen when there is no reward
+  (iOS CheckInFullscreen.swift:224-231), which fixes the empty-reward screen.
+- [x] **P2 — The yesterday guard consumed today's auto-present slot** (one shared
+  `autoCheckInShownOn`), so completing a forced yesterday check-in swallowed
+  today's. Split into `forcedYesterdayShownOn` + `autoCheckInShownOn`.
+- [x] **P2 — Auto check-in fired immediately after onboarding.** iOS gates the
+  on-load ladder behind `showCheckInOnLoad = !firstLaunch` (Home.swift:39-41);
+  now gated on `completedOnboarding`.
+- [x] **P2 — Clearing a check-in produced backend side effects iOS never
+  produces**, including a phantom group-activity row (teammates saw "checked in"
+  for a deletion) plus a spurious analytics event and day_info push. iOS bails on
+  `guard let sober else { return }` (CheckInLogger.swift:83-84); now ported.
+- [x] **P2 — The variable reward was re-rolled on EVERY write path**, including
+  day-card edits (amount / timestamp / remove / smoked-again), re-stamping
+  `dayInfo.variableRewardType` (which the calendar renders) and dirtying day_info
+  each time. iOS only generates it in `CheckInFullscreen.handleCheckedIn`; now
+  behind `logCheckIns(generateReward =)`, true only from the check-in screen.
+
+**Open (W86 — audited, NOT fixed; needs Thatcher's call or is larger work):**
+- [ ] **P2 — No midnight-rollover / app-resume re-evaluation.** `today` is
+  computed once per composition and the ladder is `LaunchedEffect(selectedDay)`;
+  iOS re-runs it on `scenePhase == .active` and has a 00:00:01 timer
+  (Home.swift:156-160, TodayFeedView.swift:88-108). An app left open across
+  midnight keeps treating yesterday as today.
+- [ ] **P2 — No red-dot badge** on calendar days still needing a check-in
+  (iOS CalendarView.swift:576-581). Not covered by W41 (that was node FILL).
+- [ ] **P2 — Week strip can't be paged** to previous weeks (iOS pages every week
+  back to program start), so older missed days are unreachable from week mode.
+- [ ] **P2 — Check-in analytics don't match.** iOS emits one `checked_in` per
+  LoggedCheckIn with method/amount/custom-id/`type`, plus a full funnel
+  (`opened_check_in_screen`, `completed_check_in`, `skipped_check_in`, reward +
+  topic events) all stamped with `day_number`. Android emits one batch event with
+  an Android-invented name and `{sober}` only, so the iOS funnel is empty for
+  Android.
+- [ ] **P2 — Group not refreshed** after the check-in activity posts (iOS calls
+  `groupController.refresh()`), so the leaderboard shows stale state.
+- [ ] **P2 — Check-in reminder not rescheduled** by a check-in (overlaps W92a).
+- [ ] **P2 — No achievement notification / `miniDisplayAchievementIDs`** is never
+  written (declared but unused).
+- [ ] **P2 — Most COUNT achievements unreachable** (only `check_in` is mapped)
+  and `customData` is always empty, so detail cards lose their numbers.
+- [ ] **P2 — Amount picker is dead code**: `awaitingAmount` is never set true, so
+  no amount can be recorded at check-in time. Needs a product call — restore the
+  iOS hold-to-open interaction, or delete the picker.
+- [ ] **P3 — `lastSmoked` recomputed unconditionally** → clear-timer drift; iOS
+  guards on the latest smoked entry actually changing. Other half of W87.
+- [ ] **P3 — No `onNeedReShowCheckIn`**: clearing a day's last check-in leaves it
+  half-logged instead of re-presenting.
+- [ ] **P3 — Skip doesn't clear a pre-existing check-in** (iOS
+  `handleSkip(removeCheckIn: true)`). Divergent but arguably safer — decide.
+- [ ] **P3 — Month-mode day preview** is fully editable on Android; iOS is
+  read-only there and its inline check-in is `showAll: false` (weed slider only).
+- [ ] **P3 — "Custom Check In" upsell row** on the day card not ported.
+- [ ] **P3 — Dead code**: `today/calendar/WeekCalendar.kt`, `MonthCalendar.kt`,
+  `CalendarCard.kt`, `checkin/DayDetailSheet.kt` are unreferenced and contain a
+  different, older check-in rendering — they will mislead future audits.
+- Multi-sheet weekday order (Mon-first) is left as-is: PARITY W1 records
+  Mon-start as the intended Android spec, though iOS is locale/Sunday-first.
+
+**Verified matching** (so coverage is known): ladder order + all four branch
+conditions, multi threshold (2) and `sober == null` missed-day definition, today
+excluded from catch-up, day-0 gate (`absoluteDay >= 1`), no break-state gating
+anywhere (iOS never reads `currentBreak` in the ladder), future days never
+checkable, timezone/day-boundary handling, sheet step order + undo, slide-to-
+confirm mechanics, `handleMultiCheckIn` semantics, both reward generators, the
+slipped-nudge gate + window + copy, health-setback math, and the wire format.
+
 ### 1a-ix. Helium paywall SDK integration (2026-07-22)
 
 - [x] (done 2026-07-22, uncommitted — **Helium Android SDK wired as the primary

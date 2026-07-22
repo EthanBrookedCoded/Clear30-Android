@@ -17,9 +17,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,6 +55,7 @@ import org.clear30.data.supabase.getUserID
 import org.clear30.data.supabase.updateTriggerResponses
 import org.clear30.data.supabase.updateYourWhy
 import org.clear30.util.now
+import org.clear30.views.components.Clear30Sheet
 import org.clear30.views.components.ConfettiOverlay
 import org.clear30.views.components.Heading3
 import org.clear30.views.components.InlineVideoPlayer
@@ -281,10 +280,11 @@ private fun PlanLine(activity: SlipActivity, label: String, text: String) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SlipPreviousPlansSheet(plans: List<SlipPlan>, onDismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Clear30Colors.background) {
+    // Own padding (bottom cardSpacing * 2 inside the scroll) instead of the
+    // standard sheet content padding.
+    Clear30Sheet(onDismiss = onDismiss, skipPartiallyExpanded = false, contentPadding = false) {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
                 .padding(horizontal = Dimens.horizontalPadding)

@@ -100,7 +100,7 @@ internal fun DailyTopicsSection(
                                 if (complete) Modifier.background(Color.White)
                                 else Modifier.progressRing(SolidColor(Color.White), progress.toFloat()),
                             )
-                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                            .padding(horizontal = Dimens.chipHorizontalPadding, vertical = Dimens.chipVerticalPadding),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
                     ) {

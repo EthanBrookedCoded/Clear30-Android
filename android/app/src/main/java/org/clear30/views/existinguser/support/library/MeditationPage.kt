@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -37,18 +36,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.media3.common.Player
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.clear30.data.Clear30Store
 import org.clear30.data.model.Program
 import org.clear30.data.model.ProgramMeditation
+import org.clear30.views.components.Clear30FullScreenCover
 import org.clear30.views.components.Heading3
 import org.clear30.views.components.IconButton
 import org.clear30.views.components.TinyText
-import org.clear30.views.components.pressScale
 import org.clear30.views.components.sfSymbol
 import org.clear30.views.theme.Clear30Colors
 import org.clear30.views.theme.Clear30Gradients
@@ -68,21 +65,19 @@ import org.clear30.views.theme.Haptics
  */
 @Composable
 fun MeditationPage(meditation: ProgramMeditation, program: Program, onDismiss: () -> Unit) {
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(modifier = Modifier.fillMaxSize(), color = Clear30Colors.background) {
-            Box(Modifier.fillMaxSize()) {
-                Row(
-                    Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(Dimens.cardSpacing / 2),
-                ) {
-                    IconButton("xmark", onClick = onDismiss)
-                }
-                Column(
-                    Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    MeditationPlayerCore(meditation, program, centered = true)
-                }
+    Clear30FullScreenCover(onDismiss = onDismiss) {
+        Box(Modifier.fillMaxSize()) {
+            Row(
+                Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(Dimens.cardSpacing / 2),
+            ) {
+                IconButton("xmark", onClick = onDismiss)
+            }
+            Column(
+                Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                MeditationPlayerCore(meditation, program, centered = true)
             }
         }
     }

@@ -21,10 +21,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -49,6 +47,7 @@ import org.clear30.data.model.CustomCheckIn
 import org.clear30.data.model.CustomCheckInOption
 import org.clear30.data.model.Program
 import org.clear30.data.model.UserInfo
+import org.clear30.views.components.Clear30Alert
 import org.clear30.views.components.Clear30Card
 import org.clear30.views.components.Heading1
 import org.clear30.views.components.HuePicker
@@ -164,18 +163,18 @@ fun CustomCheckInSetup(
     }
 
     deleting?.let { c ->
-        AlertDialog(
+        Clear30Alert(
             onDismissRequest = { deleting = null },
-            title = { Text("Delete ${c.completeOption.emoji} ${c.name}?") },
-            text = { Text("This will also delete all of its check-in data.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    program.customCheckIns.removeAll { it.id == c.id }
-                    persist()
-                    deleting = null
-                }) { Text("Yes", color = Clear30Colors.red2) }
+            title = "Delete ${c.completeOption.emoji} ${c.name}?",
+            message = "This will also delete all of its check-in data.",
+            confirmLabel = "Yes",
+            onConfirm = {
+                program.customCheckIns.removeAll { it.id == c.id }
+                persist()
+                deleting = null
             },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text("No") } },
+            dismissLabel = "No",
+            destructive = true,
         )
     }
 }
@@ -411,10 +410,13 @@ private val PICKER_EMOJIS = listOf(
 /** Simple emoji grid picker (iOS presents its EmojiPicker sheet here). */
 @Composable
 private fun EmojiPickDialog(onPick: (String) -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
+    // The only action is Cancel (picking an emoji from the grid dismisses).
+    Clear30Alert(
         onDismissRequest = onDismiss,
-        title = { Text("Pick an emoji") },
-        text = {
+        title = "Pick an emoji",
+        confirmLabel = "Cancel",
+        onConfirm = onDismiss,
+        content = {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(6),
                 modifier = Modifier.fillMaxWidth().height(260.dp),
@@ -433,7 +435,5 @@ private fun EmojiPickDialog(onPick: (String) -> Unit, onDismiss: () -> Unit) {
                 }
             }
         },
-        confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }

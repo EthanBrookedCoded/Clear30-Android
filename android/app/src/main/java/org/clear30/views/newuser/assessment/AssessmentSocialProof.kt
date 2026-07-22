@@ -58,6 +58,8 @@ import org.clear30.data.supabase.getAssessmentSocialProofValue
 import org.clear30.data.supabase.getCommunityPostById
 import org.clear30.data.supabase.incrementAssessmentSocialProofCount
 import org.clear30.views.components.Clear30Card
+import org.clear30.views.components.Clear30Sheet
+import org.clear30.views.components.scrollShadowBleed
 import org.clear30.views.components.GiganticText
 import org.clear30.views.components.Heading3
 import org.clear30.views.components.MiniText
@@ -206,11 +208,13 @@ fun AssessmentSocialProof(name: String, modifier: Modifier = Modifier) {
     Column(
         modifier
             .fillMaxSize()
+            // iOS scrollShadowFix (+inner / -outer): widen the scroll clip past
+            // the parent AssessmentInfoSlide's 25dp inset and re-pad inside it,
+            // so the stat/review cards' soft shadows aren't cut at the sides.
+            .scrollShadowBleed()
             .verticalScroll(rememberScrollState())
-            // No horizontal padding here: the parent AssessmentInfoSlide already
-            // applies Dimens.horizontalPadding (25dp). iOS nets the same by
-            // cancelling scrollShadowFix (+inner / -outer); we simply omit it.
-            .padding(vertical = Dimens.headingTopPadding),
+            .padding(vertical = Dimens.headingTopPadding)
+            .padding(horizontal = Dimens.scrollShadowFix),
     ) {
         PeopleCountSection(name = name, peopleCount = peopleCount)
         StatisticsSection(stats = data.stats)
@@ -223,19 +227,13 @@ fun AssessmentSocialProof(name: String, modifier: Modifier = Modifier) {
 }
 
 /** iOS `DetailViewWrapper` — the tapped review / community post, full text. */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun SocialProofDetailSheet(sheet: SocialProofSheet, onDismiss: () -> Unit) {
-    androidx.compose.material3.ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = Clear30Colors.background,
-    ) {
+    Clear30Sheet(onDismiss = onDismiss) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.cardSpacing),
+                .verticalScroll(rememberScrollState()),
         ) {
             when (sheet) {
                 is SocialProofSheet.PostDetail -> {

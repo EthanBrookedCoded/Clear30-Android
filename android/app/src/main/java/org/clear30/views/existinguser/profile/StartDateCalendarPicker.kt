@@ -7,7 +7,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +37,7 @@ import org.clear30.views.components.SmallText
 import org.clear30.views.components.StandardCalendarNode
 import org.clear30.views.components.StretchedButton
 import org.clear30.views.components.TinyText
+import org.clear30.views.components.pressScale
 import org.clear30.views.components.sfSymbol
 import org.clear30.views.theme.Clear30Colors
 import org.clear30.views.theme.Clear30Gradients
@@ -188,7 +188,7 @@ private fun MonthGrid(
 @Composable
 private fun CloseButton(onClick: () -> Unit) {
     Box(
-        Modifier.size(28.dp).clip(RoundedCornerShape(7.dp)).background(Clear30Colors.opacityGray).clickable(onClick = onClick),
+        Modifier.size(28.dp).clip(RoundedCornerShape(7.dp)).background(Clear30Colors.opacityGray).pressScale(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(sfSymbol("xmark"), contentDescription = "Close", tint = Clear30Colors.text.copy(alpha = 0.75f), modifier = Modifier.size(13.dp))
@@ -199,7 +199,10 @@ private fun CloseButton(onClick: () -> Unit) {
 private fun NavChevron(symbol: String, enabled: Boolean, onClick: () -> Unit) {
     Box(
         Modifier.size(28.dp).alpha(if (enabled) 1f else 0.5f).clip(RoundedCornerShape(7.dp))
-            .background(Clear30Colors.opacityGray).clickable(enabled = enabled, onClick = onClick),
+            .background(Clear30Colors.opacityGray)
+            // pressScale has no enabled param — disabled chevrons simply aren't
+            // clickable (callers fire their own light haptic on tap).
+            .then(if (enabled) Modifier.pressScale(haptic = false, onClick = onClick) else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         Icon(sfSymbol(symbol), contentDescription = null, tint = Clear30Colors.text.copy(alpha = 0.75f), modifier = Modifier.size(13.dp))

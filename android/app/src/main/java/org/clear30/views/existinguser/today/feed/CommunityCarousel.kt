@@ -23,6 +23,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import org.clear30.data.model.Post
 import org.clear30.views.components.Clear30Card
+import org.clear30.views.components.scrollShadowBleed
+import org.clear30.views.components.PagerDots
 import org.clear30.views.components.DefaultButton
 import org.clear30.views.components.Heading3
 import org.clear30.views.components.SmallText
@@ -55,7 +57,13 @@ fun CommunityCarouselCard(
     Column(Modifier.fillMaxSize()) {
         androidx.compose.foundation.pager.HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxWidth().weight(1f),
+            // Same as the guides pager: this inner pager clips at the feed page's
+            // width, cutting the post cards' soft shadows — bleed + re-pad
+            // (iOS scrollShadowFix pattern).
+            modifier = Modifier.fillMaxWidth().weight(1f).scrollShadowBleed(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                horizontal = Dimens.scrollShadowFix,
+            ),
             pageSpacing = Dimens.cardSpacing,
         ) { page ->
             if (page < posts.size) {
@@ -66,7 +74,7 @@ fun CommunityCarouselCard(
         }
         if (pageCount > 1) {
             // Page dots like the other carousels (iOS FeedView pageDots).
-            FeedPagerDots(
+            PagerDots(
                 count = pageCount,
                 current = pagerState.currentPage,
                 modifier = Modifier

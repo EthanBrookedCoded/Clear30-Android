@@ -2,6 +2,12 @@ package org.clear30.views.components
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AcUnit
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.OpenInFull
+import androidx.compose.material.icons.rounded.Photo
+import androidx.compose.material.icons.rounded.SmartDisplay
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.AllInclusive
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.Gesture
@@ -259,5 +265,12 @@ fun sfSymbol(name: String): ImageVector = when (name) {
     "snowflake" -> Icons.Rounded.AcUnit
     "cloud.fill", "cloud" -> Icons.Rounded.Cloud
     "infinity" -> Icons.Rounded.AllInclusive
+    "trash", "trash.fill" -> Icons.Rounded.Delete
+    "lock.fill", "lock" -> Icons.Rounded.Lock
+    "photo", "photo.fill" -> Icons.Rounded.Photo
+    "play.rectangle.fill", "play.rectangle" -> Icons.Rounded.SmartDisplay
+    "arrow.up.right.square", "arrow.up.right.square.fill" -> Icons.AutoMirrored.Rounded.OpenInNew
+    "arrow.up.left.and.arrow.down.right" -> Icons.Rounded.OpenInFull
+    "circle.fill", "circle" -> Icons.Rounded.Circle
     else -> Icons.Rounded.Circle
 }

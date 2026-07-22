@@ -45,6 +45,8 @@ import androidx.compose.material3.Icon
 import org.clear30.views.components.Clear30Card
 import org.clear30.views.components.Heading2
 import org.clear30.views.components.Heading3
+import org.clear30.views.components.scrollShadowBleed
+import org.clear30.views.components.PagerDots
 import org.clear30.views.components.LoadingIcon
 import org.clear30.views.components.SmallText
 import org.clear30.views.components.TinyText
@@ -133,7 +135,14 @@ fun CravingResources(program: Program, userInfo: UserInfo, kind: MeditationResou
                         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                             androidx.compose.foundation.pager.HorizontalPager(
                                 state = pagerState,
-                                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.85f),
+                                // scrollShadowBleed + contentPadding: the pager clips
+                                // to its bounds, which cut the meditation cards' soft
+                                // shadows at the sides (iOS scrollShadowFix pattern).
+                                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.85f)
+                                    .scrollShadowBleed(),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                                    horizontal = Dimens.scrollShadowFix,
+                                ),
                                 pageSpacing = Dimens.cardSpacing,
                             ) { page ->
                                 org.clear30.views.existinguser.today.MeditationFeedCard(
@@ -143,7 +152,7 @@ fun CravingResources(program: Program, userInfo: UserInfo, kind: MeditationResou
                             }
                         }
                         if (resources.size > 1) {
-                            org.clear30.views.existinguser.today.FeedPagerDots(
+                            PagerDots(
                                 count = resources.size,
                                 current = pagerState.currentPage,
                                 modifier = Modifier

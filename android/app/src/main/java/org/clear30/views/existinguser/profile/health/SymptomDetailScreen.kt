@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -165,7 +164,7 @@ private fun TipExpandedOverlay(tip: SymptomTip, onClose: () -> Unit) {
     ) {
         Column(
             // Absorb taps so tapping the content doesn't close it (scrim taps do).
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding()
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState())
                 .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
             verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
@@ -240,7 +239,7 @@ private fun ClaireMini(title: String, onStartChat: () -> Unit) {
             SmallText(title, maxLines = 4)
             Row(
                 Modifier.clip(RoundedCornerShape(99.dp)).background(Clear30Colors.opacityGray)
-                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                    .padding(horizontal = Dimens.chipHorizontalPadding, vertical = Dimens.chipVerticalPadding),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {

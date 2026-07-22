@@ -1,8 +1,5 @@
 package org.clear30.views.existinguser
 
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -178,34 +175,25 @@ fun AllTabs(
     // Paywall(popup: true, hard:)). Hard paywalls can't be dismissed
     // (interactiveDismissDisabled); soft ones close via back / the X button.
     paywallSheet?.let { hard ->
-        androidx.compose.ui.window.Dialog(
-            onDismissRequest = { if (!hard) paywallSheet = null },
-            properties = androidx.compose.ui.window.DialogProperties(
-                usePlatformDefaultWidth = false,
-                dismissOnBackPress = !hard,
-                dismissOnClickOutside = false,
-            ),
+        org.clear30.views.components.Clear30FullScreenCover(
+            onDismiss = { paywallSheet = null },
+            canDismiss = !hard,
         ) {
-            Box(
-                Modifier.fillMaxSize()
-                    .background(org.clear30.views.theme.Clear30Colors.background),
-            ) {
-                org.clear30.views.newuser.Paywall(
-                    userInfo = userInfo,
-                    popup = true,
-                    hard = hard,
-                ) { entitlement ->
-                    if (entitlement != null) {
-                        handleUserPaid(userInfo, program, entitlement)
-                        selected = CustomTabBarItem.TODAY // iOS goToRoot()
-                        // Persist off the dialog's composition (it unmounts next
-                        // frame — a rememberCoroutineScope launch would be axed).
-                        org.clear30.Clear30Application.appScope.launch {
-                            org.clear30.data.Clear30Store.save(userInfo)
-                        }
+            org.clear30.views.newuser.Paywall(
+                userInfo = userInfo,
+                popup = true,
+                hard = hard,
+            ) { entitlement ->
+                if (entitlement != null) {
+                    handleUserPaid(userInfo, program, entitlement)
+                    selected = CustomTabBarItem.TODAY // iOS goToRoot()
+                    // Persist off the dialog's composition (it unmounts next
+                    // frame — a rememberCoroutineScope launch would be axed).
+                    org.clear30.Clear30Application.appScope.launch {
+                        org.clear30.data.Clear30Store.save(userInfo)
                     }
-                    paywallSheet = null
                 }
+                paywallSheet = null
             }
         }
     }

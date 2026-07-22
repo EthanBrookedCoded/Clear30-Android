@@ -49,7 +49,17 @@ class CheckInLogger(
      * composition (PARITY §18-D1: the generator mutates `program.dayInfo`, so
      * it must run exactly once per check-in, here).
      */
-    fun logCheckIns(date: Instant, checkIns: List<LoggedCheckIn>): VariableReward? {
+    fun logCheckIns(
+        date: Instant,
+        checkIns: List<LoggedCheckIn>,
+        // Only the CHECK-IN SCREEN generates + stamps the day's variable reward
+        // (iOS does it in CheckInFullscreen.handleCheckedIn, never in the
+        // logger). Day-card edits — amount, timestamp, remove, smoked-again —
+        // go through here too, and re-rolling on those re-stamped
+        // `dayInfo.variableRewardType` (which the calendar renders) and dirtied
+        // day_info for another Supabase push on every tweak.
+        generateReward: Boolean = false,
+    ): VariableReward? {
         val plainDate = PlainDate.from(date)
 
         checkIns.firstNotNullOfOrNull { it.method }?.let { program.latestCheckInMethod = it }
@@ -66,21 +76,26 @@ class CheckInLogger(
         // Reward generation: pick + stamp the day's variable reward type (iOS
         // CheckInRewardVariableGenerator.storeRewardType). The static reward is
         // generated on demand by the reward sheet (it doesn't mutate state).
-        val variableReward = CheckInRewardVariableGenerator(userInfo, program).generate(plainDate)
+        val variableReward =
+            if (generateReward) CheckInRewardVariableGenerator(userInfo, program).generate(plainDate) else null
 
         // Analytics: fire a single event per check-in, tagged by outcome. Use the
         // weed check-in's completion specifically (iOS `weedCheckIn?.completion`) —
         // the first slot isn't guaranteed to be the weed entry once customs exist.
         val sober = checkIns.weedCheckIn?.completion
-        val event = when (sober) {
-            true -> LogEventType.loggedCheckIn
-            false -> LogEventType.smokedCheckIn
-            null -> LogEventType.unloggedCheckIn
+        if (sober == null) {
+            // iOS bails here — `guard let sober else { return }`
+            // (CheckInLogger.swift:83-84). Clearing a day's last check-in must
+            // NOT emit analytics, push day_info, or write a group activity row
+            // (teammates were seeing "checked in" for a deletion). The local
+            // mutation above still stands; it syncs on the next foreground pass.
+            return null
         }
+        val event = if (sober) LogEventType.loggedCheckIn else LogEventType.smokedCheckIn
         Logger.logEvent(
             userInfo.loggingID,
             event,
-            mapOf(LogEventExtraDataType.SOBER to (sober?.toString() ?: "null")),
+            mapOf(LogEventExtraDataType.SOBER to sober.toString()),
         )
 
         // Post-slip nudge (iOS CheckInLogger.handleNotificationsAndSMS,
@@ -90,7 +105,7 @@ class CheckInLogger(
         // schedules the 90min–3h nudge (scheduleSlipped itself checks the active
         // break + settings); a sober one cancels any pending nudge — they've
         // already returned, so the "you slipped" push would be stale.
-        if (sober != null) {
+        run {
             val todayPlain = PlainDate.from(now())
             val latestLoggedDay = program.dayInfo.entries
                 .filter { it.key <= todayPlain && it.value.sober != null }
@@ -238,7 +253,15 @@ class CheckInLogger(
     }
 
     private fun persist(sober: Boolean? = null) {
-        scope.launch {
+        // App-lifetime scope, NOT the caller's `scope` (the Today tab's
+        // rememberCoroutineScope). TodayTab is disposed on every tab switch, so
+        // a composition-tied scope cancelled this whole pipeline mid-flight —
+        // checking in and immediately switching tabs dropped the Supabase
+        // day_info push, the achievement evaluation, the group activity and the
+        // health-notification reschedule. Same rule as the break mutations
+        // (PARITY §3). iOS runs these on detached completion handlers that
+        // outlive any view.
+        org.clear30.Clear30Application.appScope.launch {
             // The whole async pipeline is defensive (PARITY §18-D1): an uncaught
             // throw from any step would kill the calling scope (the Today tab's
             // rememberCoroutineScope) and crash the app after the user already

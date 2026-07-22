@@ -135,6 +135,9 @@ fun TodayTab(
     // CheckInViewModel.showCheckInForDate). Forced flows (W69) open it for
     // yesterday / a past selected day, not just today.
     var checkInSheetFor by remember { mutableStateOf<PlainDate?>(null) }
+    // True when the open sheet is a FORCED (iOS inline) check-in: unskippable,
+    // no back-dismiss — the day must be logged (iOS replaces the feed with it).
+    var checkInBlocking by remember { mutableStateOf(false) }
     var showMultiCheckIn by remember { mutableStateOf(false) }
     var showMidPilotAssessment by remember { mutableStateOf(false) }
     // In-app overlays opened from the inlined content cards (YouTube now plays
@@ -218,30 +221,49 @@ fun TodayTab(
     // The today-scoped auto-presents (2 & 4) run once per calendar day per
     // process, via TodayTabUiState — Android disposes this composable on every
     // tab switch, so without the guard the sheet would re-open each return.
-    LaunchedEffect(selectedDay) {
+    // Runs the iOS ladder (CheckInViewModel.handleShowCheckIn). [manual] mirrors
+    // iOS `forceShowForSelectedDay`: the day card's "Check in" button routes
+    // through here too, so tapping it with a backlog opens the MULTI sheet and
+    // with yesterday unlogged opens YESTERDAY — it never jumps straight to the
+    // selected day (iOS TodayFeedView.swift:159-172).
+    fun runCheckInLadder(manual: Boolean) {
         val isToday = selectedDay == today
         if (isToday && missedCheckInDays(program).size >= 2) {
             showMultiCheckIn = true
-            return@LaunchedEffect
+            return
         }
         val yesterday = today.adding(days = -1)
         if (isToday && program.getDay(now()) >= 1 && program.dayInfo[yesterday]?.sober == null) {
-            if (TodayTabUiState.autoCheckInShownOn != today) {
-                TodayTabUiState.autoCheckInShownOn = today
+            // Auto-present once per day per process; a manual tap always opens it.
+            if (manual || TodayTabUiState.forcedYesterdayShownOn != today) {
+                TodayTabUiState.forcedYesterdayShownOn = today
+                // iOS branch 2/3 is the INLINE check-in — unskippable (the feed is
+                // replaced until the day is logged, TodayFeedView.swift:32-33).
+                checkInBlocking = true
                 checkInSheetFor = yesterday
             }
-            return@LaunchedEffect
+            return
         }
         if (!isToday && program.dayInfo[selectedDay]?.sober == null) {
+            checkInBlocking = true
             checkInSheetFor = selectedDay
-            return@LaunchedEffect
+            return
         }
-        if (isToday && program.dayInfo[today]?.sober == null &&
-            TodayTabUiState.autoCheckInShownOn != today
+        if (manual || (isToday && program.dayInfo[today]?.sober == null &&
+                TodayTabUiState.autoCheckInShownOn != today)
         ) {
             TodayTabUiState.autoCheckInShownOn = today
-            checkInSheetFor = today
+            // Branch 4 is iOS's fullScreen (isToday) variant — skippable.
+            checkInBlocking = false
+            checkInSheetFor = selectedDay
         }
+    }
+
+    LaunchedEffect(selectedDay) {
+        // iOS gates the on-load ladder behind `showCheckInOnLoad = !firstLaunch`
+        // (Home.swift:39-41) so a user who just finished onboarding lands on the
+        // feed/tutorial, not a check-in sheet.
+        if (userInfo.completedOnboarding == true) runCheckInLadder(manual = false)
     }
 
     // Mid-pilot assessment (F2 — iOS TodayFeedView.handlePopups:290-300): a
@@ -448,7 +470,7 @@ fun TodayTab(
                     program = program,
                     showStreak = selectedDay == today,
                     revision = refresh,
-                    onCheckIn = { checkInSheetFor = selectedDay },
+                    onCheckIn = { runCheckInLadder(manual = true) },
                     onCheckInChange = onCheckInChange,
                 )
             }
@@ -503,7 +525,7 @@ fun TodayTab(
                                     program = program,
                                     showStreak = selectedDay == today,
                                     revision = refresh,
-                                    onCheckIn = { checkInSheetFor = selectedDay },
+                                    onCheckIn = { runCheckInLadder(manual = true) },
                                     onCheckInChange = onCheckInChange,
                                 )
                                 messages.firstOrNull()?.let { first ->
@@ -626,8 +648,13 @@ fun TodayTab(
             userInfo = userInfo,
             program = program,
             selectedDay = sheetDay,
+            // Forced (iOS inline) check-ins can't be skipped or back-dismissed —
+            // the day must be logged. Only the branch-4 today auto-present and
+            // manual taps are skippable, matching iOS.
+            blocking = checkInBlocking,
             onDismiss = {
                 checkInSheetFor = null
+                checkInBlocking = false
                 refresh++
             },
             // Only a COMPLETED check-in advances the feed to the first lesson —
@@ -646,6 +673,9 @@ fun TodayTab(
                 name = userInfo.name,
                 dates = missed,
                 logger = logger,
+                // iOS presents this through PopupManager's bare overlay — no
+                // scrim tap, no close control, no swipe. The only exit is the
+                // slide-to-confirm (CheckInViewModel.swift:166-172).
                 onDismiss = { showMultiCheckIn = false; refresh++ },
             )
         }
@@ -662,45 +692,29 @@ fun TodayTab(
     redditUrl?.let { u -> org.clear30.views.components.RedditDialog(u, onDismiss = { redditUrl = null }) }
     // Claire prompt → open Claire in-place (G27), without leaving the Today tab.
     claireOverlay?.let { seed ->
-        androidx.compose.ui.window.Dialog(
-            onDismissRequest = { claireOverlay = null },
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            androidx.compose.material3.Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = Clear30Colors.background,
-            ) {
-                org.clear30.views.existinguser.support.ClaireChat(
-                    onBack = { claireOverlay = null },
-                    userInfo = userInfo,
-                    program = program,
-                    initialInput = seed,
-                )
-            }
+        org.clear30.views.components.Clear30FullScreenCover(onDismiss = { claireOverlay = null }) {
+            org.clear30.views.existinguser.support.ClaireChat(
+                onBack = { claireOverlay = null },
+                userInfo = userInfo,
+                program = program,
+                initialInput = seed,
+            )
         }
     }
     // Catch-up card → full-screen viewer of the missed day's lesson group (iOS
     // navigates to programMessages for the whole group).
     catchUpMessages?.let { group ->
-        androidx.compose.ui.window.Dialog(
-            onDismissRequest = { catchUpMessages = null },
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            androidx.compose.material3.Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = Clear30Colors.background,
-            ) {
-                MessageDetail(
-                    program = program,
-                    messages = group,
-                    userInfo = userInfo,
-                    journalEntries = journalEntries,
-                    onBack = {
-                        catchUpMessages = null
-                        refresh++
-                    },
-                )
-            }
+        org.clear30.views.components.Clear30FullScreenCover(onDismiss = { catchUpMessages = null }) {
+            MessageDetail(
+                program = program,
+                messages = group,
+                userInfo = userInfo,
+                journalEntries = journalEntries,
+                onBack = {
+                    catchUpMessages = null
+                    refresh++
+                },
+            )
         }
     }
 
@@ -1108,6 +1122,13 @@ private object TodayTabUiState {
      * value from a previous day never suppresses today's auto-present.
      */
     var autoCheckInShownOn: PlainDate? = null
+
+    /**
+     * Separate guard for the FORCED-YESTERDAY branch. iOS keeps branches 2 and
+     * 4 independent, so consuming one must not suppress the other (otherwise
+     * completing yesterday's forced check-in swallows today's auto-present).
+     */
+    var forcedYesterdayShownOn: PlainDate? = null
 
     fun resetIfStale(today: PlainDate) {
         if (savedOn != null && savedOn != today) {

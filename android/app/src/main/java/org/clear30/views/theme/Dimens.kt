@@ -17,4 +17,12 @@ object Dimens {
     val buttonHorizontalPadding = (25f / 1.5f).dp   // ~16.67
     val buttonVerticalPadding = 25.dp
     val cornerRadius = 21.dp
+
+    /** Bottom-sheet top corners — iOS `presentationCornerRadius(20)` (sheetDefaults). */
+    val sheetCornerRadius = 20.dp
+
+    // Badge/pill chip insets (iOS hardcodes 10/5 on every badge chip — the
+    // "Day N ✓" health badges, feed date chips, achievement tags, etc.).
+    val chipHorizontalPadding = 10.dp
+    val chipVerticalPadding = 5.dp
 }

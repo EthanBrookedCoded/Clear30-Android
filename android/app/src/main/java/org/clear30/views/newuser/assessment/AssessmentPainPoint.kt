@@ -40,6 +40,7 @@ import org.clear30.data.model.NormativeData
 import org.clear30.data.model.ProgramAssessmentResponse
 import org.clear30.data.model.getSingleOption
 import org.clear30.views.components.Clear30Card
+import org.clear30.views.components.scrollShadowBleed
 import org.clear30.views.components.DefaultText
 import org.clear30.views.components.Heading3
 import org.clear30.views.components.SmallText
@@ -111,7 +112,12 @@ fun AssessmentPainPoint(
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
+                // Widen the scroll clip past the parent's 25dp inset and re-pad
+                // inside it, so the hero card's soft shadow isn't clipped
+                // (iOS scrollShadowFix pattern).
+                .scrollShadowBleed()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = Dimens.scrollShadowFix),
             verticalArrangement = Arrangement.Center,
         ) {
             // Outer wrapper: bare until `showCard`, then the red gradient hero card

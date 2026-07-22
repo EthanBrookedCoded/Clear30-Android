@@ -10,13 +10,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -28,18 +23,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.clear30.views.components.GradientActionButton
+import org.clear30.views.components.Clear30Alert
+import org.clear30.views.components.SmallTextEditor
+import org.clear30.views.components.TextIconButton
 import org.clear30.views.components.Heading3Input
 import org.clear30.views.components.pressScale
 import org.clear30.views.components.sfSymbol
 import org.clear30.views.theme.Clear30Colors
 import org.clear30.views.theme.Clear30Gradients
 import org.clear30.views.theme.Dimens
-import org.clear30.views.theme.Lexend
 
 /**
  * TextEntryEditor — full-screen journal text editor, ported from iOS
@@ -84,10 +78,12 @@ fun TextEntryEditor(
         else if (initialContent.isEmpty()) contentFocus.requestFocus()
     }
 
+    // No statusBarsPadding: every presentation context (JournalSection, the
+    // Today feed, MessageDetail) is inline inside AllTabs' Scaffold content,
+    // which is already inset below the status bar.
     Box(Modifier.fillMaxSize().background(Clear30Colors.background)) {
         Column(
             Modifier.fillMaxSize()
-                .statusBarsPadding()
                 .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
         ) {
             // Header — back chevron • trash (existing, non-empty entries only).
@@ -122,20 +118,21 @@ fun TextEntryEditor(
                 returnNewLine = false,
             )
 
-            // Body — borderless small-text editor filling the page (iOS SmallTextEditor).
-            BasicTextField(
-                value = content,
-                onValueChange = { content = it },
+            // Body — the shared borderless editor filling the page
+            // (iOS `SmallTextEditor(text:, placeholder: "")`).
+            SmallTextEditor(
+                content, { content = it },
+                placeholder = "",
                 modifier = Modifier.fillMaxWidth().weight(1f).focusRequester(contentFocus),
-                textStyle = TextStyle(fontFamily = Lexend, fontSize = 15.5.sp, color = Clear30Colors.text),
-                cursorBrush = SolidColor(Clear30Colors.text),
             )
 
             if (onShare != null && !shared && title.isNotBlank() && content.isNotBlank()) {
-                GradientActionButton(
-                    iconName = "person.3.fill",
+                // iOS TextIconButton(text:, imageName: "person.3.fill",
+                // gradient: communityGradient).
+                TextIconButton(
+                    text = "Share to Community",
+                    icon = "person.3.fill",
                     gradient = Clear30Gradients.community,
-                    title = "Share to Community",
                     modifier = Modifier.padding(bottom = Dimens.cardSpacing),
                 ) { showShareConfirm = true }
             }
@@ -143,30 +140,29 @@ fun TextEntryEditor(
     }
 
     if (showDeleteConfirm) {
-        AlertDialog(
+        Clear30Alert(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete") },
-            text = { Text("Are you sure you want to delete this journal entry?") },
-            confirmButton = {
-                TextButton(onClick = { showDeleteConfirm = false; onDelete?.invoke() }) { Text("Delete") }
-            },
-            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") } },
+            title = "Delete",
+            message = "Are you sure you want to delete this journal entry?",
+            confirmLabel = "Delete",
+            destructive = true,
+            onConfirm = { showDeleteConfirm = false; onDelete?.invoke() },
+            dismissLabel = "Cancel",
         )
     }
 
     if (showShareConfirm) {
-        AlertDialog(
+        Clear30Alert(
             onDismissRequest = { showShareConfirm = false },
-            title = { Text("Share to Community") },
-            text = { Text("Post this journal entry to the community feed?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    showShareConfirm = false
-                    shared = true
-                    onShare?.invoke(title.trim(), content.trim())
-                }) { Text("Share") }
+            title = "Share to Community",
+            message = "Post this journal entry to the community feed?",
+            confirmLabel = "Share",
+            onConfirm = {
+                showShareConfirm = false
+                shared = true
+                onShare?.invoke(title.trim(), content.trim())
             },
-            dismissButton = { TextButton(onClick = { showShareConfirm = false }) { Text("Cancel") } },
+            dismissLabel = "Cancel",
         )
     }
 }

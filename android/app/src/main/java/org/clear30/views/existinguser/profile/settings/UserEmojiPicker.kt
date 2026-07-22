@@ -21,7 +21,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -31,7 +30,7 @@ import org.clear30.data.model.UserInfo
 import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.SupabaseUserProps
 import org.clear30.data.supabase.updateUser
-import org.clear30.views.components.Clear30Card
+import org.clear30.views.components.Clear30CardDialog
 import org.clear30.views.components.Heading2
 import org.clear30.views.components.SmallText
 import org.clear30.views.components.pressScale
@@ -63,46 +62,47 @@ fun UserEmojiPickerButton(userInfo: UserInfo) {
     }
 
     if (showPicker) {
-        Dialog(onDismissRequest = { showPicker = false }) {
-            Clear30Card(modifier = Modifier.fillMaxWidth()) {
-                Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-                    SmallText("Pick your emoji", color = Clear30Colors.text.copy(alpha = 0.5f))
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(6),
-                        modifier = Modifier.fillMaxWidth().height(280.dp),
-                        horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
-                        verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
-                    ) {
-                        items(USER_EMOJIS) { candidate ->
-                            Box(
-                                Modifier.clip(RoundedCornerShape(Dimens.cornerRadius / 2))
-                                    .background(
-                                        if (candidate == emoji) Clear30Colors.opacityGray else Clear30Colors.button,
-                                    )
-                                    .pressScale {
-                                        showPicker = false
-                                        emoji = candidate
-                                        userInfo.emoji = candidate
-                                        scope.launch {
-                                            Clear30Store.save(userInfo)
-                                            val error = SupabaseController.updateUser(
-                                                JsonObject(mapOf(SupabaseUserProps.EMOJI to JsonPrimitive(candidate))),
+        Clear30CardDialog(onDismiss = { showPicker = false }) {
+            Column(
+                Modifier.fillMaxWidth().padding(Dimens.cardSpacing),
+                verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+            ) {
+                SmallText("Pick your emoji", color = Clear30Colors.text.copy(alpha = 0.5f))
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(6),
+                    modifier = Modifier.fillMaxWidth().height(280.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+                    verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+                ) {
+                    items(USER_EMOJIS) { candidate ->
+                        Box(
+                            Modifier.clip(RoundedCornerShape(Dimens.cornerRadius / 2))
+                                .background(
+                                    if (candidate == emoji) Clear30Colors.opacityGray else Clear30Colors.button,
+                                )
+                                .pressScale {
+                                    showPicker = false
+                                    emoji = candidate
+                                    userInfo.emoji = candidate
+                                    scope.launch {
+                                        Clear30Store.save(userInfo)
+                                        val error = SupabaseController.updateUser(
+                                            JsonObject(mapOf(SupabaseUserProps.EMOJI to JsonPrimitive(candidate))),
+                                        )
+                                        if (error != null) {
+                                            AlertHandler.show(
+                                                AlertHandler.Alert(
+                                                    title = "Could not update emoji",
+                                                    message = error.message,
+                                                ),
                                             )
-                                            if (error != null) {
-                                                AlertHandler.show(
-                                                    AlertHandler.Alert(
-                                                        title = "Could not update emoji",
-                                                        message = error.message,
-                                                    ),
-                                                )
-                                            }
                                         }
                                     }
-                                    .padding(Dimens.cardSpacing / 2),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Heading2(candidate)
-                            }
+                                }
+                                .padding(Dimens.cardSpacing / 2),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Heading2(candidate)
                         }
                     }
                 }

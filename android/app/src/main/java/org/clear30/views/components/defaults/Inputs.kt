@@ -139,6 +139,44 @@ fun MultiLineOffWhiteInput(
     )
 }
 
+/**
+ * SmallTextEditor — the borderless full-page body editor (iOS `SmallTextEditor`,
+ * Inputs.swift:44): plain Lexend 17 text on the page background, no box/outline
+ * and no Material chrome, with the placeholder shown faintly while empty.
+ *
+ * This is the standard "write your thoughts" field — the journal entry body and
+ * the community post description both use it. Pass `placeholder = ""` for no
+ * placeholder (iOS TextEntry does).
+ */
+@Composable
+fun SmallTextEditor(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+) {
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier,
+        textStyle = TextStyle(fontFamily = Lexend, fontSize = 17.sp, color = Clear30Colors.text),
+        cursorBrush = SolidColor(Clear30Colors.text),
+        decorationBox = { inner ->
+            // iOS overlays the placeholder at 0.15; 0.25 is the nearest value the
+            // project's alpha rule allows.
+            if (value.isEmpty() && placeholder.isNotEmpty()) {
+                Text(
+                    placeholder,
+                    fontFamily = Lexend,
+                    fontSize = 17.sp,
+                    color = Clear30Colors.text.copy(alpha = 0.25f),
+                )
+            }
+            inner()
+        },
+    )
+}
+
 /** MultiLineInput — growing field with a `text @ 0.25` outline, radius 13. */
 @Composable
 fun MultiLineInput(

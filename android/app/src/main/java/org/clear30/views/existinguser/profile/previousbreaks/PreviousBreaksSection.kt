@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -64,7 +63,7 @@ fun PreviousBreaksSection(program: Program, onBack: () -> Unit) {
     androidx.activity.compose.BackHandler(onBack = onBack)
     Box(Modifier.fillMaxSize().background(Clear30Colors.background)) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding()
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState())
                 .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
             verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
         ) {

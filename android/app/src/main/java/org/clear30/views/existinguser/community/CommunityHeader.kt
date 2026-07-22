@@ -19,10 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,6 +46,8 @@ import org.clear30.data.supabase.getCommunityPostById
 import org.clear30.data.supabase.getUserID
 import org.clear30.data.supabase.setActivityIsRead
 import org.clear30.views.components.Clear30Card
+import org.clear30.views.components.Clear30Sheet
+import org.clear30.views.components.scrollShadowBleed
 import org.clear30.views.components.DefaultButton
 import org.clear30.views.components.Heading1
 import org.clear30.views.components.Heading3
@@ -124,7 +123,7 @@ internal fun CommunityHeader(
 @Composable
 private fun CircleIconBtn(icon: String, onClick: () -> Unit) {
     Box(
-        Modifier.size(40.dp).clip(CircleShape).background(Clear30Colors.opacityGray).clickable(onClick = onClick),
+        Modifier.size(40.dp).clip(CircleShape).background(Clear30Colors.opacityGray).pressScale(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(sfSymbol(icon), contentDescription = icon, tint = Clear30Colors.text, modifier = Modifier.size(18.dp))
@@ -132,7 +131,7 @@ private fun CircleIconBtn(icon: String, onClick: () -> Unit) {
 }
 
 /** Filter-by-Tag bottom sheet — gray pills, colored gradient when selected. */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun TagFilterSheet(
     tags: List<PostTag.Tag>,
@@ -141,8 +140,9 @@ internal fun TagFilterSheet(
     onDone: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    // Own padding (bottom headingTopPadding) instead of the standard sheet
+    // content padding.
+    Clear30Sheet(onDismiss = onDismiss, contentPadding = false) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = Dimens.horizontalPadding).padding(bottom = Dimens.headingTopPadding),
             verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
@@ -322,7 +322,13 @@ internal fun ActivityScreen(
                 } else if (notifications.isEmpty()) {
                     SmallText("No activity, yet...", color = Clear30Colors.text.copy(alpha = 0.5f))
                 } else {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
+                    LazyColumn(
+                        // Widen the clip past the parent's 25dp inset + re-pad via
+                        // contentPadding so card shadows aren't cut at the edges.
+                        modifier = Modifier.scrollShadowBleed(),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = Dimens.scrollShadowFix),
+                        verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+                    ) {
                         items(notifications, key = { it.id }) { activity ->
                             CommunityNotificationCard(activity) { openActivity(activity) }
                         }
@@ -341,7 +347,11 @@ internal fun ActivityScreen(
                 } else if (myPosts.isEmpty()) {
                     SmallText("No posts, yet...", color = Clear30Colors.text.copy(alpha = 0.5f))
                 } else {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
+                    LazyColumn(
+                        modifier = Modifier.scrollShadowBleed(),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = Dimens.scrollShadowFix),
+                        verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+                    ) {
                         items(myPosts, key = { it.id }) { post ->
                             PostCard(
                                 post,

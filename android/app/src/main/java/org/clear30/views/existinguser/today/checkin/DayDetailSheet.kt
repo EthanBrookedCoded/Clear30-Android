@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -36,6 +33,7 @@ import org.clear30.data.model.Program
 import org.clear30.data.model.UserInfo
 import kotlin.time.Duration.Companion.hours
 import org.clear30.views.components.Clear30Card
+import org.clear30.views.components.Clear30Sheet
 import org.clear30.views.components.DefaultButton
 import org.clear30.views.components.GiganticText
 import org.clear30.views.components.Heading1
@@ -57,7 +55,6 @@ import org.clear30.views.theme.Dimens
  * [CheckInLogger.logCheckIns], stamping the entry at noon on the selected day
  * so the last-smoked timer and reward recompute stay honest.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DayDetailSheet(
     date: PlainDate,
@@ -67,7 +64,6 @@ fun DayDetailSheet(
     onDismiss: () -> Unit,
     onCheckInToday: () -> Unit = onDismiss,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
     val info = program.dayInfo[date]
     val isToday = date == PlainDate.from(org.clear30.util.now())
@@ -95,13 +91,9 @@ fun DayDetailSheet(
         )
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = Clear30Colors.background,
-    ) {
+    Clear30Sheet(onDismiss = onDismiss) {
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.cardSpacing),
+            Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
         ) {
             Heading1(prettyDate(date))

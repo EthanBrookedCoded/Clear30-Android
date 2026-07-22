@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.clear30.data.Clear30Store
 import org.clear30.data.model.UserInfo
+import org.clear30.views.components.Clear30CardDialog
 import org.clear30.views.components.Heading2
 import org.clear30.views.components.SmallText
 import org.clear30.views.components.StretchedButton
@@ -461,20 +462,10 @@ private fun EndlessCell(unlocked: Boolean, current: Boolean, gradient: Brush, on
 /** Tiny deterministic-per-call RNG helper to vary visuals (kept out of Compose state). */
 internal fun rng(): Random = Random(System.nanoTime())
 
-/** Full-screen modal that hosts a game's level picker over the app background. */
+/** Centered card dialog that hosts a game's level picker over the scrim. */
 @Composable
 fun GameSheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
-    androidx.compose.ui.window.Dialog(
-        onDismissRequest = onDismiss,
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-    ) {
-        Box(
-            Modifier.fillMaxWidth()
-                .padding(Dimens.horizontalPadding)
-                .clip(RoundedCornerShape(Dimens.cornerRadius))
-                .background(Clear30Colors.background),
-        ) {
-            content()
-        }
+    Clear30CardDialog(onDismiss = onDismiss) {
+        content()
     }
 }

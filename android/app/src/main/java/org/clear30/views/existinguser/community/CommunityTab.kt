@@ -264,7 +264,10 @@ fun CommunityTab(program: org.clear30.data.model.Program, userInfo: org.clear30.
                     modifier = Modifier.fillMaxSize().padding(padding),
                 ) {
                     LazyColumn(
-                        Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding),
+                        Modifier.fillMaxSize(),
+                        // contentPadding (not outer padding) so the post cards'
+                        // soft shadows aren't clipped at the list edges.
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = Dimens.horizontalPadding),
                         verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
                     ) {
                         item {
@@ -649,13 +652,12 @@ internal fun PostOverflowMenu(
     val scope = rememberCoroutineScope()
     val isOwner = post.userId.isNotEmpty() && post.userId == userInfo.userID
     Box {
-        androidx.compose.material3.IconButton(onClick = { expanded = true }) {
-            androidx.compose.material3.Icon(
-                org.clear30.views.components.sfSymbol("ellipsis"),
-                contentDescription = "More",
-                tint = Clear30Colors.text.copy(alpha = 0.5f),
-            )
-        }
+        androidx.compose.material3.Icon(
+            org.clear30.views.components.sfSymbol("ellipsis"),
+            contentDescription = "More",
+            tint = Clear30Colors.text.copy(alpha = 0.5f),
+            modifier = Modifier.pressScale { expanded = true }.padding(Dimens.cardSpacing / 2),
+        )
         androidx.compose.material3.DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },

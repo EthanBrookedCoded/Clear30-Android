@@ -88,7 +88,10 @@ fun FeatureWishlist(userInfo: UserInfo, onBack: () -> Unit) {
                 SmallText("No feature ideas yet.", color = Clear30Colors.text.copy(alpha = 0.5f))
             }
             else -> LazyColumn(
-                Modifier.weight(1f).fillMaxWidth().padding(top = Dimens.cardSpacing),
+                Modifier.weight(1f).fillMaxWidth(),
+                // contentPadding (not outer padding) so the first card's soft
+                // shadow isn't clipped at the list's top edge.
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = Dimens.cardSpacing),
                 verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
             ) {
                 items(ideas, key = { it.id }) { idea ->

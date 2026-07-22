@@ -131,7 +131,7 @@ private fun PromptCard(prompt: ProgramClairePrompt, onClick: () -> Unit) {
             SmallText(prompt.title, maxLines = 4)
             Row(
                 Modifier.clip(RoundedCornerShape(99.dp)).background(Clear30Colors.opacityGray)
-                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                    .padding(horizontal = Dimens.chipHorizontalPadding, vertical = Dimens.chipVerticalPadding),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {

@@ -49,8 +49,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
 import kotlinx.datetime.LocalDate
 import org.clear30.data.CheckInLogger
@@ -61,13 +59,16 @@ import org.clear30.data.model.CheckInDefaults
 import org.clear30.data.model.CheckInMethod
 import org.clear30.data.model.CustomCheckInOption
 import org.clear30.data.model.LoggedCheckIn
+import org.clear30.data.model.weedCheckIn
 import org.clear30.data.model.PlainDate
 import org.clear30.data.model.Program
 import org.clear30.data.model.UserInfo
 import org.clear30.util.now
 import org.clear30.util.withCurrentTime
+import org.clear30.views.components.Clear30FullScreenCover
 import org.clear30.views.components.DefaultText
 import org.clear30.views.components.Heading2
+import org.clear30.views.components.pressScale
 import org.clear30.views.components.SmallText
 import org.clear30.views.components.TinyText
 import org.clear30.views.components.sfSymbol
@@ -109,6 +110,11 @@ fun CheckInSheet(
     // Fired only when a check-in was actually COMPLETED (not skipped/closed) —
     // iOS scrolls the feed only in this case (CheckInViewModel.swift:136-146).
     onCompleted: (() -> Unit)? = null,
+    // FORCED check-in (iOS's inline `CheckIn`, presented by ladder branches 2/3
+    // in place of the whole feed): no Skip pill and no back-dismiss — the only
+    // way out is completing it. Branch 4 / manual taps pass false, matching
+    // iOS's fullscreen variant which does offer Skip.
+    blocking: Boolean = false,
 ) {
     // Reward + feed-scroll are a CURRENT-DAY-only affair (iOS shows the fullscreen
     // reward only when `isToday`). Previous-day catch-up check-ins log silently.
@@ -131,12 +137,12 @@ fun CheckInSheet(
         Logger.logEvent(userInfo.loggingID, LogEventType.openedCheckInSheet)
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
+    // Transparent cover background: the sheet's own Box paints the plain/gradient
+    // background INSIDE the entrance animation, so nothing flashes before the pop-in.
+    Clear30FullScreenCover(onDismiss = onDismiss, canDismiss = !blocking, background = Color.Transparent) {
         // Entrance — the sheet pops in like the iOS defaultTransition (.scale +
         // .opacity on a response-0.175 spring). Dialogs otherwise appear abruptly.
+        // (Kept internal — not the cover's `entrance` — so exit animates too.)
         var visible by remember { mutableStateOf(false) }
         LaunchedEffect(Unit) { visible = true }
         AnimatedVisibility(
@@ -187,7 +193,10 @@ fun CheckInSheet(
                     Spacer(Modifier.height(Dimens.cardSpacing * 2))
 
                     // Weed check-in (method + amount) plus one slider per custom check-in.
-                    OnScreenCheckIn(program) { checkIns ->
+                    OnScreenCheckIn(
+                        program,
+                        initialCheckIns = program.dayInfo[selectedDay]?.loggedCheckIns.orEmpty(),
+                    ) { checkIns ->
                         // logCheckIns stamps + returns the day's variable reward;
                         // the static reward is derived on the spot. Both sober days
                         // (celebratory rewards) and slips (encouraging quotes /
@@ -197,32 +206,47 @@ fun CheckInSheet(
                         // → CheckInLogger.logCheckIns(date: day)). The instant is
                         // the selected day at the current time-of-day (iOS
                         // `withCurrentTime()` semantics in handleLastSmoked).
-                        variableReward = logger.logCheckIns(selectedDay.dateObject.withCurrentTime(), checkIns)
+                        variableReward = logger.logCheckIns(
+                            selectedDay.dateObject.withCurrentTime(),
+                            checkIns,
+                            // Only the check-in screen rolls the day's variable
+                            // reward (iOS CheckInFullscreen.handleCheckedIn).
+                            generateReward = true,
+                        )
                         staticReward = org.clear30.data.CheckInRewardStaticGenerator.generate(userInfo, program, selectedDay)
                         rewardSober = program.dayInfo[selectedDay]?.sober
-                        // Current day → celebratory reward screen. Previous-day
-                        // catch-up → no reward, no scroll, just log and close (G33).
-                        if (isToday) phase = "reward" else onDismiss()
+                        // iOS `handleCheckedIn` generates + shows the reward for
+                        // WHATEVER day was checked in — there is no isToday gate
+                        // (CheckInFullscreen.swift:189-241). The forced-yesterday
+                        // flow is the most common one, so gating it here silently
+                        // swallowed its reward moment. Only show it when a reward
+                        // actually exists (iOS skips straight past an empty one).
+                        if (staticReward != null || variableReward != null) phase = "reward" else onDismiss()
                     }
 
                     Spacer(Modifier.weight(1f))
 
                     // Skip Check In — gray pill on the plain background (iOS TinyTextButton).
-                    Row(
-                        Modifier.clip(RoundedCornerShape(99.dp))
-                            .background(Clear30Colors.opacityGray)
-                            .clickable { onDismiss() }
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        SmallText("Skip Check In", color = Clear30Colors.text.copy(alpha = 0.5f))
-                        Icon(
-                            sfSymbol("chevron.right"),
-                            contentDescription = null,
-                            tint = Clear30Colors.text.copy(alpha = 0.5f),
-                            modifier = Modifier.size(14.dp),
-                        )
+                    // iOS shows it ONLY on today's fullscreen variant
+                    // (`if selectedDay.isToday, let skip`, CheckInFullscreen.swift:343);
+                    // the inline/forced variant has no skip control at all.
+                    if (isToday && !blocking) {
+                        Row(
+                            Modifier.clip(RoundedCornerShape(99.dp))
+                                .background(Clear30Colors.opacityGray)
+                                .clickable { onDismiss() }
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            SmallText("Skip Check In", color = Clear30Colors.text.copy(alpha = 0.5f))
+                            Icon(
+                                sfSymbol("chevron.right"),
+                                contentDescription = null,
+                                tint = Clear30Colors.text.copy(alpha = 0.5f),
+                                modifier = Modifier.size(14.dp),
+                            )
+                        }
                     }
                     Spacer(Modifier.height(Dimens.cardSpacing * 2))
                 }
@@ -239,16 +263,35 @@ fun CheckInSheet(
  * [LoggedCheckIn]s are handed to [onDone] after a short settle delay.
  */
 @Composable
-private fun OnScreenCheckIn(program: Program, onDone: (List<LoggedCheckIn>) -> Unit) {
+private fun OnScreenCheckIn(
+    program: Program,
+    // The day's already-logged check-ins (iOS `initialCheckInValues`). Empty for
+    // a fresh day; non-empty when re-opening a logged day to add a custom
+    // check-in created after the fact.
+    initialCheckIns: List<LoggedCheckIn> = emptyList(),
+    onDone: (List<LoggedCheckIn>) -> Unit,
+) {
     // Keyed by slot id: "weed" for the standard check-in, the custom's id otherwise.
-    val results = remember { mutableStateMapOf<String, LoggedCheckIn>() }
+    // Seeded with what the day already has, so untouched slots survive the
+    // re-log instead of being wiped (iOS CheckIn.handleWeedCheckIn guards the
+    // weed value the same way).
+    val initialWeed = remember(initialCheckIns) { initialCheckIns.weedCheckIn }
+    val results = remember {
+        mutableStateMapOf<String, LoggedCheckIn>().apply {
+            initialWeed?.let { put("weed", it) }
+            initialCheckIns.filter { it.id != initialWeed?.id }.forEach { put(it.id, it) }
+        }
+    }
     val total = 1 + program.customCheckIns.size
     var fired by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
         SlideToCheckIn(
             methods = CheckInMethod.entries,
-            initialMethod = program.latestCheckInMethod,
+            initialMethod = CheckInMethod.entries.firstOrNull { it.id == initialWeed?.id }
+                ?: program.latestCheckInMethod,
+            initialCompletion = initialWeed?.completion,
+            initialAmount = initialWeed?.amount,
         ) { completion, method, amount ->
             if (completion == null) {
                 results.remove("weed")
@@ -262,7 +305,9 @@ private fun OnScreenCheckIn(program: Program, onDone: (List<LoggedCheckIn>) -> U
         }
 
         program.customCheckIns.forEach { ci ->
+            val existing = initialCheckIns.firstOrNull { it.id == ci.id }
             SlideToCheckIn(
+                initialCompletion = existing?.completion,
                 left = ci.incompleteOption,
                 right = ci.completeOption,
                 gradient = ci.gradient,
@@ -318,7 +363,7 @@ private fun AmountPicker(method: CheckInMethod, modifier: Modifier = Modifier, o
             }
         }
         Box(
-            Modifier.clip(RoundedCornerShape(99.dp)).clickable { onPick(null) }.padding(horizontal = 14.dp, vertical = 8.dp),
+            Modifier.clip(RoundedCornerShape(99.dp)).pressScale { onPick(null) }.padding(horizontal = 14.dp, vertical = 8.dp),
         ) {
             TinyText("Skip amount", color = Clear30Colors.text.copy(alpha = 0.5f))
         }
@@ -342,6 +387,12 @@ private fun AmountPicker(method: CheckInMethod, modifier: Modifier = Modifier, o
 fun SlideToCheckIn(
     methods: List<CheckInMethod>? = null,
     initialMethod: CheckInMethod? = null,
+    // Pre-committed state when the day was ALREADY checked in (iOS
+    // `CheckIn.handleInitialState()`): the bar renders in its committed form so
+    // re-opening a logged day — e.g. to fill in a newly-created custom check-in
+    // — doesn't ask the user to redo what they already answered.
+    initialCompletion: Boolean? = null,
+    initialAmount: Int? = null,
     left: CustomCheckInOption = CheckInDefaults.weed.incompleteOption,
     right: CustomCheckInOption = CheckInDefaults.weed.completeOption,
     gradient: Brush = Clear30Gradients.clear30,
@@ -359,11 +410,11 @@ fun SlideToCheckIn(
     val leftOpt = if (isWeed) (method ?: CheckInMethod.BUD).customCheckIn.incompleteOption else left
     val rightOpt = if (isWeed) (method ?: CheckInMethod.BUD).customCheckIn.completeOption else right
 
-    var committed by remember { mutableStateOf<Boolean?>(null) }   // null = open, true = right, false = left
+    var committed by remember { mutableStateOf(initialCompletion) }   // null = open, true = right, false = left
     var offsetX by remember { mutableFloatStateOf(0f) }
     var passedThreshold by remember { mutableStateOf(false) }
     var awaitingAmount by remember { mutableStateOf(false) }
-    var chosenAmount by remember { mutableStateOf<Int?>(null) }
+    var chosenAmount by remember { mutableStateOf(initialAmount) }
     var menuOpen by remember { mutableStateOf(false) }
 
     val animOffset by animateFloatAsState(offsetX, spring(dampingRatio = 0.9f, stiffness = 158f), label = "slideOffset")

@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.clear30.views.theme.Clear30Colors
@@ -57,6 +58,27 @@ fun Modifier.softShadow(
         canvas.nativeCanvas.drawRoundRect(0f, 0f, size.width, size.height, r, r, frameworkPaint)
     }
 }
+
+/**
+ * scrollShadowBleed — Compose port of the iOS scroll-shadow trick
+ * (`.padding(.horizontal, scrollShadowFix)` INSIDE a ScrollView +
+ * `.padding(.horizontal, -scrollShadowFix)` OUTSIDE it): widens this node
+ * beyond its parent's inset by [amount] per side so the scroll container's
+ * clip has breathing room for the cards' soft shadows. Re-apply
+ * `.padding(horizontal = amount)` AFTER the scroll modifier so the content
+ * lands back exactly where it was — only the clip moves out.
+ *
+ * Use on scrolling containers whose parent already applies
+ * `Dimens.horizontalPadding` (e.g. the AssessmentInfoSlide custom views).
+ */
+fun Modifier.scrollShadowBleed(amount: Dp = Dimens.scrollShadowFix): Modifier =
+    this.layout { measurable, constraints ->
+        val extra = amount.roundToPx() * 2
+        val placeable = measurable.measure(constraints.copy(maxWidth = constraints.maxWidth + extra))
+        layout(placeable.width - extra, placeable.height) {
+            placeable.placeRelative(-extra / 2, 0)
+        }
+    }
 
 /**
  * cardGlow — the `glowGradient` halo from iOS CardStyle (Cards.swift:663-667):

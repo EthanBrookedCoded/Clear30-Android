@@ -16,7 +16,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,8 +27,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import kotlinx.datetime.Instant
 import org.clear30.data.RedditComment
 import org.clear30.data.RedditPost
@@ -64,18 +61,16 @@ fun RedditDialog(url: String, onDismiss: () -> Unit) {
         return
     }
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(modifier = Modifier.fillMaxSize().popEntrance(), color = Clear30Colors.background) {
-            Column(Modifier.fillMaxSize()) {
-                RedditTopBar(onClose = onDismiss, onOpenWeb = url)
-                val t = thread
-                if (loading || t == null) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = Clear30Colors.reddit1)
-                    }
-                } else {
-                    RedditThreadContent(t)
+    Clear30FullScreenCover(onDismiss = onDismiss, entrance = true) {
+        Column(Modifier.fillMaxSize()) {
+            RedditTopBar(onClose = onDismiss, onOpenWeb = url)
+            val t = thread
+            if (loading || t == null) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Clear30Colors.reddit1)
                 }
+            } else {
+                RedditThreadContent(t)
             }
         }
     }

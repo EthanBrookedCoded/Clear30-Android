@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import org.clear30.data.model.BreakReasonType
 import org.clear30.views.components.Clear30Card
+import org.clear30.views.components.scrollShadowBleed
 import org.clear30.views.components.DefaultText
 import org.clear30.views.components.Heading3
 import org.clear30.views.components.SmallText
@@ -77,10 +78,14 @@ fun AssessmentDreamOutcome(
 
     Column(
         modifier
+            // scrollShadowBleed widens the scroll clip past the parent
+            // AssessmentInfoSlide's 25dp inset, and the horizontal padding after
+            // verticalScroll restores the inset INSIDE the clip — so the hero
+            // card's soft shadow isn't cut at the sides (iOS scrollShadowFix).
+            .scrollShadowBleed()
             .verticalScroll(rememberScrollState())
-            // Parent AssessmentInfoSlide already applies Dimens.horizontalPadding
-            // (25dp); omit the extra scrollShadowFix so we don't double-inset.
-            .padding(vertical = Dimens.headingTopPadding),
+            .padding(vertical = Dimens.headingTopPadding)
+            .padding(horizontal = Dimens.scrollShadowFix),
     ) {
         // --- one green hero card (matches iOS): centered name + "30 Days From Now",
         // the outcome tiles, and a single "+$<monthly>" savings card inside it ---
@@ -193,7 +198,7 @@ private fun MoneyTypeButton(
             .pressScale(onClick = onClick)
             .clip(RoundedCornerShape(12.dp))
             .background(bg)
-            .padding(horizontal = 10.dp, vertical = 5.dp),
+            .padding(horizontal = Dimens.chipHorizontalPadding, vertical = Dimens.chipVerticalPadding),
         contentAlignment = Alignment.Center,
     ) {
         TinyText(title, color = fg, maxLines = 1)

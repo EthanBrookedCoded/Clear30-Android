@@ -214,7 +214,10 @@ fun DrFredChat(userInfo: UserInfo, onBack: () -> Unit) {
             ) { FredProfileContent() }
             else -> LazyColumn(
                 state = listState,
-                modifier = Modifier.weight(1f).fillMaxWidth().padding(vertical = Dimens.cardSpacing),
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                // contentPadding (not outer padding) so bubble shadows aren't
+                // clipped at the list's top/bottom edges.
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = Dimens.cardSpacing),
                 verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
             ) {
                 forEachDay(ordered) { dayLabel, message ->

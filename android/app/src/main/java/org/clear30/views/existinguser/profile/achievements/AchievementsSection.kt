@@ -19,8 +19,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
 import org.clear30.data.Clear30Store
 import org.clear30.data.LogEventType
@@ -34,6 +32,8 @@ import org.clear30.data.supabase.getAchievementStats
 import org.clear30.data.supabase.getUserAchievements
 import org.clear30.data.supabase.withRarityAndStats
 import org.clear30.views.components.Clear30Card
+import org.clear30.views.components.Clear30FullScreenCover
+import org.clear30.views.components.scrollShadowBleed
 import org.clear30.views.components.SmallText
 import org.clear30.views.components.pressScale
 import org.clear30.views.components.sfSymbol
@@ -118,7 +118,7 @@ fun AchievementsSection(userInfo: UserInfo, program: org.clear30.data.model.Prog
 
     // Full rarity-grouped list.
     if (showList) {
-        Dialog(onDismissRequest = { showList = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Clear30FullScreenCover(onDismiss = { showList = false }) {
             AchievementList(
                 defs = defs,
                 earned = earned,
@@ -130,7 +130,7 @@ fun AchievementsSection(userInfo: UserInfo, program: org.clear30.data.model.Prog
 
     // Reveal carousel over the earned achievements.
     revealKey?.let { key ->
-        Dialog(onDismissRequest = { revealKey = null }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Clear30FullScreenCover(onDismiss = { revealKey = null }) {
             AchievementReveal(
                 achievements = earnedOrdered,
                 startKey = key,
@@ -163,7 +163,13 @@ private fun MiniDisplayCard(
                 )
             }
             Spacer(Modifier.size(Dimens.cardSpacing))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
+            LazyRow(
+                // Widen the clip + re-pad via contentPadding so the first/last
+                // tiles' soft shadows aren't cut at the rail edges.
+                modifier = Modifier.scrollShadowBleed(),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = Dimens.scrollShadowFix),
+                horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+            ) {
                 items(preview, key = { it.key }) { def ->
                     val tile = Modifier.size(60.dp).pressScale { onOpenAchievement(def) }
                     if (isNew(def.key)) AchievementNewIconCard(def, tile) else AchievementIconCard(def, tile)

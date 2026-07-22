@@ -195,7 +195,7 @@ private fun MessageRow(
                         Modifier
                             .clip(androidx.compose.foundation.shape.RoundedCornerShape(99.dp))
                             .background(Clear30Colors.opacityGray)
-                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                            .padding(horizontal = Dimens.chipHorizontalPadding, vertical = Dimens.chipVerticalPadding),
                     ) {
                         TinyText(it, color = Clear30Colors.text.copy(alpha = 0.75f))
                     }
@@ -220,7 +220,7 @@ private fun MessageRow(
                             Modifier.progressRing(gradient, progress.toFloat())
                         },
                     )
-                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                    .padding(horizontal = Dimens.chipHorizontalPadding, vertical = Dimens.chipVerticalPadding),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 TinyText(day, color = if (complete) androidx.compose.ui.graphics.Color.White else Clear30Colors.text)

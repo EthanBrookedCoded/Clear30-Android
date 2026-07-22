@@ -72,13 +72,26 @@ object AchievementEngine {
         return reduction.coerceAtLeast(0.0) >= percentage.toDouble()
     }
 
-    /** Consecutive sober days ending today (or yesterday if today is unlogged). */
+    /**
+     * Consecutive sober days — 1:1 port of iOS `calculateConsecutiveDays`
+     * (ProgramCheckIns.swift:288-307), which backs `latestConsecutiveDaysSober`.
+     *
+     * Walks the LOGGED days newest-first and stops at the first day that isn't
+     * sober or that leaves a calendar gap. A slip logged today therefore resets
+     * the streak to 0 immediately. The previous implementation stepped past a
+     * smoked today as if it were merely unlogged, so slipping on day 7/14/30
+     * still awarded the streak achievement — and achievements are permanent
+     * and pushed to the backend, so the wrong award was not reversible.
+     */
     private fun currentSoberStreak(program: Program): Int {
         var streak = 0
-        var date = now()
-        if (program.dayInfo[PlainDate.from(date)]?.sober != true) date = date.adding(days = -1)
-        while (program.dayInfo[PlainDate.from(date)]?.sober == true) {
-            streak++; date = date.adding(days = -1)
+        var previous: PlainDate? = null
+        for ((date, info) in program.dayInfo.entries.sortedByDescending { it.key }) {
+            val prev = previous
+            if (prev != null && date.adding(days = 1) != prev) break
+            if (info.sober != true) break
+            streak++
+            previous = date
         }
         return streak
     }

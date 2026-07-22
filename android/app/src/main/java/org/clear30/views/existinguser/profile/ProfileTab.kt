@@ -15,14 +15,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -48,7 +45,9 @@ import org.clear30.data.model.UserInfo
 import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.syncProgramState
 import org.clear30.data.supabase.updateYourWhy
+import org.clear30.views.components.Clear30Alert
 import org.clear30.views.components.Clear30Card
+import org.clear30.views.components.Clear30Sheet
 import org.clear30.views.components.DefaultButton
 import org.clear30.views.components.Heading1
 import org.clear30.views.components.Heading3
@@ -357,35 +356,31 @@ private fun UserWhyCard(userInfo: UserInfo) {
 
     if (showEditor) {
         var draft by remember { mutableStateOf(why ?: "") }
-        AlertDialog(
+        Clear30Alert(
             onDismissRequest = { showEditor = false },
-            title = { Text("Your Why") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-                    Text("What's your reason for taking a break? You'll see it here to stay grounded.")
-                    androidx.compose.material3.OutlinedTextField(
-                        draft, { draft = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("My why is…") },
-                    )
+            title = "Your Why",
+            message = "What's your reason for taking a break? You'll see it here to stay grounded.",
+            confirmLabel = "Save",
+            onConfirm = {
+                val trimmed = draft.trim()
+                userInfo.userWhy = trimmed.ifBlank { null }
+                why = userInfo.userWhy
+                scope.launch {
+                    Clear30Store.save(userInfo)
+                    // Sync to backend (iOS ProfileCards.swift `updateYourWhy`) —
+                    // iOS sends the raw text, empty string included, on clear.
+                    SupabaseController.updateYourWhy(trimmed)
                 }
+                showEditor = false
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    val trimmed = draft.trim()
-                    userInfo.userWhy = trimmed.ifBlank { null }
-                    why = userInfo.userWhy
-                    scope.launch {
-                        Clear30Store.save(userInfo)
-                        // Sync to backend (iOS ProfileCards.swift `updateYourWhy`) —
-                        // iOS sends the raw text, empty string included, on clear.
-                        SupabaseController.updateYourWhy(trimmed)
-                    }
-                    showEditor = false
-                }) { Text("Save") }
-            },
-            dismissButton = { TextButton(onClick = { showEditor = false }) { Text("Cancel") } },
-        )
+            dismissLabel = "Cancel",
+        ) {
+            androidx.compose.material3.OutlinedTextField(
+                draft, { draft = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("My why is…") },
+            )
+        }
     }
 }
 
@@ -407,48 +402,46 @@ private fun ProgramCard(program: Program, userInfo: UserInfo, revision: Int, onC
     // iOS info button → detail sheet about the current program / break; during a
     // break the sheet also offers "End Break" (iOS sheetInfoView).
     detailInfo?.let { info ->
-        AlertDialog(
+        Clear30Alert(
             onDismissRequest = { detailInfo = null },
-            title = { Text(info.title) },
-            text = { Text(info.description) },
-            confirmButton = { TextButton(onClick = { detailInfo = null }) { Text("Got it") } },
-            dismissButton = if (currentBreak != null) {
-                { TextButton(onClick = { detailInfo = null; showEndConfirm = true }) { Text("End Break") } }
-            } else {
-                null
-            },
+            title = info.title,
+            message = info.description,
+            confirmLabel = "Got it",
+            onConfirm = { detailInfo = null },
+            dismissLabel = if (currentBreak != null) "End Break" else null,
+            onDismissAction = { detailInfo = null; showEndConfirm = true },
         )
     }
 
     // iOS `handleEnd()` (ProfileCards.swift:292-315): yes/no alert → endBreak →
     // the Life program.
     if (showEndConfirm && currentBreak != null) {
-        AlertDialog(
+        Clear30Alert(
             onDismissRequest = { showEndConfirm = false },
-            title = { Text("End ${currentBreak.name}?") },
-            text = { Text("This will end your break and put you in The Life Program.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    showEndConfirm = false
-                    // App-lifetime scope: endBreak nulls currentBreak in place, so
-                    // this card recomposes mid-flight — a composition-tied scope
-                    // would cancel the mutation halfway through.
-                    org.clear30.Clear30Application.appScope.launch {
-                        try {
-                            org.clear30.data.LoadingCoordinator.tracked {
-                                val error = org.clear30.data.ProgramTimelineHandler.endBreak(program)
-                                if (error != null) org.clear30.data.AlertHandler.error(message = error)
-                            }
-                        } catch (t: Throwable) {
-                            android.util.Log.e("ProgramCard", "endBreak failed", t)
-                        } finally {
-                            refresh++
-                            onChanged()
+            title = "End ${currentBreak.name}?",
+            message = "This will end your break and put you in The Life Program.",
+            confirmLabel = "End break",
+            destructive = true,
+            onConfirm = {
+                showEndConfirm = false
+                // App-lifetime scope: endBreak nulls currentBreak in place, so
+                // this card recomposes mid-flight — a composition-tied scope
+                // would cancel the mutation halfway through.
+                org.clear30.Clear30Application.appScope.launch {
+                    try {
+                        org.clear30.data.LoadingCoordinator.tracked {
+                            val error = org.clear30.data.ProgramTimelineHandler.endBreak(program)
+                            if (error != null) org.clear30.data.AlertHandler.error(message = error)
                         }
+                    } catch (t: Throwable) {
+                        android.util.Log.e("ProgramCard", "endBreak failed", t)
+                    } finally {
+                        refresh++
+                        onChanged()
                     }
-                }) { Text("End break") }
+                }
             },
-            dismissButton = { TextButton(onClick = { showEndConfirm = false }) { Text("Cancel") } },
+            dismissLabel = "Cancel",
         )
     }
 
@@ -458,35 +451,34 @@ private fun ProgramCard(program: Program, userInfo: UserInfo, revision: Int, onC
     // content; errors surface through the master alert.
     if (showSwitchConfirm) {
         val target = if (program.coreModeration) "weed free" else "moderation"
-        AlertDialog(
+        Clear30Alert(
             onDismissRequest = { showSwitchConfirm = false },
-            title = { Text("Switch to $target?") },
-            text = { Text("Do you want to switch to the $target program?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    showSwitchConfirm = false
-                    // App-lifetime scope — the switch submits an assessment and
-                    // refetches content; a composition-tied scope would cancel
-                    // it mid-flight on a tab switch, leaving the backend flipped
-                    // but the local mode unswitched.
-                    org.clear30.Clear30Application.appScope.launch {
-                        try {
-                            org.clear30.data.LoadingCoordinator.tracked {
-                                val error = org.clear30.data.ProgramTimelineHandler.switchCore(
-                                    program,
-                                    clientName = userInfo.name,
-                                )
-                                if (error != null) org.clear30.data.AlertHandler.error(message = error)
-                            }
-                        } catch (t: Throwable) {
-                            android.util.Log.e("ProgramCard", "switchCore failed", t)
-                        } finally {
-                            refresh++
+            title = "Switch to $target?",
+            message = "Do you want to switch to the $target program?",
+            confirmLabel = "Switch",
+            onConfirm = {
+                showSwitchConfirm = false
+                // App-lifetime scope — the switch submits an assessment and
+                // refetches content; a composition-tied scope would cancel
+                // it mid-flight on a tab switch, leaving the backend flipped
+                // but the local mode unswitched.
+                org.clear30.Clear30Application.appScope.launch {
+                    try {
+                        org.clear30.data.LoadingCoordinator.tracked {
+                            val error = org.clear30.data.ProgramTimelineHandler.switchCore(
+                                program,
+                                clientName = userInfo.name,
+                            )
+                            if (error != null) org.clear30.data.AlertHandler.error(message = error)
                         }
+                    } catch (t: Throwable) {
+                        android.util.Log.e("ProgramCard", "switchCore failed", t)
+                    } finally {
+                        refresh++
                     }
-                }) { Text("Switch") }
+                }
             },
-            dismissButton = { TextButton(onClick = { showSwitchConfirm = false }) { Text("Cancel") } },
+            dismissLabel = "Cancel",
         )
     }
 
@@ -597,7 +589,7 @@ private fun Badge(
             outlineOpacity = 0.5f,
             padding = false,
         )
-        .padding(horizontal = 10.dp, vertical = 5.dp)
+        .padding(horizontal = Dimens.chipHorizontalPadding, vertical = Dimens.chipVerticalPadding)
     if (onClick != null) mod = mod.pressScale { onClick() }
 
     Row(mod, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
@@ -654,45 +646,41 @@ private fun ProfileMoneySaved(
     // as an adjustment over the auto-calculated savings on the current break.
     if (showEditor) {
         var draft by remember { mutableStateOf("$moneySaved") }
-        AlertDialog(
+        Clear30Alert(
             onDismissRequest = { showEditor = false },
-            title = { Text("Edit Money Saved") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-                    Text("Enter your total dollars saved.")
-                    androidx.compose.material3.OutlinedTextField(
-                        draft, { draft = it.filter(Char::isDigit) },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Amount") },
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
-                        ),
-                        singleLine = true,
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val desired = draft.trim().toIntOrNull()
-                    val currentBreak = program.currentBreak ?: program.lastBreak
-                    if (desired != null && desired >= 0 && currentBreak != null) {
-                        val auto = program.getAutoCalculatedMoneySavedOverBreak(currentBreak) ?: 0
-                        currentBreak.moneySavedAdjustment = desired - auto
-                        // Persist locally AND push to the server right away, on the
-                        // app scope so it survives leaving Profile. Without the push
-                        // the adjustment lived only in local state and was wiped on
-                        // sign-out before the next foreground sync (iOS pushes here).
-                        org.clear30.Clear30Application.appScope.launch {
-                            Clear30Store.save(program)
-                            SupabaseController.syncProgramState(program)
-                        }
-                        onChanged()
+            title = "Edit Money Saved",
+            message = "Enter your total dollars saved.",
+            confirmLabel = "Save",
+            onConfirm = {
+                val desired = draft.trim().toIntOrNull()
+                val currentBreak = program.currentBreak ?: program.lastBreak
+                if (desired != null && desired >= 0 && currentBreak != null) {
+                    val auto = program.getAutoCalculatedMoneySavedOverBreak(currentBreak) ?: 0
+                    currentBreak.moneySavedAdjustment = desired - auto
+                    // Persist locally AND push to the server right away, on the
+                    // app scope so it survives leaving Profile. Without the push
+                    // the adjustment lived only in local state and was wiped on
+                    // sign-out before the next foreground sync (iOS pushes here).
+                    org.clear30.Clear30Application.appScope.launch {
+                        Clear30Store.save(program)
+                        SupabaseController.syncProgramState(program)
                     }
-                    showEditor = false
-                }) { Text("Save") }
+                    onChanged()
+                }
+                showEditor = false
             },
-            dismissButton = { TextButton(onClick = { showEditor = false }) { Text("Cancel") } },
-        )
+            dismissLabel = "Cancel",
+        ) {
+            androidx.compose.material3.OutlinedTextField(
+                draft, { draft = it.filter(Char::isDigit) },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("Amount") },
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                ),
+                singleLine = true,
+            )
+        }
     }
 
     Clear30Card(modifier = modifier.pressScale { showEditor = true }) {
@@ -800,10 +788,11 @@ private fun ProfileSettingsOverlay(
     onSignOut: () -> Unit,
     onClose: () -> Unit,
 ) {
+    // No statusBarsPadding: renders inside AllTabs' Scaffold content, which is
+    // already inset below the status bar.
     Box(Modifier.fillMaxSize().background(Clear30Colors.background)) {
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                .statusBarsPadding()
                 .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
             verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
         ) {
@@ -825,7 +814,6 @@ private fun ProfileSettingsOverlay(
  * Shifts the whole program/current day via `ProgramTimelineHandler.adjustBreakTime`
  * (the same mechanism as "Change Break Start Date"), then persists + syncs.
  */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun TimelineDevSheet(program: Program, onDismiss: () -> Unit, onChanged: () -> Unit) {
     val scope = rememberCoroutineScope()
@@ -840,9 +828,9 @@ private fun TimelineDevSheet(program: Program, onDismiss: () -> Unit, onChanged:
             onChanged()
         }
     }
-    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Clear30Colors.background) {
+    Clear30Sheet(onDismiss = onDismiss) {
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.cardSpacing),
+            Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
         ) {
             Heading3("🛠 Timeline (dev)")

@@ -255,7 +255,7 @@ private fun CadenceChips(current: BreathingCadence, remaining: Float, onPick: (B
             Spacer(Modifier.weight(1f))
             Row(
                 Modifier.clip(RoundedCornerShape(99.dp)).background(Clear30Colors.opacityGray)
-                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                    .padding(horizontal = Dimens.chipHorizontalPadding, vertical = Dimens.chipVerticalPadding),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {

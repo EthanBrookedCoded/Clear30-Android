@@ -155,7 +155,7 @@ private val pillShape = RoundedCornerShape(Dimens.cornerRadius / 1.75f)
 @Composable
 private fun Pill(background: Brush, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Box(
-        modifier.clip(pillShape).background(background).padding(horizontal = 10.dp, vertical = 5.dp),
+        modifier.clip(pillShape).background(background).padding(horizontal = Dimens.chipHorizontalPadding, vertical = Dimens.chipVerticalPadding),
         contentAlignment = Alignment.Center,
     ) { content() }
 }
@@ -242,7 +242,7 @@ fun AchievementNewCard(def: AchievementDefinition, modifier: Modifier = Modifier
         // "New ›" badge, rotated like a sticker in the top-trailing corner.
         Box(
             Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 2.dp).rotate(-3f)
-                .clip(pillShape).background(Color.White).padding(horizontal = 10.dp, vertical = 5.dp),
+                .clip(pillShape).background(Color.White).padding(horizontal = Dimens.chipHorizontalPadding, vertical = Dimens.chipVerticalPadding),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,

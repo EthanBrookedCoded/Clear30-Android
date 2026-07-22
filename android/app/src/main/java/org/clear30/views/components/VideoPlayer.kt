@@ -38,8 +38,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -221,8 +219,8 @@ fun FeedNativeVideoPlayer(
 /** Full-screen immediate-playback dialog for a direct video URL / on-disk file. */
 @Composable
 fun VideoPlayerDialog(uri: String, onDismiss: () -> Unit) {
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Clear30FullScreenCover(onDismiss = onDismiss, background = Color.Black) {
+        Box(Modifier.fillMaxSize()) {
             VideoSurface(uri, Modifier.fillMaxSize().align(Alignment.Center))
             CloseButton(onDismiss)
         }
@@ -362,8 +360,8 @@ fun YouTubeDialog(videoId: String, onDismiss: () -> Unit) {
     var loading by remember(videoId) { mutableStateOf(true) }
     var failed by remember(videoId) { mutableStateOf(false) }
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(Modifier.fillMaxSize().popEntrance().background(Color.Black)) {
+    Clear30FullScreenCover(onDismiss = onDismiss, background = Color.Black, entrance = true) {
+        Box(Modifier.fillMaxSize()) {
             // Show the thumbnail INSTANTLY behind the player so tapping gives an
             // immediate visual (the frame you tapped), not a black screen + spinner
             // while YouTube's embed page loads. The WebView draws over it once ready.
@@ -434,8 +432,8 @@ fun WebViewDialog(url: String, onDismiss: () -> Unit) {
         }
     }
     DisposableEffect(webView) { onDispose { webView.destroy() } }
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(Modifier.fillMaxSize().popEntrance().background(Clear30Colors.background)) {
+    Clear30FullScreenCover(onDismiss = onDismiss, entrance = true) {
+        Box(Modifier.fillMaxSize()) {
             AndroidView(
                 factory = { webView },
                 modifier = Modifier.fillMaxSize().statusBarsPadding().padding(top = 44.dp),

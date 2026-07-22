@@ -33,14 +33,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
 import org.clear30.data.model.AssessmentInfoData
 import org.clear30.data.model.AssessmentInfoDataID
 import org.clear30.data.model.AssessmentQuestionType
 import org.clear30.data.model.ProgramAssessmentQuestion
 import org.clear30.data.model.UserInfo
+import org.clear30.views.components.Clear30FullScreenCover
 import org.clear30.views.components.IconButton
 import org.clear30.views.components.InfiniteProgressBar
 import org.clear30.views.components.SmallText
@@ -68,15 +67,11 @@ fun MidPilotAssessment(userInfo: UserInfo, completion: () -> Unit) {
     val vm = remember { MidPilotAssessmentViewModel(userInfo, completion) }
     val scope = rememberCoroutineScope()
 
-    Dialog(
-        onDismissRequest = { /* interactive dismiss disabled (iOS) */ },
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnBackPress = false,
-            dismissOnClickOutside = false,
-        ),
+    Clear30FullScreenCover(
+        onDismiss = { /* interactive dismiss disabled (iOS) */ },
+        canDismiss = false,
     ) {
-        Box(Modifier.fillMaxSize().background(Clear30Colors.background)) {
+        Box(Modifier.fillMaxSize()) {
             val index = vm.currentIndex
 
             Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {

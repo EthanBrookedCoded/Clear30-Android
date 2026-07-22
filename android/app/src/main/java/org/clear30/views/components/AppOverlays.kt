@@ -6,10 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
@@ -45,23 +42,19 @@ fun AppOverlays() {
 private fun MasterAlert() {
     val alert by AlertHandler.current.collectAsStateWithLifecycle()
     val a = alert ?: return
-    AlertDialog(
+    Clear30Alert(
         onDismissRequest = { AlertHandler.dismiss() },
-        title = { Text(a.title) },
-        text = { Text(a.message) },
-        confirmButton = {
-            TextButton(onClick = {
-                a.onPrimary?.invoke()
-                AlertHandler.dismiss()
-            }) { Text(a.primaryLabel) }
+        title = a.title,
+        message = a.message,
+        confirmLabel = a.primaryLabel,
+        onConfirm = {
+            a.onPrimary?.invoke()
+            AlertHandler.dismiss()
         },
-        dismissButton = a.secondaryLabel?.let {
-            {
-                TextButton(onClick = {
-                    a.onSecondary?.invoke()
-                    AlertHandler.dismiss()
-                }) { Text(it) }
-            }
+        dismissLabel = a.secondaryLabel,
+        onDismissAction = {
+            a.onSecondary?.invoke()
+            AlertHandler.dismiss()
         },
     )
 }
@@ -71,15 +64,14 @@ private fun PopupQueueHost() {
     val payload by PopupManager.current.collectAsStateWithLifecycle()
     val p = payload ?: return
     when (p) {
-        is PopupManager.Payload.Alert -> AlertDialog(
+        is PopupManager.Payload.Alert -> Clear30Alert(
             onDismissRequest = { PopupManager.dismissCurrent() },
-            title = { Text(p.title) },
-            text = { Text(p.message) },
-            confirmButton = {
-                TextButton(onClick = {
-                    p.onConfirm()
-                    PopupManager.dismissCurrent()
-                }) { Text(p.confirmLabel) }
+            title = p.title,
+            message = p.message,
+            confirmLabel = p.confirmLabel,
+            onConfirm = {
+                p.onConfirm()
+                PopupManager.dismissCurrent()
             },
         )
         is PopupManager.Payload.Confetti -> {
@@ -91,13 +83,12 @@ private fun PopupQueueHost() {
                 ConfettiOverlay()
             }
         }
-        is PopupManager.Payload.Achievement -> AlertDialog(
+        is PopupManager.Payload.Achievement -> Clear30Alert(
             onDismissRequest = { PopupManager.dismissCurrent() },
-            title = { Text("Achievement earned") },
-            text = { Text(p.achievementKey) },
-            confirmButton = {
-                TextButton(onClick = { PopupManager.dismissCurrent() }) { Text("Nice") }
-            },
+            title = "Achievement earned",
+            message = p.achievementKey,
+            confirmLabel = "Nice",
+            onConfirm = { PopupManager.dismissCurrent() },
         )
     }
 }

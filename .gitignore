@@ -28,6 +28,7 @@ android/gradlew.bat
 
 # Secrets / keys (also covered by local.properties above)
 **/*.keystore
+**/*.jks
 **/keystore.properties
 
 # Web / Backend node modules (in case lockfile-less)

@@ -17,9 +17,6 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,7 +34,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DatePeriod
@@ -61,7 +57,11 @@ import org.clear30.data.model.UserInfo
 import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.sendGroupPing
 import org.clear30.data.supabase.updateGroupSubscriptions
+import org.clear30.views.components.Clear30Alert
 import org.clear30.views.components.Clear30Card
+import org.clear30.views.components.Clear30CardDialog
+import org.clear30.views.components.PagerDots
+import org.clear30.views.components.scrollShadowBleed
 import org.clear30.views.components.cardStyle
 import org.clear30.views.components.pressScale
 import org.clear30.views.components.DefaultButton
@@ -121,8 +121,9 @@ fun GroupsTab(program: org.clear30.data.model.Program, userInfo: UserInfo) {
     val g = group
     if (g == null) {
         // Not in a group — 1:1 of iOS GroupCreation: heading, the swipeable
-        // benefit carousel (image cards, fixed 450dp, no dots), and the single
-        // create CTA. Creation is INSTANT — no name prompt; the group is
+        // benefit carousel (image cards, fixed 450dp, + page dots per Thatcher —
+        // iOS has none), and the single create CTA. Creation is INSTANT — no
+        // name prompt; the group is
         // auto-named "<name>'s Group" with the default hue, like iOS createGroup().
         fun createGroup() {
             if (creatingGroup) return
@@ -165,12 +166,27 @@ fun GroupsTab(program: org.clear30.data.model.Program, userInfo: UserInfo) {
             Spacer(Modifier.weight(1f))
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.height(450.dp).fillMaxWidth(),
+                // scrollShadowBleed + contentPadding: the pager clips to its
+                // bounds, which cut the slide cards' soft shadows at the sides
+                // (iOS scrollShadowFix pattern).
+                modifier = Modifier.height(450.dp).fillMaxWidth().scrollShadowBleed(),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                    horizontal = Dimens.scrollShadowFix,
+                ),
                 pageSpacing = Dimens.cardSpacing,
             ) { page ->
                 val (image, title, body) = slides[page]
                 GroupBenefitSlide(image, title, body)
             }
+            // Page dots under the carousel (Thatcher, W83 — iOS GroupCreation has
+            // none; deliberate divergence so the 3 slides are discoverable).
+            PagerDots(
+                count = slides.size,
+                current = pagerState.currentPage,
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(top = Dimens.cardSpacing),
+            )
             Spacer(Modifier.weight(1f))
             GradientActionButton("person.2.fill", Clear30Gradients.clear30, "Start Your Group") { createGroup() }
             error?.let { msg ->
@@ -526,7 +542,7 @@ private fun MemberBadge(
                 gradient = gradient,
                 padding = false,
             )
-            .padding(horizontal = 10.dp, vertical = 5.dp),
+            .padding(horizontal = Dimens.chipHorizontalPadding, vertical = Dimens.chipVerticalPadding),
         color = if (gradient != null) Color.White else Clear30Colors.text,
         maxLines = 1,
     )
@@ -729,8 +745,10 @@ internal fun SendNotePopup(
     onSend: (String) -> Unit,
 ) {
     var note by remember { mutableStateOf("") }
-    Dialog(onDismissRequest = onDismiss) {
-        Column(Modifier.fillMaxWidth().cardStyle()) {
+    Clear30CardDialog(onDismiss = onDismiss) {
+        // The wrapper draws the card (padding = false) — 16dp matches
+        // cardStyle's own inner padding.
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                 SmallText("Send a note to", color = Clear30Colors.text.copy(alpha = 0.5f), maxLines = 1)
                 Spacer(Modifier.weight(1f))
@@ -758,12 +776,13 @@ internal fun SendNotePopup(
 @Composable
 private fun PingConfirmDialog(member: Clear30GroupMember, onDismiss: () -> Unit, onConfirm: () -> Unit) {
     val label = "${member.emoji} ${member.name}".trim()
-    AlertDialog(
+    Clear30Alert(
         onDismissRequest = onDismiss,
-        title = { Text("Ping $label") },
-        text = { Text("Do you want to ping $label to remind them to check in?") },
-        confirmButton = { TextButton(onClick = { onConfirm(); onDismiss() }) { Text("Yes") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("No") } },
+        title = "Ping $label",
+        message = "Do you want to ping $label to remind them to check in?",
+        confirmLabel = "Yes",
+        onConfirm = { onConfirm(); onDismiss() },
+        dismissLabel = "No",
     )
 }
 
@@ -778,32 +797,32 @@ private fun InnerCirclePickerDialog(
     val selected = remember {
         androidx.compose.runtime.mutableStateListOf(*group.subscribed.orEmpty().map { it.subscribedTo }.toTypedArray())
     }
-    AlertDialog(
+    Clear30Alert(
         onDismissRequest = onDismiss,
-        title = { Text("Inner Circle") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-                Text("Add to inner circle to pin members and see their status in your \"Today\" feed.")
-                group.members.filter { it.memberID != userInfo.userID }.forEach { m ->
-                    Row(
-                        Modifier.fillMaxWidth().clickable {
-                            if (selected.contains(m.memberID)) selected.remove(m.memberID) else selected.add(m.memberID)
-                        },
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
-                    ) {
-                        androidx.compose.material3.Checkbox(
-                            checked = selected.contains(m.memberID),
-                            onCheckedChange = { on -> if (on) selected.add(m.memberID) else selected.remove(m.memberID) },
-                        )
-                        Text("${m.emoji} ${m.name}".trim())
-                    }
+        title = "Inner Circle",
+        message = "Add to inner circle to pin members and see their status in your \"Today\" feed.",
+        confirmLabel = "Done",
+        onConfirm = { onSave(selected.toList()) },
+        dismissLabel = "Cancel",
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+            group.members.filter { it.memberID != userInfo.userID }.forEach { m ->
+                Row(
+                    Modifier.fillMaxWidth().clickable {
+                        if (selected.contains(m.memberID)) selected.remove(m.memberID) else selected.add(m.memberID)
+                    },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+                ) {
+                    androidx.compose.material3.Checkbox(
+                        checked = selected.contains(m.memberID),
+                        onCheckedChange = { on -> if (on) selected.add(m.memberID) else selected.remove(m.memberID) },
+                    )
+                    SmallText("${m.emoji} ${m.name}".trim())
                 }
             }
-        },
-        confirmButton = { TextButton(onClick = { onSave(selected.toList()) }) { Text("Done") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
+        }
+    }
 }
 
 // MARK: - Notes tab (iOS GroupNoteInbox.swift) — READ-ONLY inbox
@@ -1005,16 +1024,15 @@ private fun GroupNameCard(name: String, onChange: (String) -> Unit, onCommit: ()
 
 @Composable
 private fun LeaveGroupDialog(busy: Boolean, onDismiss: () -> Unit, onConfirm: () -> Unit) {
-    AlertDialog(
+    Clear30Alert(
         onDismissRequest = onDismiss,
-        title = { Text("Leave group?") },
-        text = { Text("Are you sure you want to leave the group?") },
-        confirmButton = {
-            TextButton(onClick = onConfirm, enabled = !busy) {
-                Text(if (busy) "Leaving…" else "Yes, leave", color = Clear30Colors.red2)
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text("Stay") } },
+        title = "Leave group?",
+        message = "Are you sure you want to leave the group?",
+        confirmLabel = if (busy) "Leaving…" else "Yes, leave",
+        onConfirm = onConfirm,
+        confirmEnabled = !busy,
+        destructive = true,
+        dismissLabel = "Stay",
     )
 }
 

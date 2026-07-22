@@ -1,6 +1,5 @@
 package org.clear30.views.existinguser.support
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,10 +8,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -32,6 +29,7 @@ import org.clear30.data.model.JournalEntry
 import org.clear30.data.model.Program
 import org.clear30.data.model.UserInfo
 import org.clear30.util.now
+import org.clear30.views.components.Clear30Alert
 import org.clear30.views.components.Clear30Card
 import org.clear30.views.components.GradientActionButton
 import org.clear30.views.components.Heading1
@@ -128,29 +126,25 @@ fun JournalPromptsScreen(
 @Composable
 private fun WritePromptResponseDialog(prompt: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var body by remember { mutableStateOf("") }
-    AlertDialog(
+    Clear30Alert(
         onDismissRequest = onDismiss,
-        title = { Text("Journal") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-                TinyText(prompt, color = Clear30Colors.text.copy(alpha = 0.5f))
-                OutlinedTextField(
-                    value = body,
-                    onValueChange = { body = it },
-                    placeholder = { Text("Take your time…") },
-                    minLines = 4,
-                    maxLines = 8,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onSave(body) },
-                enabled = body.isNotBlank(),
-            ) { Text("Save") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
+        title = "Journal",
+        confirmLabel = "Save",
+        onConfirm = { onSave(body) },
+        confirmEnabled = body.isNotBlank(),
+        dismissLabel = "Cancel",
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+            TinyText(prompt, color = Clear30Colors.text.copy(alpha = 0.5f))
+            OutlinedTextField(
+                value = body,
+                onValueChange = { body = it },
+                placeholder = { Text("Take your time…") },
+                minLines = 4,
+                maxLines = 8,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
 }
 

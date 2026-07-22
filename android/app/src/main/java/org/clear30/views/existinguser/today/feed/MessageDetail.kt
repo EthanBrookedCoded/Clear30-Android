@@ -156,9 +156,19 @@ fun MessageDetail(
         program.contentInfo[contentDay]?.updateProgress(pagerState.settledPage.toDouble() / denom)
     }
 
-    Column(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding)) {
+    // iOS scrollShadowFix (T9b, same as TodayTab): the column keeps
+    // horizontalPadding − scrollShadowFix and the header re-pads the remainder,
+    // so the pager (a clipping scroll container) has scrollShadowFix of room
+    // around its pages and the cards' soft shadows aren't cut at the sides.
+    Column(
+        Modifier.fillMaxSize()
+            .padding(horizontal = Dimens.horizontalPadding - Dimens.scrollShadowFix),
+    ) {
         // ── Header: back + heart ↔ topic + progress (iOS :262-383) ──────────
-        Box(Modifier.fillMaxWidth().height(70.dp), contentAlignment = Alignment.CenterStart) {
+        Box(
+            Modifier.fillMaxWidth().height(70.dp).padding(horizontal = Dimens.scrollShadowFix),
+            contentAlignment = Alignment.CenterStart,
+        ) {
             val showProgressHeader = pagerState.currentPage > 0
             // Plain switch (no Crossfade) — same W21 reasoning as the tab host:
             // the fading alpha layer corrupted the cards' blur shadows.
@@ -203,7 +213,10 @@ fun MessageDetail(
         VerticalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(vertical = Dimens.cardSpacing * 2.5f),
+            contentPadding = PaddingValues(
+                horizontal = Dimens.scrollShadowFix,
+                vertical = Dimens.cardSpacing * 2.5f,
+            ),
             pageSpacing = Dimens.cardSpacing,
         ) { page ->
             val focused = page == pagerState.settledPage

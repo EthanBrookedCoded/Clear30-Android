@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -39,8 +38,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -52,8 +49,8 @@ import org.clear30.data.model.Program
 import org.clear30.util.now
 import org.clear30.views.components.CalendarNodeFillStyle
 import org.clear30.views.components.Clear30Card
+import org.clear30.views.components.Clear30FullScreenCover
 import org.clear30.views.components.Heading3
-import org.clear30.views.components.IconButton
 import org.clear30.views.components.SmallText
 import org.clear30.views.components.StandardCalendarNode
 import org.clear30.views.components.TinyText
@@ -70,17 +67,20 @@ private val MULTI_MONTH_NAMES = listOf(
 private val MULTI_WEEKDAY_ABBR = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 /**
- * Days that have no weed check-in yet, from program start up to yesterday — iOS
- * `datesWithoutCheckIn` scans the whole program; we cap the catch-up list at the
- * last ~31 days so a long-running program never produces an unwieldy list.
- * Returns empty for a brand-new user (no dayInfo yet) so we never nag on day one.
+ * Days that have no weed check-in yet, from program start up to yesterday — a
+ * 1:1 port of iOS `datesWithoutCheckIn` (ProgramCheckIns.swift:345-355), which
+ * scans the ENTIRE program with no window and no dayInfo precondition.
+ *
+ * The old ~31-day cap + `dayInfo.isEmpty()` bail were Android-only and caused
+ * real divergence: days older than the window could never be caught up (so they
+ * stayed `sober == null` forever, corrupting numDaysSober / numDaysCheckedIn /
+ * the health-setback math), and a user who had never checked in once — a fresh
+ * install + restore — got no catch-up at all because the threshold is computed
+ * on this list.
  */
 fun missedCheckInDays(program: Program): List<PlainDate> {
-    if (program.dayInfo.isEmpty()) return emptyList()
     val yesterday = PlainDate.from(now()).adding(days = -1)
-    val programStart = PlainDate.from(program.startDate)
-    val windowStart = yesterday.adding(days = -30)
-    val from = if (windowStart >= programStart) windowStart else programStart
+    val from = PlainDate.from(program.startDate)
     if (from > yesterday) return emptyList()
 
     val result = mutableListOf<PlainDate>()
@@ -126,10 +126,10 @@ fun MultiCheckInSheet(
         }
     }
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(Modifier.fillMaxSize().background(Clear30Colors.background)) {
+    Clear30FullScreenCover(onDismiss = onDismiss, canDismiss = false, statusBarPadding = true) {
+        Box(Modifier.fillMaxSize()) {
             Column(
-                Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
+                Modifier.fillMaxSize().navigationBarsPadding()
                     // Scrollable so the slide-to-confirm control can't be pushed
                     // off-screen on short phones.
                     .verticalScroll(androidx.compose.foundation.rememberScrollState())
@@ -221,9 +221,9 @@ fun MultiCheckInSheet(
                 Spacer(Modifier.height(Dimens.cardSpacing / 2))
             }
 
-            Row(Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(Dimens.cardSpacing / 2)) {
-                IconButton("xmark", onClick = onDismiss)
-            }
+            // No close control: iOS presents this through PopupManager's bare
+            // overlay (no scrim tap, no swipe, no X) — the backlog must be
+            // resolved via slide-to-confirm (CheckInViewModel.swift:166-172).
         }
     }
 }

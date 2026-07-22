@@ -11,7 +11,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,13 +35,12 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import org.clear30.data.AlertHandler
 import org.clear30.data.AssessmentSubmissionHandler
 import org.clear30.data.model.Program
 import org.clear30.data.model.ProgramAssessmentResponse
 import org.clear30.data.model.UserInfo
+import org.clear30.views.components.Clear30FullScreenCover
 import org.clear30.views.components.Heading3
 import org.clear30.views.components.IconButton
 import org.clear30.views.components.InfiniteProgressBar
@@ -76,11 +74,8 @@ fun BreakAssessmentFlow(
 ) {
     val vm = remember { BreakAssessmentViewModel(userInfo, program) }
 
-    Dialog(
-        onDismissRequest = { if (!vm.assessmentDone) onDismiss() },
-        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false),
-    ) {
-        Box(Modifier.fillMaxSize().background(Clear30Colors.background)) {
+    Clear30FullScreenCover(onDismiss = { if (!vm.assessmentDone) onDismiss() }) {
+        Box(Modifier.fillMaxSize()) {
             val index = vm.currentIndex
 
             if (index >= vm.slides.size) {

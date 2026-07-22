@@ -10,11 +10,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,6 +26,7 @@ import org.clear30.data.model.ProgramMessage
 import org.clear30.data.model.Stage
 import org.clear30.data.model.unlocked
 import org.clear30.views.components.Clear30Card
+import org.clear30.views.components.Clear30Sheet
 import org.clear30.views.components.IconButton
 import org.clear30.views.components.SmallText
 import org.clear30.views.components.cardStyle
@@ -146,7 +144,6 @@ internal fun LibraryFilterButton(onClick: () -> Unit) {
  * the 0.4 detent: one card row per option, the ACTIVE row filled with the Clear30
  * gradient, break rows showing their start month right-aligned at half opacity.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun LibraryFilterSheet(
     options: List<LibraryFilterOption>,
@@ -154,12 +151,9 @@ internal fun LibraryFilterSheet(
     onSelect: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = Clear30Colors.background,
-    ) {
+    // Own padding (the iOS 0.4 detent height + headingTopPadding) instead of
+    // the standard sheet content padding.
+    Clear30Sheet(onDismiss = onDismiss, contentPadding = false) {
         Column(
             Modifier
                 .fillMaxWidth()
