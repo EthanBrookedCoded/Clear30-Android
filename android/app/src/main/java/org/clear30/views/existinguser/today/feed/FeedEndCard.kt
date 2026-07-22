@@ -114,7 +114,9 @@ internal fun FeedEndCelebration(
             verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing, Alignment.CenterVertically),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            message?.let { TopicProgressCard(it.topicEmoji, it.topicTitle, badge, animatedProgress) }
+            // Compact card (iOS `stretch: false`) — the celebration page centers
+            // the card + CTAs instead of stretching the card to full height.
+            message?.let { TopicProgressCard(it.topicEmoji, it.topicTitle, badge, animatedProgress, stretch = false) }
             if (showCta) {
                 AnimatedVisibility(visible = showSecondary, enter = fadeIn() + scaleIn(initialScale = 0.9f), exit = fadeOut()) {
                     if (unreadMessages > 0) {
@@ -148,11 +150,17 @@ internal fun TopicProgressCard(
     badge: Pair<String, String>? = null,
     progress: Float?,
     modifier: Modifier = Modifier.fillMaxWidth(),
+    stretch: Boolean = true,
     onContinue: (() -> Unit)? = null,
 ) {
     Clear30Card(modifier = modifier) {
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-            // Badge — top-leading (iOS puts it above the stretched title).
+        Column(
+            if (stretch) Modifier.fillMaxSize() else Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+        ) {
+            // Badge — top-leading, left-aligned text with the iOS padding
+            // (ProgramMessageTopicCard: leading VStack, h=cardSpacing,
+            // v=cardSpacing*0.75).
             badge?.let { (subtitle, badgeTitle) ->
                 Row {
                     Column(
@@ -160,16 +168,21 @@ internal fun TopicProgressCard(
                             outlineGradient = Clear30Gradients.clear30,
                             outlineOpacity = 0.5f,
                             padding = false,
-                        ).padding(horizontal = Dimens.cardSpacing / 2, vertical = Dimens.cardSpacing / 3),
-                        horizontalAlignment = Alignment.CenterHorizontally,
+                        ).padding(horizontal = Dimens.cardSpacing, vertical = Dimens.cardSpacing * 0.75f),
+                        horizontalAlignment = Alignment.Start,
                     ) {
                         TinyText(subtitle, color = Clear30Colors.text.copy(alpha = 0.5f))
                         SmallText(badgeTitle)
                     }
                 }
             }
-            // Title — centered in the stretch space (iOS `.frame(maxHeight: .infinity)`).
-            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+            // Title — centered in the stretch space (iOS `.frame(maxHeight: .infinity)`);
+            // compact cards (iOS `stretch: false`) hug the title instead.
+            Box(
+                Modifier.fillMaxWidth()
+                    .then(if (stretch) Modifier.weight(1f) else Modifier.padding(vertical = Dimens.cardSpacing / 2)),
+                contentAlignment = Alignment.Center,
+            ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),

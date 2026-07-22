@@ -83,6 +83,13 @@ fun AllAssessment(
 
     val index = vm.currentIndex
 
+    // System back steps back one slide instead of exiting the activity
+    // (the header chevron's exact behavior).
+    androidx.activity.compose.BackHandler(enabled = index > 0) {
+        org.clear30.views.theme.Haptics.lightImpact()
+        vm.currentIndex = vm.currentIndex - 1
+    }
+
     // iOS `makeCurrentBackgroundGradient`: every info slide whose
     // overrideBackgroundGradient is not false renders on the full green gradient
     // with white content + a hidden progress bar.

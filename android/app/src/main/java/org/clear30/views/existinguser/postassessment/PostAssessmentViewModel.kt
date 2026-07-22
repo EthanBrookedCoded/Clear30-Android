@@ -112,13 +112,14 @@ class PostAssessmentViewModel(
                     .getOrNull(response.responses.firstOrNull() ?: -1)?.toIntOrNull() ?: return
                 val slidesToAdd = mutableListOf<AssessmentSlide>()
 
-                // ONE of coach-referral / interview / testimonial / comments,
-                // by experiment priority (iOS PostAssessmentViewModel:130-160).
+                // ONE of coach-referral / testimonial / comments, by experiment
+                // priority (iOS PostAssessmentViewModel:130-160). The interview
+                // branch is hardcoded OUT (§17-Q22): prod has no
+                // post-assessment-interview row, so the fallback(true) was
+                // showing it to everyone.
                 when {
                     experimentController.showFeature(ExperimentKey.postAssessmentCoachReferral) ->
                         slidesToAdd.add(AssessmentSlide.Information(PostAssessmentQuestions.coachReferralSlide))
-                    experimentController.showFeature(ExperimentKey.postAssessmentInterview) ->
-                        slidesToAdd.add(AssessmentSlide.Information(PostAssessmentQuestions.interviewSlide))
                     experimentController.showFeature(ExperimentKey.postAssessmentTestimonial) ->
                         slidesToAdd.add(AssessmentSlide.Information(PostAssessmentQuestions.testimonialSlide))
                     else ->

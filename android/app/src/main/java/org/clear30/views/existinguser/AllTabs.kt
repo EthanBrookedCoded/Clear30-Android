@@ -68,6 +68,34 @@ fun AllTabs(
             org.clear30.data.HealthDataHandler.ensureHealthData(userInfo, program)
             org.clear30.data.NotificationHandler.scheduleHealthNotifications(userInfo, program)
         }
+        // Evaluate achievements once per app load too — check-ins and the
+        // Profile section also evaluate, but both can be skipped for days
+        // (e.g. the Day-0 layout hides the section entirely).
+        runCatching { org.clear30.data.AchievementEngine.evaluateNow(userInfo, program) }
+        // Referral-code group join deferred from onboarding (iOS
+        // AllTabs.swift:554-557): the sales-slide referral stashed a group id;
+        // consume it once the user is in the app and not already grouped.
+        runCatching {
+            val setup = org.clear30.data.Clear30Store.loadOnboardingSetup()
+            val groupToJoin = setup.groupToJoin
+            if (groupToJoin != null && userInfo.groupID.isNullOrEmpty()) {
+                val err = org.clear30.data.GroupController(userInfo, program).join(groupToJoin)
+                if (err == null) {
+                    setup.groupToJoin = null
+                    org.clear30.data.Clear30Store.save(setup)
+                }
+            }
+        }
+    }
+
+    // The day-30 "breakdown 📦" deep link opens the post-assessment when one is
+    // pending (iOS URLManager.swift:184-193).
+    val breakdownSub by org.clear30.AppState.pendingSubRoute.collectAsStateWithLifecycle()
+    androidx.compose.runtime.LaunchedEffect(breakdownSub) {
+        if (breakdownSub is org.clear30.data.DeepLinkRoute.Breakdown) {
+            if (program.postAssessmentCardText != null) showPostAssessment = true
+            org.clear30.AppState.requestSubRoute(null)
+        }
     }
 
     // React to deep-link / push-notification tab requests from AppState.
@@ -91,23 +119,21 @@ fun AllTabs(
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-            // Crossfade every tab switch so navigation feels smooth instead of
-            // snapping. Keyed on the selected tab; the outgoing screen fades out
-            // as the incoming fades in.
-            Crossfade(targetState = selected, animationSpec = tween(durationMillis = 280), label = "tab") { tab ->
-                when (tab) {
-                    CustomTabBarItem.TODAY -> TodayTab(
-                        program, userInfo, journalEntries,
-                        onOpenPostAssessment = { showPostAssessment = true },
-                    )
-                    CustomTabBarItem.COMMUNITY -> CommunityTab(program, userInfo)
-                    CustomTabBarItem.GROUPS -> GroupsTab(program, userInfo)
-                    CustomTabBarItem.PROFILE -> ProfileTab(
-                        userInfo, program, journalEntries, onSignOut,
-                        onOpenPostAssessment = { showPostAssessment = true },
-                    )
-                    CustomTabBarItem.SUPPORT -> SupportTab(program, userInfo, journalEntries)
-                }
+            // W21: instant tab switch (no Crossfade) — the 280ms crossfade drew
+            // BOTH tabs stacked mid-transition (overlapping cards) and composited
+            // a fading alpha layer over the feed's blur shadows, corrupting them.
+            when (selected) {
+                CustomTabBarItem.TODAY -> TodayTab(
+                    program, userInfo, journalEntries,
+                    onOpenPostAssessment = { showPostAssessment = true },
+                )
+                CustomTabBarItem.COMMUNITY -> CommunityTab(program, userInfo)
+                CustomTabBarItem.GROUPS -> GroupsTab(program, userInfo)
+                CustomTabBarItem.PROFILE -> ProfileTab(
+                    userInfo, program, journalEntries, onSignOut,
+                    onOpenPostAssessment = { showPostAssessment = true },
+                )
+                CustomTabBarItem.SUPPORT -> SupportTab(program, userInfo, journalEntries)
             }
         }
     }

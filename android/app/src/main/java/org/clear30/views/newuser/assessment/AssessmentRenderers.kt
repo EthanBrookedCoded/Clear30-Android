@@ -1,6 +1,7 @@
 package org.clear30.views.newuser.assessment
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -17,9 +18,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -27,7 +27,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -40,6 +43,7 @@ import org.clear30.views.components.MultiLineOffWhiteInput
 import org.clear30.views.components.OffWhiteInput
 import org.clear30.views.components.SmallText
 import org.clear30.views.components.StretchedButton
+import org.clear30.views.components.TinyText
 import org.clear30.views.components.softShadow
 import org.clear30.views.theme.Clear30Colors
 import org.clear30.views.theme.Clear30Gradients
@@ -91,9 +95,18 @@ fun AssessmentInput(
  * "`value` `valueLabel`(s)" pluralized (e.g. "4 days"). The returned integer is
  * the raw slider value; AssessmentQuestionView maps it back to an option index
  * (displayedOptions → value-1, else first option containing "`value`").
+ *
+ * When [onCustomInput] is set (sliderWithCustom, e.g. Money-Spent) a "Custom
+ * amount" link swaps the slider for a numeric field; Next then completes with
+ * the typed value as an input-style answer (iOS `onCustomInputCompleted`).
  */
 @Composable
-fun AssessmentSlider(question: ProgramAssessmentQuestion, valueLabel: String, onCompleted: (Int) -> Unit) {
+fun AssessmentSlider(
+    question: ProgramAssessmentQuestion,
+    valueLabel: String,
+    onCustomInput: ((Int) -> Unit)? = null,
+    onCompleted: (Int) -> Unit,
+) {
     val min = question.min
     val max = question.max
     if (max < min) { onCompleted(min); return }
@@ -102,6 +115,12 @@ fun AssessmentSlider(question: ProgramAssessmentQuestion, valueLabel: String, on
     val initial = min + ((max - min) / 2.0).roundToInt()
     var value by remember { mutableFloatStateOf(initial.toFloat()) }
     val rounded = value.roundToInt().coerceIn(min, max)
+
+    var customMode by remember { mutableStateOf(false) }
+    var customAmount by remember { mutableStateOf("") }
+    // iOS customInputValid: non-empty int under 1000.
+    val customValid = customAmount.toIntOrNull()?.let { it < 1000 } == true
+    val focusRequester = remember { FocusRequester() }
 
     val bigLabel = when {
         display != null && rounded - 1 in display.indices -> display[rounded - 1]
@@ -114,32 +133,69 @@ fun AssessmentSlider(question: ProgramAssessmentQuestion, valueLabel: String, on
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         QuestionCard(question.prompt1, question.prompt2, modifier = Modifier.padding(bottom = Dimens.cardSpacing))
-        Spacer(Modifier.weight(1f))
-        Heading1(bigLabel)
-        Spacer(Modifier.height(Dimens.cardSpacing * 2))
-        GradientSlider(
-            value = value,
-            valueRange = min.toFloat()..max.toFloat(),
-            onValueChange = { newValue ->
-                if (newValue.roundToInt().coerceIn(min, max) != rounded) Haptics.mediumImpact()
-                value = newValue
-            },
-            onValueChangeFinished = { value = value.roundToInt().coerceIn(min, max).toFloat() },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(Modifier.height(Dimens.cardSpacing / 2))
-        // Track endpoint labels (iOS shows displayOptions.first/last or min/max).
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            SmallText(display?.firstOrNull() ?: "$min", color = LocalDim())
-            SmallText(display?.lastOrNull() ?: "$max", color = LocalDim())
+        if (customMode) {
+            Spacer(Modifier.weight(1f))
+            OffWhiteInput(
+                value = customAmount,
+                onValueChange = { customAmount = it },
+                placeholder = "Custom amount",
+                modifier = Modifier.focusRequester(focusRequester),
+                numsOnly = true,
+            )
+            Spacer(Modifier.height(Dimens.cardSpacing))
+            TinyText(
+                "Back to slider",
+                modifier = Modifier.clickable {
+                    customMode = false
+                    customAmount = ""
+                },
+                color = LocalDim(),
+            )
+            Spacer(Modifier.weight(1f))
+            LaunchedEffect(Unit) { focusRequester.requestFocus() }
+        } else {
+            Spacer(Modifier.weight(1f))
+            Heading1(bigLabel)
+            Spacer(Modifier.height(Dimens.cardSpacing * 2))
+            GradientSlider(
+                value = value,
+                valueRange = min.toFloat()..max.toFloat(),
+                onValueChange = { newValue ->
+                    if (newValue.roundToInt().coerceIn(min, max) != rounded) Haptics.mediumImpact()
+                    value = newValue
+                },
+                onValueChangeFinished = { value = value.roundToInt().coerceIn(min, max).toFloat() },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(Dimens.cardSpacing / 2))
+            // Track endpoint labels (iOS shows displayOptions.first/last or min/max).
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                SmallText(display?.firstOrNull() ?: "$min", color = LocalDim())
+                SmallText(display?.lastOrNull() ?: "$max", color = LocalDim())
+            }
+            if (onCustomInput != null) {
+                TinyText(
+                    "Custom amount",
+                    modifier = Modifier
+                        .padding(top = Dimens.cardSpacing)
+                        .clickable { customMode = true },
+                    color = LocalDim(),
+                )
+            }
+            Spacer(Modifier.weight(1f))
         }
-        Spacer(Modifier.weight(1f))
         StretchedButton(
             "Next",
             gradient = Clear30Gradients.clear30,
-            modifier = Modifier.padding(top = Dimens.cardSpacing, bottom = Dimens.cardSpacing),
+            modifier = Modifier
+                .padding(top = Dimens.cardSpacing, bottom = Dimens.cardSpacing)
+                .alpha(if (customMode && !customValid) 0.5f else 1f),
         ) {
-            onCompleted(rounded)
+            if (customMode) {
+                if (customValid) onCustomInput?.invoke(customAmount.toInt())
+            } else {
+                onCompleted(rounded)
+            }
         }
     }
 }
@@ -252,12 +308,15 @@ fun AssessmentSpectrum(
             }
             Spacer(Modifier.height(Dimens.cardSpacing * 2))
         }
-        Slider(
+        SpectrumSlider(
             value = value,
-            onValueChange = { value = it },
-            valueRange = 0f..(steps - 1).toFloat(),
-            steps = (steps - 2).coerceAtLeast(0),
-            colors = clear30SliderColors(),
+            steps = steps,
+            showNotches = showDots,
+            onValueChange = { newValue ->
+                if (newValue.roundToInt().coerceIn(0, steps - 1) != index) Haptics.mediumImpact()
+                value = newValue
+            },
+            onValueChangeFinished = { value = value.roundToInt().coerceIn(0, steps - 1).toFloat() },
             modifier = Modifier.fillMaxWidth(),
         )
         Row(
@@ -282,19 +341,86 @@ fun AssessmentSpectrum(
 }
 
 /**
- * clear30-green slider track/thumb, mirroring the iOS gradient track + white thumb.
- * TODO(port): iOS draws the track with the full clear30 blue→green gradient and a
- * rounded-white thumb with a green glow; Material3 Slider only takes solid colors,
- * so this approximates with solid green. A custom track/thumb would match exactly.
+ * SpectrumSlider — the iOS AssessmentSpectrum `ValueSlider`: a 20dp capsule track
+ * filled edge-to-edge with the clear30 blue→green gradient (soft green glow),
+ * step notches when [showNotches], and the same white 27dp thumb as
+ * [GradientSlider]. Drag or tap to set; the caller snaps to whole steps on
+ * release. [value] runs 0..steps-1.
  */
 @Composable
-internal fun clear30SliderColors() = SliderDefaults.colors(
-    thumbColor = Clear30Colors.green,
-    activeTrackColor = Clear30Colors.green,
-    inactiveTrackColor = Clear30Colors.text.copy(alpha = 0.25f),
-    activeTickColor = androidx.compose.ui.graphics.Color.Transparent,
-    inactiveTickColor = androidx.compose.ui.graphics.Color.Transparent,
-)
+private fun SpectrumSlider(
+    value: Float,
+    steps: Int,
+    showNotches: Boolean,
+    onValueChange: (Float) -> Unit,
+    onValueChangeFinished: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val density = LocalDensity.current
+    val thumb = 27.dp
+    val track = 20.dp
+    val notch = 10.dp
+    val span = (steps - 1).toFloat()
+    BoxWithConstraints(modifier.height(thumb)) {
+        val wPx = with(density) { maxWidth.toPx() }
+        val thumbPx = with(density) { thumb.toPx() }
+        val travel = (wPx - thumbPx).coerceAtLeast(1f)
+        val frac = if (span <= 0f) 0f else (value / span).coerceIn(0f, 1f)
+        val centerX = thumbPx / 2f + frac * travel
+
+        fun setFromX(x: Float) {
+            val f = ((x - thumbPx / 2f) / travel).coerceIn(0f, 1f)
+            onValueChange(f * span)
+        }
+
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(thumb)
+                .pointerInput(wPx) { detectTapGestures { setFromX(it.x); onValueChangeFinished() } }
+                .pointerInput(wPx) {
+                    detectHorizontalDragGestures(onDragEnd = onValueChangeFinished) { change, _ ->
+                        setFromX(change.position.x)
+                    }
+                },
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            // Full-width gradient capsule with the green glow (iOS SpectrumBackground).
+            Box(
+                Modifier.fillMaxWidth().height(track)
+                    .softShadow(Clear30Colors.green.copy(alpha = 0.75f), cornerRadius = track / 2, blurRadius = 5.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Clear30Gradients.clear30),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (showNotches) {
+                    // Notch centers line up with the thumb's travel endpoints.
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = (thumb - notch) / 2),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        repeat(steps) {
+                            Box(
+                                Modifier.size(notch).clip(RoundedCornerShape(4.dp))
+                                    // iOS-source alpha (AssessmentSpectrum.swift:149).
+                                    .background(Color.Black.copy(alpha = 0.15f)),
+                            )
+                        }
+                    }
+                }
+            }
+            // White thumb (same as GradientSlider).
+            Box(
+                Modifier
+                    .offset { IntOffset((centerX - thumbPx / 2f).roundToInt(), 0) }
+                    .size(thumb)
+                    .softShadow(Clear30Colors.shadow, cornerRadius = 10.dp, blurRadius = 3.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color.White),
+            )
+        }
+    }
+}
 
 /** Dimmed content color (0.5) for secondary labels, inheriting white on gradients. */
 @Composable

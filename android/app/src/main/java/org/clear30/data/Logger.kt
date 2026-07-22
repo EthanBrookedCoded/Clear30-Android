@@ -206,6 +206,7 @@ value class LogEventType(val rawValue: String) {
         val openedHealthTimeline = LogEventType("opened_health_timeline")
         val changedProgramStartDate = LogEventType("changed_program_start_date")
         val openedDopamineTimer = LogEventType("opened_dopamine_timer")
+        val day0StartNow = LogEventType("day_0_start_now")
 
         // Misc — add more as views call them. Untyped events still work via
         // [Logger.log(loggingID, eventName)] for one-off use.

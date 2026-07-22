@@ -538,34 +538,35 @@ internal fun GroupMemberEmoji(emoji: String) {
 }
 
 /**
- * TextIconButton (iOS Buttons.swift) — self-sized card button with trailing
- * icon, centered in its row. Gradient fill = white content; otherwise text at
- * half opacity (the "Add to Inner Circle" look).
+ * TextIconButton (iOS Buttons.swift) — full-width card button with trailing
+ * icon, content centered (iOS puts a Spacer on both sides so the CardStyle
+ * fill stretches). Gradient fill = white content; [foreground] overrides
+ * (e.g. the red Leave button); otherwise text at half opacity.
  */
 @Composable
 private fun GroupTextIconButton(
     text: String,
     icon: String,
     gradient: Brush? = null,
+    foreground: Color? = null,
     onClick: () -> Unit,
 ) {
-    val foreground = if (gradient != null) Color.White else Clear30Colors.text.copy(alpha = 0.5f)
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        Row(
-            Modifier
-                .pressScale { onClick() }
-                .cardStyle(gradient = gradient),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
-        ) {
-            DefaultText(text, color = foreground)
-            androidx.compose.material3.Icon(
-                org.clear30.views.components.sfSymbol(icon),
-                contentDescription = null,
-                tint = foreground,
-                modifier = Modifier.size(20.dp),
-            )
-        }
+    val fg = foreground ?: if (gradient != null) Color.White else Clear30Colors.text.copy(alpha = 0.5f)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .pressScale { onClick() }
+            .cardStyle(gradient = gradient),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2, Alignment.CenterHorizontally),
+    ) {
+        DefaultText(text, color = fg)
+        androidx.compose.material3.Icon(
+            org.clear30.views.components.sfSymbol(icon),
+            contentDescription = null,
+            tint = fg,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
@@ -935,14 +936,19 @@ private fun GroupSettingsTab(
                             org.clear30.views.components.sfSymbol("minus.circle"),
                             contentDescription = "Remove",
                             tint = Clear30Colors.text.copy(alpha = 0.5f),
-                            modifier = Modifier.size(25.dp).clickable { scope.launch { controller.removeMember(m.memberID) } },
+                            modifier = Modifier
+                                .pressScale { scope.launch { controller.removeMember(m.memberID) } }
+                                .size(25.dp),
                         )
                     }
                 }
             }
         }
         Spacer(Modifier.height(Dimens.cardSpacing / 2))
-        DefaultButton("Leave group", gradient = Clear30Gradients.red, modifier = Modifier.fillMaxWidth()) { onLeave() }
+        // iOS GroupSettings leave button: a plain full-width card button with
+        // red content (TextIconButton foregroundColor: redColor1) — not a
+        // red gradient pill.
+        GroupTextIconButton("Leave", "figure.walk.departure", foreground = Clear30Colors.red1) { onLeave() }
         Spacer(Modifier.height(Dimens.cardSpacing))
     }
 }

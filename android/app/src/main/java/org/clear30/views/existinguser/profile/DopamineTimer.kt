@@ -56,6 +56,8 @@ import org.clear30.data.model.Program
 import org.clear30.data.model.UserInfo
 import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.updateLastSmoked
+import org.clear30.util.adding
+import org.clear30.util.justDay
 import org.clear30.util.now
 import org.clear30.views.components.SmallText
 import org.clear30.views.components.cardStyle
@@ -210,6 +212,122 @@ fun DopamineTimer(program: Program, userInfo: UserInfo) {
     }
 }
 
+/**
+ * BreakStartCountdown — the Day-0 profile timer (iOS `StartTimer` +
+ * `Profile.day0StartNow`): before Day 1 of an upcoming break, the profile
+ * shows a clear30-green "Your Break Starts X" card over a clear30-green
+ * countdown to Day 1 with a "Start Break Now" button. Confirming shifts the
+ * break so today becomes Day 1 ([ProgramTimelineHandler.day0StartNow]); when
+ * the countdown reaches zero the caller re-derives and swaps layouts.
+ */
+@Composable
+fun BreakStartCountdown(
+    program: Program,
+    userInfo: UserInfo,
+    currentBreak: org.clear30.data.model.ProgramBreak,
+    onChanged: () -> Unit,
+) {
+    var showConfirm by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+
+    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) { delay(1_000); nowMs = System.currentTimeMillis() }
+    }
+
+    // Day 1 begins at the start of the day after the break's Day-0 start date
+    // (iOS StartTimer: `targetDate: currentBreak.startDate.adding(days: 1).justDay`).
+    val day1 = remember(currentBreak.startDate) { currentBreak.startDate.adding(days = 1).justDay }
+    val remaining = ((day1.toEpochMilliseconds() - nowMs) / 1000).coerceAtLeast(0)
+    val days = (remaining / 86_400).toInt()
+    val hours = ((remaining % 86_400) / 3_600).toInt()
+    val minutes = ((remaining % 3_600) / 60).toInt()
+    val seconds = (remaining % 60).toInt()
+
+    // Countdown hit zero → Day 1 arrived naturally (iOS onCountdownComplete).
+    LaunchedEffect(remaining <= 0) { if (remaining <= 0) onChanged() }
+
+    // iOS `relativeToToday` (CalendarUtils.swift): Today / Tomorrow / In N days.
+    val day1Plain = org.clear30.data.model.PlainDate.from(day1)
+    val todayPlain = org.clear30.data.model.PlainDate.from(now())
+    val daysToTarget = todayPlain.daysTo(day1Plain)
+    val startsLabel = when {
+        daysToTarget <= 0 -> "Today"
+        daysToTarget == 1 -> "Tomorrow"
+        else -> "In $daysToTarget days"
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
+        // Green "Your Break Starts X" card (iOS StartTimer, clear30Gradient).
+        Row(
+            Modifier.fillMaxWidth().cardStyle(gradient = Clear30Gradients.clear30),
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            SmallText("Your Break Starts $startsLabel", color = Color.White)
+        }
+        // Green countdown card (iOS DopamineTimer(gradient: clear30Gradient)).
+        Box(Modifier.fillMaxWidth().cardStyle(gradient = Clear30Gradients.clear30)) {
+            Column(Modifier.fillMaxWidth()) {
+                Row(
+                    Modifier.fillMaxWidth().padding(bottom = Dimens.cardSpacing),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+                ) {
+                    Icon(
+                        sfSymbol("timer"),
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.5f),
+                        modifier = Modifier.size(15.dp),
+                    )
+                    SmallText("${currentBreak.name} countdown", color = Color.White.copy(alpha = 0.5f))
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+                    if (days > 0) TimerBar(days, 30, "Day", accent = Clear30Colors.green)
+                    TimerBar(hours, 24, "Hour", accent = Clear30Colors.green)
+                    TimerBar(minutes, 60, "Minute", accent = Clear30Colors.green)
+                    TimerBar(seconds, 60, "Second", accent = Clear30Colors.green)
+                }
+                EditActionButton(
+                    "Start Break Now", "timer",
+                    Modifier.fillMaxWidth().padding(top = Dimens.cardSpacing),
+                ) { Haptics.lightImpact(); showConfirm = true }
+            }
+        }
+    }
+
+    // iOS Profile.day0StartNow: yes/no alert before pulling the start forward.
+    if (showConfirm) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showConfirm = false },
+            title = { Text("Start now?") },
+            text = { Text("Your break is set to start ${startsLabel.replaceFirstChar { it.lowercase() }}. Do you want to start it today instead?") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    showConfirm = false
+                    if (busy) return@TextButton
+                    busy = true
+                    // App-lifetime scope: day0StartNow mutates the break in place,
+                    // which swaps this composable out mid-flight — a
+                    // composition-tied scope would cancel the mutation.
+                    org.clear30.Clear30Application.appScope.launch {
+                        try {
+                            runCatching { org.clear30.data.ProgramTimelineHandler.day0StartNow(program) }
+                                .onFailure { android.util.Log.e("BreakStartCountdown", "day0StartNow failed", it) }
+                        } finally {
+                            busy = false
+                            onChanged()
+                        }
+                    }
+                    Logger.logEvent(userInfo.loggingID, LogEventType.day0StartNow)
+                }) { Text("Yes") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showConfirm = false }) { Text("No") }
+            },
+        )
+    }
+}
+
 /** White pill button on the gradient card (iOS `TextIconButton` — solid `clear30Button` fill, dark text). */
 @Composable
 private fun EditActionButton(text: String, icon: String?, modifier: Modifier = Modifier, onClick: () -> Unit) {
@@ -244,6 +362,9 @@ private fun TimerBar(
     max: Int,
     unit: String,
     editable: Boolean = false,
+    // Label color where the white fill overlaps — the host card's accent
+    // (meditation blue on the streak card, clear30 green on the countdown).
+    accent: Color = Clear30Colors.meditation1,
     onValueChange: (Int) -> Unit = {},
 ) {
     val label = "$value $unit${if (value != 1) "s" else ""}"
@@ -294,7 +415,7 @@ private fun TimerBar(
         // lines up); as the white fill grows the words read blue under it.
         Box(Modifier.width(fillW).fillMaxHeight().clipToBounds()) {
             Box(Modifier.width(full).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
-                BarLabel(label, Clear30Colors.meditation1)
+                BarLabel(label, accent)
             }
         }
 

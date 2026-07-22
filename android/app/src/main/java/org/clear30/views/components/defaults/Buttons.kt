@@ -5,6 +5,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -129,6 +130,45 @@ fun IconButton(
         tint = tint,
         modifier = modifier.pressScale(haptic = haptic, onClick = onClick).padding(padding).size(height),
     )
+}
+
+/**
+ * TextIconButton (iOS Buttons.swift `TextIconButton`) — the standard full-width
+ * CARD button: white card background + soft shadow (or [gradient] fill) via
+ * CardStyle, centered text with an optional trailing icon and dim [subtext].
+ * [foreground] overrides the content color (e.g. a red destructive button).
+ */
+@Composable
+fun TextIconButton(
+    text: String,
+    icon: String? = null,
+    gradient: Brush? = null,
+    foreground: Color? = null,
+    subtext: String? = null,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val fg = foreground ?: if (gradient != null) Color.White else Clear30Colors.text
+    Column(
+        modifier
+            .fillMaxWidth()
+            .pressScale(onClick = onClick)
+            .cardStyle(gradient = gradient),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 4),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+        ) {
+            SmallText(text, color = fg)
+            if (icon != null) {
+                // iOS TextIconButton imageSize = 12.
+                Icon(sfSymbol(icon), contentDescription = null, tint = fg, modifier = Modifier.size(12.dp))
+            }
+        }
+        if (subtext != null) TinyText(subtext, color = fg.copy(alpha = 0.5f))
+    }
 }
 
 /** GradientActionButton — full-width gradient card button with leading icon. */

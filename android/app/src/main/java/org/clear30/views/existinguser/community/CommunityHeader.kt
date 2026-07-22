@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -153,7 +154,25 @@ internal fun TagFilterSheet(
             ) {
                 tags.forEach { tag -> FilterTagPill(tag, selected = tag.id in selected) { onToggle(tag.id) } }
             }
-            DefaultButton("Done  ✓", gradient = null, modifier = Modifier.fillMaxWidth()) { onDone() }
+            // iOS TextIconButton("Done", "checkmark") — a full-width primary
+            // button below the tag flow (AllTagView.swift:60-62), W20.
+            Row(
+                Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(Dimens.cornerRadius))
+                    .background(Clear30Gradients.button)
+                    .pressScale { onDone() }
+                    .padding(vertical = 15.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SmallText("Done")
+                Spacer(Modifier.width(Dimens.cardSpacing / 2))
+                Icon(
+                    sfSymbol("checkmark"),
+                    contentDescription = null,
+                    modifier = Modifier.size(15.dp),
+                )
+            }
         }
     }
 }

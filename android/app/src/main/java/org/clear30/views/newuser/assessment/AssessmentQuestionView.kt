@@ -85,9 +85,16 @@ fun AssessmentQuestionView(
             is AssessmentQuestionType.SectionedMultipleChoice ->
                 AssessmentMultipleChoice(question) { onResult(AssessmentQuestionResult.MultipleChoice(it)) }
             is AssessmentQuestionType.Slider ->
-                AssessmentSlider(question, t.valueLabel) { onResult(AssessmentQuestionResult.MultipleChoice(listOf(it))) }
+                AssessmentSlider(question, t.valueLabel) {
+                    onResult(AssessmentQuestionResult.MultipleChoice(listOf(sliderOptionIndex(question, it))))
+                }
             is AssessmentQuestionType.SliderWithCustom ->
-                AssessmentSlider(question, t.valueLabel) { onResult(AssessmentQuestionResult.MultipleChoice(listOf(it))) }
+                AssessmentSlider(
+                    question, t.valueLabel,
+                    onCustomInput = { onResult(AssessmentQuestionResult.Input(it.toString())) },
+                ) {
+                    onResult(AssessmentQuestionResult.MultipleChoice(listOf(sliderOptionIndex(question, it))))
+                }
             is AssessmentQuestionType.Spectrum ->
                 AssessmentSpectrum(question, t.left, t.middle, t.right, t.showDots) { onResult(AssessmentQuestionResult.MultipleChoice(listOf(it))) }
             is AssessmentQuestionType.MultiSpectrum ->
@@ -374,6 +381,20 @@ internal fun linkedText(markdown: String): AnnotatedString = buildAnnotatedStrin
     }
     if (last < markdown.length) append(markdown.substring(last))
 }
+
+/**
+ * iOS AssessmentQuestionView's slider result mapping: with displayedOptions the
+ * 1-based slider value maps to option index `value - 1`; otherwise the first
+ * option containing the value's digits wins (fallback index 0). The raw value
+ * must NOT be recorded directly — responses are 0-based option indices
+ * everywhere (submission payload, restore, weekly spend/usage stats).
+ */
+private fun sliderOptionIndex(question: ProgramAssessmentQuestion, sliderValue: Int): Int =
+    if (question.displayedOptions != null) {
+        sliderValue - 1
+    } else {
+        question.options.indexOfFirst { it.contains(sliderValue.toString()) }.coerceAtLeast(0)
+    }
 
 /** Dim Terms-of-Use footer with tappable links (iOS MiniTextWithLinks). */
 @Composable

@@ -34,7 +34,7 @@ class AssessmentViewModel(
     private val userInfo: UserInfo,
     private val onboardingSetup: OnboardingSetup,
     val experimentController: ExperimentController,
-    private val scope: CoroutineScope,
+    val scope: CoroutineScope,
     private val completion: () -> Unit,
 ) {
     var currentIndex by mutableIntStateOf(0)
@@ -52,10 +52,10 @@ class AssessmentViewModel(
     /** Approximate progress-bar length (AssessmentViewModel.progressBarEstimate). */
     val progressBarEstimate: Int
         get() {
+            // Same numbers as prod iOS (short flow: bio-sex/symptoms never show,
+            // so their +1s are dropped rather than experiment-read, §17-Q22).
             var base = if (useNewOnboarding) 24 else 25
             if (experimentController.showFeature(ExperimentKey.assessmentUsageDuration, false)) base += 1
-            if (experimentController.showFeature(ExperimentKey.assessmentBiologicalSex, false)) base += 1
-            if (experimentController.showFeature(ExperimentKey.onboardingSymptoms, false)) base += 1
             base += 2 // commitment question + affirmation
             return base
         }

@@ -4,6 +4,7 @@ import kotlinx.datetime.Instant
 import org.clear30.data.model.AssessmentQuestionID
 import org.clear30.data.model.CheckInMethod
 import org.clear30.data.model.ContentInfo
+import androidx.glance.appwidget.updateAll
 import org.clear30.data.model.PlainDate
 import org.clear30.data.model.PopInType
 import org.clear30.data.model.Program
@@ -64,8 +65,10 @@ object ProgramTimelineHandler {
     private fun MutableMap<PlainDate, ContentInfo>.mergeStartSoon(other: Map<PlainDate, ContentInfo>) {
         other.forEach { (k, v) ->
             val current = this[k]
+            // iOS keeps the NEW (start-soon) bucket's stage unconditionally —
+            // even when nil (ProgramMessageHandler.swift:226-230).
             this[k] = if (current == null) v
-            else v.copy(messages = v.messages + current.messages, stage = v.stage ?: current.stage)
+            else v.copy(messages = v.messages + current.messages)
         }
     }
 
@@ -103,11 +106,20 @@ object ProgramTimelineHandler {
     private suspend fun finish(program: Program) {
         Clear30Store.save(program)
         SupabaseController.syncProgramState(program)
-        // Timeline mutations move the health milestones — reschedule their
-        // notifications (iOS ProgramTimelineHandler.swift:96,463). Gated on
+        // Timeline mutations move BOTH notification timelines — reschedule
+        // health AND content immediately (iOS does this inside every mutator;
+        // deferring content to the next Today-tab open left stale pushes armed
+        // for messages the mutation just moved or deleted). Gated on
         // notificationSettings inside, so the pre-permission signup path no-ops.
         runCatching {
-            NotificationHandler.scheduleHealthNotifications(Clear30Store.loadUserInfo(), program)
+            val userInfo = Clear30Store.loadUserInfo()
+            NotificationHandler.scheduleHealthNotifications(userInfo, program)
+            val allMessages = program.contentInfo.values.flatMap { it.messages } + program.schoolMessages
+            NotificationHandler.scheduleContent(userInfo, allMessages, program)
+        }
+        // iOS reloads the widget after every mutator (WidgetCenter.reloadAllTimelines).
+        runCatching {
+            org.clear30.widget.StatsWidget().updateAll(org.clear30.Clear30Application.instance)
         }
     }
 
@@ -163,9 +175,13 @@ object ProgramTimelineHandler {
     ): String? {
         setupDaysSoberAndLastSmoked(program, lastSmoked, mainBreak, startSoonBreak)
         program.latestCheckInMethod = checkInMethod
-        // Register the break(s) so the timeline windows line up with the content.
-        if (mainBreak != null && program.breaks.none { it === mainBreak }) program.breaks.add(mainBreak)
-        if (startSoonBreak != null && program.breaks.none { it === startSoonBreak }) program.breaks.add(startSoonBreak)
+        // iOS REPLACES program.breaks wholesale on the onboarding path
+        // (AssessmentSubmissionHandler.swift:137) — a retry after a failed
+        // submit re-runs handleBreaks with fresh instances, and appending
+        // would stack duplicate overlapping breaks and corrupt day math.
+        program.breaks.clear()
+        if (mainBreak != null) program.breaks.add(mainBreak)
+        if (startSoonBreak != null) program.breaks.add(startSoonBreak)
         return if (mainBreak != null) startWithClear30(program, mainBreak, startSoonBreak, clientName)
         else startWithCore(program, clientName)
     }
@@ -356,7 +372,7 @@ object ProgramTimelineHandler {
             startSoon.startDate = startSoon.startDate.adding(days = -daysToShift)
             startSoon.overrideEndDate(startSoon.endDate.adding(days = -daysToShift - 1))
         }
-        if (program.breaks.size == 1) program.lastSmoked = now()
+        if (program.breaks.size == 1) CheckInLogger.resetLastSmoked(now(), program)
         program.breaks.minByOrNull { it.startDate }?.let { program.startDate = minOf(it.startDate, program.startDate) }
         program.updateHealthProgressStartDates(now()) // iOS day0StartNow step 11
         finish(program)
@@ -386,7 +402,9 @@ object ProgramTimelineHandler {
 
         val info = program.dayInfo[nowPlain]
         program.dayInfo[nowPlain] = (info ?: ProgramDayInfo()).copy(popInType = PopInType.RestartedBreak)
-        program.lastSmoked = now()
+        // iOS routes through resetLastSmoked, which records the elapsed sober
+        // span (consumed by the span-based check-in reward) + widget refresh.
+        CheckInLogger.resetLastSmoked(now(), program)
         finish(program)
     }
 
@@ -403,7 +421,9 @@ object ProgramTimelineHandler {
         val todayPlain = PlainDate.from(today)
         current.overrideEndDate(today.adding(days = -1)) // last day in = yesterday
         program.contentInfo = program.contentInfo.filterKeys { it < todayPlain }.toMutableMap()
+        // iOS prefixes the failure copy (ProgramTimelineHandler.swift:226).
         return switchCore(program, startOn = today, newModeration = false)
+            ?.let { "Could not get life messages: $it" }
     }
 
     /**
@@ -448,13 +468,11 @@ object ProgramTimelineHandler {
         }
 
         // Pull the program start back if a break now precedes it (iOS step 7 —
-        // the health anchors shift with it; otherwise only setbacks recompute).
+        // the health anchors shift with it; iOS touches nothing otherwise).
         val earliest = program.breaks.minByOrNull { it.startDate }
         if (earliest != null && earliest.startDate.justDay < program.startDate.justDay) {
             program.startDate = earliest.startDate.justDay
             program.adjustHealthProgressStartDate(days)
-        } else {
-            program.updateHealthSetbackDays()
         }
         finish(program)
     }
@@ -469,7 +487,13 @@ object ProgramTimelineHandler {
         val today = now().justDay
         val todayPlain = PlainDate.from(today)
         val startSoonLastDay = newStart.adding(days = -1).justDay
-        val packaged = ProgramMessageHandler.getMessages() ?: return
+        val packaged = ProgramMessageHandler.getMessages()
+        if (packaged == null) {
+            // iOS surfaces this instead of silently no-oping the user's move
+            // (ProgramTimelineHandler.swift:403-409).
+            AlertHandler.error(message = "Could not fetch preparation messages.")
+            return
+        }
         val startSoonContent = ProgramMessageHandler.scheduleStartSoon(today, startSoonLastDay, packaged)
 
         // Replace any old start-soon break that abutted this break's old start.
@@ -487,7 +511,7 @@ object ProgramTimelineHandler {
         current.startDate = newStart
         current.moneySavedAdjustment = 0
         program.resetHealthProgress(on = current.startDate.adding(days = 1)) // iOS 7b
-        program.lastSmoked = current.startDate.adding(days = 1) // iOS resetLastSmoked(setTo: breakDay1)
+        CheckInLogger.resetLastSmoked(current.startDate.adding(days = 1), program) // iOS resetLastSmoked(setTo: breakDay1)
         finish(program)
     }
 

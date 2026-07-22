@@ -109,6 +109,7 @@ fun AppRoot(viewModel: AppRootViewModel = viewModel()) {
                     }
                 }
             }
+            is org.clear30.data.DeepLinkRoute.Breakdown -> AppState.requestTab("TODAY")
             is org.clear30.data.DeepLinkRoute.Unrecognized -> Unit
         }
         // Stash the payload-bearing routes so the destination tab can drive
@@ -120,7 +121,8 @@ fun AppRoot(viewModel: AppRootViewModel = viewModel()) {
             is org.clear30.data.DeepLinkRoute.Meditation,
             is org.clear30.data.DeepLinkRoute.Messages,
             is org.clear30.data.DeepLinkRoute.Claire,
-            is org.clear30.data.DeepLinkRoute.DrFred -> AppState.requestSubRoute(route)
+            is org.clear30.data.DeepLinkRoute.DrFred,
+            is org.clear30.data.DeepLinkRoute.Breakdown -> AppState.requestSubRoute(route)
             else -> Unit
         }
         // Ack so we don't re-dispatch on every recomposition.

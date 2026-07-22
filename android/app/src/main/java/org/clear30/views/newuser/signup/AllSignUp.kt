@@ -100,6 +100,9 @@ fun AllSignUp(
     var phonePrefix by remember { mutableStateOf("+1") }
     var code by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    // Set once the OTP verify succeeded — post-verify failures (restore/submit)
+    // retry that part directly instead of burning the consumed code.
+    var authVerified by remember { mutableStateOf(false) }
 
     // Full contact string sent to Supabase: phone prefixes the region code (iOS
     // sends "\(phoneNumberPrefix)\(input)"); email is sent verbatim.
@@ -167,21 +170,29 @@ fun AllSignUp(
                     code = code,
                     onCodeChange = { code = it },
                     onVerify = {
-                        if (code.isBlank()) return@VerificationStep
+                        if (code.isBlank() && !authVerified) return@VerificationStep
                         error = null
                         step = SignUpStep.LOADING
                         scope.launch {
                             val target = fullContact()
-                            val err = if (isEmail) SupabaseController.verifyOtpEmail(target, code)
+                            // A previous attempt may have consumed the OTP and
+                            // failed AFTER auth (restore/submit). Retry that
+                            // part directly — the session already exists, and
+                            // re-verifying a consumed code can only fail.
+                            val err = if (authVerified) null
+                            else if (isEmail) SupabaseController.verifyOtpEmail(target, code)
                             else SupabaseController.verifyOtpPhone(target, code)
                             if (err == null) {
-                                patchUserAfterAuth(userInfo, target, isEmail)
-                                // Email path only (iOS AllSignUpViewModel.swift:144-146):
-                                // domain-allowlist unlock + school-mode hydration,
-                                // fire-and-forget alongside the restore/submit flow.
-                                if (isEmail) {
-                                    scope.launch {
-                                        org.clear30.views.newuser.ReferralCodeHandler.handleEmail(userInfo)
+                                if (!authVerified) {
+                                    authVerified = true
+                                    patchUserAfterAuth(userInfo, target, isEmail)
+                                    // Email path only (iOS AllSignUpViewModel.swift:144-146):
+                                    // domain-allowlist unlock + school-mode hydration,
+                                    // fire-and-forget alongside the restore/submit flow.
+                                    if (isEmail) {
+                                        scope.launch {
+                                            org.clear30.views.newuser.ReferralCodeHandler.handleEmail(userInfo)
+                                        }
                                     }
                                 }
                                 // DB-level returning-user detection after EVERY verify
@@ -195,7 +206,20 @@ fun AllSignUp(
                                 val submitError = when {
                                     checkIfReturningUser() -> restoreAccount(userInfo, program)
                                     signInOnly -> "No account found.\nPlease sign up first."
-                                    else -> AssessmentSubmissionHandler.submitAssessment(userInfo, program, onboardingSetup)
+                                    else -> {
+                                        val err = AssessmentSubmissionHandler.submitAssessment(userInfo, program, onboardingSetup)
+                                        if (err == null) {
+                                            // D2: an OLD-Android-app account (users row with
+                                            // empty content_info) lands here — merge back its
+                                            // server check-in history + on-device journals /
+                                            // last-smoked after the fresh program is created.
+                                            runCatching {
+                                                org.clear30.data.OldAppMigrationHandler
+                                                    .migrateAfterOnboarding(userInfo, program)
+                                            }
+                                        }
+                                        err
+                                    }
                                 }
                                 if (submitError != null) {
                                     error = submitError
@@ -548,6 +572,17 @@ private suspend fun patchUserAfterAuth(userInfo: UserInfo, contact: String, isEm
     userInfo.signUpID = contact
     userInfo._signUpType = if (isEmail) SignUpType.EMAIL else SignUpType.PHONE
     userInfo._userID = SupabaseController.getUserAuthID()
+    userInfo.signUpReturning = false
+    // iOS logs `signed_up` for FRESH signups in saveUserInfo (returning ones
+    // log in restoreAccount) — Android only logged the restore path.
+    org.clear30.data.Logger.logEvent(
+        userInfo.loggingID,
+        org.clear30.data.LogEventType.signedUp,
+        mapOf(
+            org.clear30.data.LogEventExtraDataType.TYPE to userInfo.signUpType.name.lowercase(),
+            org.clear30.data.LogEventExtraDataType.RETURNING to "false",
+        ),
+    )
     // createUser RPC + assessment submission now run in AssessmentSubmissionHandler
     // (invoked from the verify path). The real users.id replaces this auth-id there.
     // TODO(port): program message fetch / normative feedback + break creation.

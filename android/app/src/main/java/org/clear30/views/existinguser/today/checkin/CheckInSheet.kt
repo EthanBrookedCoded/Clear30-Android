@@ -23,7 +23,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -98,6 +100,9 @@ fun CheckInSheet(
     userInfo: UserInfo,
     program: Program,
     onDismiss: () -> Unit,
+    // Fired only when a check-in was actually COMPLETED (not skipped/closed) —
+    // iOS scrolls the feed only in this case (CheckInViewModel.swift:136-146).
+    onCompleted: (() -> Unit)? = null,
 ) {
     var phase by remember { mutableStateOf("slide") }
     // The rewards are generated once, at the moment of check-in (inside the
@@ -142,13 +147,17 @@ fun CheckInSheet(
                     staticReward = staticReward,
                     variableReward = variableReward,
                     sober = rewardSober,
-                    onContinue = onDismiss,
+                    onContinue = {
+                        onCompleted?.invoke()
+                        onDismiss()
+                    },
                 )
                 else -> Column(
                     // T2: plain `clear30Background` behind the sliders (iOS
                     // CheckIn.swift `.background { Color.clear30Background }`) —
-                    // NOT the brand gradient.
-                    Modifier.fillMaxSize().statusBarsPadding()
+                    // NOT the brand gradient. navigationBarsPadding keeps the
+                    // Skip pill clear of the gesture bar (W8).
+                    Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
                         .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
@@ -194,7 +203,7 @@ fun CheckInSheet(
                             modifier = Modifier.size(14.dp),
                         )
                     }
-                    Spacer(Modifier.height(Dimens.cardSpacing))
+                    Spacer(Modifier.height(Dimens.cardSpacing * 2))
                 }
             }
         }
@@ -244,6 +253,10 @@ private fun OnScreenCheckIn(program: Program, onDone: (List<LoggedCheckIn>) -> U
     }
 
     LaunchedEffect(results.size) {
+        // Undo (tap the committed bar) removes a result and restarts this
+        // effect, cancelling the pending onDone — the flag must reset with it
+        // or no later commit can ever fire (the sheet deadlocked until closed).
+        if (results.size < total) fired = false
         if (results.size >= total && !fired) {
             fired = true
             delay(550)
@@ -418,8 +431,10 @@ fun SlideToCheckIn(
                                                 offsetX = threshold; committed = true; Haptics.successHeavy()
                                             }
                                             offsetX <= -threshold * 0.85f -> {
+                                                // Smoked logs immediately with no amount (iOS only
+                                                // shows the amount list on a deliberate hold; the
+                                                // amount can be edited later from the day card).
                                                 offsetX = -threshold; committed = false; Haptics.successHeavy()
-                                                if (isWeed) awaitingAmount = true
                                             }
                                             else -> { offsetX = 0f; passedThreshold = false }
                                         }
@@ -546,21 +561,22 @@ private fun CheckInRewardContent(
     val onPrimaryComplete: () -> Unit = { if (hasBoth) showSecondaryReward = true }
 
     Column(
-        Modifier.fillMaxSize().statusBarsPadding()
+        Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
             .graphicsLayer { alpha = appear; val s = 0.92f + 0.08f * appear; scaleX = s; scaleY = s }
             .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(Modifier.weight(1f))
 
-        // Headline — celebratory for a clear day, encouraging for a slip.
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        // Headline — celebratory for a clear day, encouraging for a slip. Both
+        // lines CENTERED like iOS `multilineTextAlignment(.center)` (W6).
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             if (sober == false) {
-                SmallText("Tomorrow's a fresh start, $name", color = textColor.copy(alpha = 0.5f))
-                Heading2("🌅 Every check-in is progress.", color = textColor)
+                SmallText("Tomorrow's a fresh start, $name", color = textColor.copy(alpha = 0.5f), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Heading2("🌅 Every check-in is progress.", color = textColor, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             } else {
-                SmallText("You didn't vanish, $name", color = textColor.copy(alpha = 0.5f))
-                Heading2("🙏 Staying present is everything.", color = textColor)
+                SmallText("You didn't vanish, $name", color = textColor.copy(alpha = 0.5f), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Heading2("🙏 Staying present is everything.", color = textColor, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             }
         }
 
@@ -613,6 +629,7 @@ private fun CheckInRewardContent(
                 modifier = Modifier.size(14.dp),
             )
         }
+        Spacer(Modifier.height(Dimens.cardSpacing * 2))
         Spacer(Modifier.height(Dimens.cardSpacing))
     }
 }

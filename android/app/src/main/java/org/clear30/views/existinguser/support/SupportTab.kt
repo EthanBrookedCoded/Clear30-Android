@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import org.clear30.views.components.pressScale
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -119,7 +121,8 @@ fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30
     var refresh by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     var symptomInfos by remember { mutableStateOf<org.clear30.data.model.SymptomInfos?>(null) }
     androidx.compose.runtime.LaunchedEffect(Unit) {
-        val contentStart = program.currentBreak?.startDate ?: program.startDate
+        // Main break's start, not the start-soon bridge's (see TodayTab note).
+        val contentStart = (program.currentBreakNotStartSoon ?: program.currentBreak)?.startDate ?: program.startDate
         if (org.clear30.data.ProgramMessageHandler.ensureContent(program, contentStart, userInfo.name)) refresh++
         // Pull the REAL symptom infos from the backend (`get_symptom_infos`, the
         // emoji-Name → {tips,reddits,prompts} map) — the same source iOS uses. Cache
@@ -137,7 +140,16 @@ fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30
     val sub by org.clear30.AppState.pendingSubRoute.collectAsStateWithLifecycle()
     androidx.compose.runtime.LaunchedEffect(sub) {
         when (sub) {
-            is org.clear30.data.DeepLinkRoute.Claire -> push(SupportRoute.Claire((sub as org.clear30.data.DeepLinkRoute.Claire).prompt))
+            is org.clear30.data.DeepLinkRoute.Claire -> {
+                val prompt = (sub as org.clear30.data.DeepLinkRoute.Claire).prompt
+                // Replace an already-open Claire instead of stacking a second
+                // one (double-back + dropped prompt otherwise).
+                if (backStack.last() is SupportRoute.Claire) {
+                    backStack[backStack.lastIndex] = SupportRoute.Claire(prompt)
+                } else {
+                    push(SupportRoute.Claire(prompt))
+                }
+            }
             is org.clear30.data.DeepLinkRoute.DrFred -> push(SupportRoute.DrFred)
             is org.clear30.data.DeepLinkRoute.Meditation -> push(SupportRoute.Meditations)
             is org.clear30.data.DeepLinkRoute.Messages -> push(SupportRoute.Messages)
@@ -157,32 +169,37 @@ fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30
         }
     }
     androidx.activity.compose.BackHandler(enabled = backStack.size > 1) { back() }
-    when (route) {
-        is SupportRoute.Claire -> { ClaireChat(onBack = back, userInfo = userInfo, program = program, initialInput = route.initialInput); return }
-        is SupportRoute.Cravings -> { CravingHub(program, userInfo, onBack = back); return }
-        is SupportRoute.Sleep -> { CravingResources(program, userInfo, MeditationResourceKind.SLEEP, onBack = back); return }
-        is SupportRoute.DrFred -> { DrFredChat(userInfo, onBack = back); return }
-        is SupportRoute.PeerSupport -> { PeerSupportChat(userInfo, onBack = back); return }
-        is SupportRoute.Meditations -> { MeditationsScreen(program, onBack = back); return }
-        is SupportRoute.Reddits -> { ResourcesScreen(program, kind = ResourceKind.REDDIT, onBack = back); return }
-        is SupportRoute.YouTubes -> { ResourcesScreen(program, kind = ResourceKind.YOUTUBE, onBack = back); return }
-        is SupportRoute.Messages -> { MessagesLibraryScreen(program, userInfo, journalEntries, onBack = back); return }
-        is SupportRoute.AllPrompts -> {
-            AllPromptsScreen(program, onBack = back, onOpenPrompt = { push(SupportRoute.Claire(it.prompt)) }); return
-        }
-        is SupportRoute.Wishlist -> { FeatureWishlist(userInfo, onBack = back); return }
-        is SupportRoute.Feedback -> {
-            FeedbackScreen(userInfo, config = route.config, forceFreeForm = route.forceFreeForm, onBack = back)
-            return
-        }
-        is SupportRoute.Symptom -> {
+    // Claire renders as an OVERLAY above the route it was pushed from, so that
+    // route (e.g. the message-viewer page you were on) stays composed and back
+    // returns exactly where you were instead of remounting at the list.
+    val claireRoute = route as? SupportRoute.Claire
+    val baseRoute = if (claireRoute == null) route else backStack.getOrNull(backStack.lastIndex - 1) ?: SupportRoute.Hub
+    when (baseRoute) {
+        is SupportRoute.Claire -> Unit // only reachable as the overlay below
+        is SupportRoute.Cravings -> CravingHub(program, userInfo, onBack = back)
+        is SupportRoute.Sleep -> CravingResources(program, userInfo, MeditationResourceKind.SLEEP, onBack = back)
+        is SupportRoute.DrFred -> DrFredChat(userInfo, onBack = back)
+        is SupportRoute.PeerSupport -> PeerSupportChat(userInfo, onBack = back)
+        is SupportRoute.Meditations -> MeditationsScreen(program, onBack = back)
+        is SupportRoute.Reddits -> ResourcesScreen(program, kind = ResourceKind.REDDIT, onBack = back)
+        is SupportRoute.YouTubes -> ResourcesScreen(program, kind = ResourceKind.YOUTUBE, onBack = back)
+        is SupportRoute.Messages -> MessagesLibraryScreen(program, userInfo, journalEntries, onBack = back)
+        is SupportRoute.AllPrompts ->
+            AllPromptsScreen(program, onBack = back, onOpenPrompt = { push(SupportRoute.Claire(it.prompt)) })
+        is SupportRoute.Wishlist -> FeatureWishlist(userInfo, onBack = back)
+        is SupportRoute.Feedback ->
+            FeedbackScreen(userInfo, config = baseRoute.config, forceFreeForm = baseRoute.forceFreeForm, onBack = back)
+        is SupportRoute.Symptom ->
             org.clear30.views.existinguser.profile.SymptomDetailScreen(
-                route.key, route.info, userInfo, onBack = back,
+                baseRoute.key, baseRoute.info, userInfo, onBack = back,
                 onAskClaire = { prompt -> push(SupportRoute.Claire(prompt)) },
-            ); return
-        }
+            )
         is SupportRoute.OpenMessage -> {
-            org.clear30.views.existinguser.today.MessageDetail(program, route.message, userInfo, journalEntries, onBack = back); return
+            // Open the whole day GROUP (iOS navigates with [ProgramMessage]) so
+            // same-day sub-messages (assessment responses) follow the main one.
+            val group = program.contentInfo[org.clear30.data.model.PlainDate.from(baseRoute.message.unlockOn)]
+                ?.messages?.takeIf { baseRoute.message in it } ?: listOf(baseRoute.message)
+            org.clear30.views.existinguser.today.MessageDetail(program, group, userInfo, journalEntries, onBack = back)
         }
         is SupportRoute.SchoolInfo -> {
             val schoolData = userInfo.schoolData
@@ -196,10 +213,9 @@ fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30
                 onOpenActivity = { push(SupportRoute.SchoolActivityDetail(it)) },
                 onOpenResource = { push(SupportRoute.SchoolResourceDetail(it)) },
             )
-            return
         }
         is SupportRoute.SchoolActivityDetail -> {
-            val a = route.activity
+            val a = baseRoute.activity
             SchoolInfoDetailScreen(
                 title = a.title,
                 gradient = userInfo.schoolData?.schoolGradient() ?: Clear30Gradients.clear30,
@@ -216,10 +232,9 @@ fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30
                 description = a.description,
                 onBack = back,
             )
-            return
         }
         is SupportRoute.SchoolResourceDetail -> {
-            val r = route.resource
+            val r = baseRoute.resource
             SchoolInfoDetailScreen(
                 title = r.title,
                 gradient = userInfo.schoolData?.schoolGradient() ?: Clear30Gradients.clear30,
@@ -231,11 +246,11 @@ fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30
                 badge = r.badge,
                 onBack = back,
             )
-            return
         }
         is SupportRoute.Hub -> Unit
     }
 
+    if (baseRoute is SupportRoute.Hub) {
     val context = LocalContext.current
     val openResource = rememberOpenResource()
     Column(
@@ -245,16 +260,9 @@ fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30
     ) {
         @Suppress("UNUSED_EXPRESSION") refresh
 
-        // Heading
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Heading1("Support")
-            Box(
-                Modifier.size(40.dp).clip(CircleShape).background(Clear30Colors.opacityGray),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(sfSymbol("magnifyingglass"), "Search", tint = Clear30Colors.text, modifier = Modifier.size(18.dp))
-            }
-        }
+        // Heading (search removed per Thatcher — intentional divergence from
+        // iOS Support2, which keeps a search feature; §17-Q23).
+        Heading1("Support")
 
         // Immediate support — iOS order: slipped, craving, sleep, Claire
         // (Support2.swift:156-168).
@@ -366,6 +374,28 @@ fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30
                 onOpenPeerSupport = { push(SupportRoute.PeerSupport) },
             ),
         )
+    }
+    } // end Hub
+
+    // Claire overlay — composed LAST so it draws (and registers its BackHandler)
+    // above the underlying route, which stays alive underneath. The pointerInput
+    // consumes taps in the chat's dead zones (gutters/header) — a background
+    // modifier alone doesn't hit-test, so taps there would fall through to the
+    // hidden screen below.
+    claireRoute?.let { claire ->
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Clear30Colors.background)
+                .pointerInput(Unit) { detectTapGestures { } },
+        ) {
+            androidx.activity.compose.BackHandler { back() }
+            // key: a new prompt while Claire is already open must rebuild the
+            // chat with the new seed instead of keeping the old input.
+            androidx.compose.runtime.key(claire.initialInput) {
+                ClaireChat(onBack = back, userInfo = userInfo, program = program, initialInput = claire.initialInput)
+            }
+        }
     }
 }
 

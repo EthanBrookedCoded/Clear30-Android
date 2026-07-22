@@ -37,9 +37,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.clear30.data.Clear30Store
@@ -107,36 +105,42 @@ private fun MeditationPlayerCore(
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val onGradient = false // both the sheet and the inline card are plain-backed (iOS)
-    val player = remember(meditation.url) {
-        ExoPlayer.Builder(context).build().apply {
-            // Process-wide audio attributes baseline (iOS AVAudioSession
-            // .playback analog). handleAudioFocus = true so the meditation
-            // pauses on incoming call / nav prompt instead of being talked over.
-            setAudioAttributes(org.clear30.data.AudioBaseline.attributes, /* handleAudioFocus = */ true)
-            setMediaItem(MediaItem.fromUri(meditation.url.trim()))
-            prepare()
-            // iOS starts paused — playback begins on the first play tap.
-            playWhenReady = false
-        }
+    // The SHARED app-wide player (MeditationAudioController) — playback belongs
+    // to the controller/service, so it survives leaving composition and keeps
+    // playing in the background (sleep meditations). IMPORTANT: composition
+    // must NOT touch the player's media item — merely composing a card (e.g.
+    // the sleep pager pre-composing the next page) would otherwise hijack /
+    // stop whatever is playing. The item is only set on the play tap.
+    val player = remember { org.clear30.data.MeditationAudioController.player(context) }
+    fun ownsPlayer() = player.currentMediaItem?.localConfiguration?.uri?.toString() == meditation.url.trim()
+    // Seed from the live player so re-entering mid-playback (or mid-pause)
+    // shows the true state — but only when the loaded track is OURS.
+    var isPlaying by remember(meditation.url) { mutableStateOf(player.isPlaying && ownsPlayer()) }
+    var positionMs by remember(meditation.url) { mutableStateOf(if (ownsPlayer()) player.currentPosition else 0L) }
+    var durationMs by remember(meditation.url) {
+        mutableStateOf(if (ownsPlayer()) player.duration.coerceAtLeast(0L) else 0L)
     }
-    var isPlaying by remember { mutableStateOf(false) }
-    var positionMs by remember { mutableStateOf(0L) }
-    var durationMs by remember { mutableStateOf(0L) }
     var everPlayed by remember { mutableStateOf(false) }
 
     DisposableEffect(meditation.url) {
         val listener = object : Player.Listener {
-            override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
+            // Every mounted card hears the shared player; each only reacts to
+            // events for ITS OWN track, so a playing sleep meditation doesn't
+            // flip other cards' discs or falsely mark them visited.
+            override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing && ownsPlayer() }
             override fun onPlaybackStateChanged(state: Int) {
+                if (!ownsPlayer()) return
                 if (state == Player.STATE_READY) durationMs = player.duration.coerceAtLeast(0L)
                 if (state == Player.STATE_ENDED) { player.pause(); player.seekTo(0); positionMs = 0 }
             }
+            override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
+                if (!ownsPlayer()) { isPlaying = false; positionMs = 0 }
+            }
         }
         player.addListener(listener)
-        onDispose {
-            player.removeListener(listener)
-            player.release()
-        }
+        // Do NOT release on dispose — the shared player keeps playing (the
+        // media notification controls it); only detach this page's listener.
+        onDispose { player.removeListener(listener) }
     }
 
     // Mark visited + persist on first actual play (iOS playPauseAction).
@@ -183,8 +187,16 @@ private fun MeditationPlayerCore(
                     },
                 )
                 .pressScale {
-                    Haptics.mediumImpact()
-                    if (player.isPlaying) player.pause() else player.play()
+                    if (player.isPlaying && ownsPlayer()) {
+                        player.pause()
+                    } else {
+                        // Point the shared player at this meditation (keeps
+                        // position if it's already the loaded track), then keep
+                        // the media service alive for background playback.
+                        org.clear30.data.MeditationAudioController.prepare(context, meditation.url, meditation.name)
+                        org.clear30.data.MeditationAudioController.ensureService(context)
+                        player.play()
+                    }
                 },
             contentAlignment = Alignment.Center,
         ) {
@@ -204,7 +216,9 @@ private fun MeditationPlayerCore(
             // spans the card; the full-screen sheet caps at 250.
             modifier = if (inline) Modifier.fillMaxWidth() else Modifier.widthIn(max = 250.dp),
             onSeek = { fraction ->
-                if (durationMs > 0) {
+                // Only seek when this card's track is the loaded one — a drag on
+                // an idle card must not scrub whatever else is playing.
+                if (durationMs > 0 && ownsPlayer()) {
                     val target = (durationMs * fraction).toLong()
                     player.seekTo(target)
                     positionMs = target
@@ -265,3 +279,4 @@ private fun formatMeditationTime(ms: Long): String {
     val totalSec = ms / 1000
     return "${totalSec / 60}:${(totalSec % 60).toString().padStart(2, '0')}"
 }
+

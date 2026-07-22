@@ -68,6 +68,10 @@ data class AchievementRarity(
     // rarity (see AchievementRarity.glyph). Optional so the row still decodes.
     @SerialName("sf_symbol") val sfSymbol: String = "",
 ) {
+    /** Non-earned Legendary achievements are hidden from the list (surprise). */
+    val isLegendary: Boolean
+        get() = name.lowercase().let { "legend" in it || "mythic" in it }
+
     /** Circle (common) → diamond (rare) → hexagon (epic) → seal (legendary). */
     val glyph: String
         get() = sfSymbol.ifBlank {

@@ -12,6 +12,9 @@
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <!-- SMS sign-up flow reads the user's contacts (Clear30 accountability texts) -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- Background meditation audio (iOS UIBackgroundModes: audio) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <application
         android:name=".Clear30Application"
@@ -43,6 +46,16 @@
                 <data android:scheme="https" android:host="clear30.org" />
             </intent-filter>
         </activity>
+
+        <!-- Background meditation playback + lock-screen controls (media3) -->
+        <service
+            android:name=".data.MeditationPlaybackService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
 
         <!-- Firebase Cloud Messaging (mirrors AppDelegate MessagingDelegate) -->
         <service

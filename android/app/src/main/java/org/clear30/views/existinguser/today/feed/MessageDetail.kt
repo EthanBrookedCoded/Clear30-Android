@@ -1,7 +1,5 @@
 package org.clear30.views.existinguser.today
 
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -30,7 +27,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import org.clear30.data.Clear30Store
@@ -57,13 +53,10 @@ import org.clear30.views.components.RedditDialog
 import org.clear30.views.components.SmallText
 import org.clear30.views.components.TinyText
 import org.clear30.views.components.WebViewDialog
-import org.clear30.views.components.scrollStackItem
-import org.clear30.views.components.pressScale
 import org.clear30.views.components.sfSymbol
 import org.clear30.views.theme.Clear30Colors
 import org.clear30.views.theme.Clear30Gradients
 import org.clear30.views.theme.Dimens
-import org.clear30.views.theme.Haptics
 
 /**
  * MessageDetail — the full-screen paged message viewer (port of iOS
@@ -72,34 +65,48 @@ import org.clear30.views.theme.Haptics
  * guide pages, meditation, each reddit, each youtube, each member perk, each
  * Claire prompt, journal prompts, then the feed-end celebration.
  *
- * The 70dp header swaps between back-button + favorite heart (page 0) and the
- * topic + progress bar (later pages, tap to return to the top), mirroring the
- * iOS `showProgressBar` header. Paging writes the day's `ContentInfo.progress`
- * as `index / (count - 1)`.
+ * The 70dp header swaps between the back button (page 0) and the topic +
+ * progress bar (later pages, tap to return to the top), mirroring the iOS
+ * `showProgressBar` header minus the favorite heart (removed per Thatcher,
+ * W35 — deliberate iOS divergence). Paging writes the day's
+ * `ContentInfo.progress` as `index / (count - 1)`.
  *
  * Marks the message visited on first open and fires `openedMessage`.
  */
+/** Single-message convenience — wraps into a one-element group. */
 @Composable
 fun MessageDetail(
     program: Program,
     message: ProgramMessage,
+    userInfo: UserInfo,
+    journalEntries: JournalEntries? = null,
+    onBack: () -> Unit,
+) = MessageDetail(program, listOf(message), userInfo, journalEntries, onBack)
+
+@Composable
+fun MessageDetail(
+    program: Program,
+    // The day's message GROUP (iOS ProgramMessagesView takes [ProgramMessage]):
+    // the first is the main message, any same-day sub-messages (usually the
+    // assessment-response message) append their content after it.
+    messages: List<ProgramMessage>,
     userInfo: UserInfo,
     // Needed to save "Journal on this" entries; null on the rare path that has no
     // journal in scope (the journal cards simply no-op there).
     journalEntries: JournalEntries? = null,
     onBack: () -> Unit,
 ) {
+    val message = messages.firstOrNull() ?: return
     val scope = rememberCoroutineScope()
     // In-app overlays opened from the content pages.
     var webUrl by remember { mutableStateOf<String?>(null) }
     var redditUrl by remember { mutableStateOf<String?>(null) }
     var journalPrompt by remember { mutableStateOf<String?>(null) }
-    // Rev bumps re-read `favorited` after the heart toggles (it's a plain var).
-    var favoriteRev by remember { mutableStateOf(0) }
 
-    LaunchedEffect(message) {
-        if (!message.visited) {
-            message.visited = true
+    LaunchedEffect(messages) {
+        val unvisited = messages.filter { !it.visited }
+        if (unvisited.isNotEmpty()) {
+            unvisited.forEach { it.visited = true }
             scope.launch {
                 // Persist locally first, then mirror content state (visited /
                 // favorites) up to Supabase (content_info) so it follows the
@@ -115,26 +122,31 @@ fun MessageDetail(
         )
     }
 
-    // One page per content part (iOS `generateFeedItems`).
-    val pages = remember(message) {
+    // One page per content part, iterating every message in the group (iOS
+    // `generateFeedItems`): topic from the first, then each message's content
+    // in sequence, then one feed-end.
+    val pages = remember(messages) {
         buildList {
             add(ViewerPage.Topic)
-            if (!message.videoURL.isNullOrBlank()) add(ViewerPage.Video)
-            add(ViewerPage.Body)
-            message.carouselImages?.takeIf { it.isNotEmpty() }?.let { add(ViewerPage.Carousel(it)) }
-            if (message.programPageInfo.isNotEmpty()) add(ViewerPage.Guides)
-            message.meditation?.let { add(ViewerPage.Meditation(it)) }
-            message.reddits.forEach { add(ViewerPage.Reddit(it)) }
-            message.youTubes.forEach { add(ViewerPage.YouTube(it)) }
-            if (message.hasOnlyResources) add(ViewerPage.Resources(message.onlyResources))
-            message.memberPerks?.forEach { add(ViewerPage.Perk(it)) }
-            message.clairePrompts.forEach { add(ViewerPage.Claire(it)) }
-            message.journalPrompts?.takeIf { it.isNotEmpty() }?.let { add(ViewerPage.Journal(it)) }
+            messages.forEach { m ->
+                if (!m.videoURL.isNullOrBlank()) add(ViewerPage.Video(m))
+                add(ViewerPage.Body(m))
+                m.carouselImages?.takeIf { it.isNotEmpty() }?.let { add(ViewerPage.Carousel(it)) }
+                if (m.programPageInfo.isNotEmpty()) add(ViewerPage.Guides(m))
+                m.meditation?.let { add(ViewerPage.Meditation(it)) }
+                m.instagramVideos?.takeIf { it.isNotEmpty() }?.let { add(ViewerPage.InstagramVideos(it)) }
+                m.reddits.forEach { add(ViewerPage.Reddit(it)) }
+                m.youTubes.forEach { add(ViewerPage.YouTube(it)) }
+                if (m.hasOnlyResources) add(ViewerPage.Resources(m.onlyResources))
+                m.memberPerks?.forEach { add(ViewerPage.Perk(it)) }
+                m.clairePrompts.forEach { add(ViewerPage.Claire(it)) }
+                m.journalPrompts?.takeIf { it.isNotEmpty() }?.let { add(ViewerPage.Journal(it)) }
+            }
             add(ViewerPage.FeedEnd)
         }
     }
     val pagerState = rememberPagerState(pageCount = { pages.size })
-    val contentDay = remember(message) { PlainDate.from(message.unlockOn) }
+    val contentDay = remember(messages) { PlainDate.from(message.unlockOn) }
 
     // Progress write-back as the user pages (iOS `updateFeedProgress`) —
     // in-memory only per page turn; persisted when the end page completes.
@@ -147,7 +159,10 @@ fun MessageDetail(
         // ── Header: back + heart ↔ topic + progress (iOS :262-383) ──────────
         Box(Modifier.fillMaxWidth().height(70.dp), contentAlignment = Alignment.CenterStart) {
             val showProgressHeader = pagerState.currentPage > 0
-            Crossfade(targetState = showProgressHeader, animationSpec = tween(160), label = "viewerHeader") { progressHeader ->
+            // Plain switch (no Crossfade) — same W21 reasoning as the tab host:
+            // the fading alpha layer corrupted the cards' blur shadows.
+            run {
+                val progressHeader = showProgressHeader
                 if (progressHeader) {
                     Column(
                         Modifier.fillMaxWidth().clickable { scope.launch { pagerState.animateScrollToPage(0) } },
@@ -176,33 +191,24 @@ fun MessageDetail(
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         IconButton("chevron.backward", onClick = onBack)
                         Spacer(Modifier.weight(1f))
-                        @Suppress("UNUSED_EXPRESSION") favoriteRev
-                        FavoriteHeart(favorited = message.favorited) {
-                            message.favorited = !message.favorited
-                            favoriteRev++
-                            if (message.favorited) Haptics.successLight() else Haptics.successHeavy()
-                            scope.launch {
-                                Clear30Store.save(program)
-                                SupabaseController.updateContentInfo(program.contentInfo)
-                            }
-                        }
                     }
                 }
             }
         }
 
-        // ── Pager (same receding-deck treatment as the Today feed) ─────────
+        // ── Pager — same plain treatment as the Today feed (W21: the deck
+        // tilt/overlap transform bled adjacent cards together and its alpha
+        // compositing corrupted the blur shadows; glow off per Thatcher).
         VerticalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(vertical = Dimens.cardSpacing * 2.5f),
             pageSpacing = Dimens.cardSpacing,
         ) { page ->
-            val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
             val focused = page == pagerState.settledPage
-            val glow = if (focused) Clear30Gradients.clear30 else null
+            val glow: androidx.compose.ui.graphics.Brush? = null
             Box(
-                Modifier.fillMaxSize().scrollStackItem(pageOffset, baseScale = 0.92f),
+                Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
             ) {
                 when (val item = pages.getOrNull(page)) {
@@ -213,11 +219,12 @@ fun MessageDetail(
                         progress = program.contentInfo[contentDay]?.progress?.toFloat(),
                         modifier = Modifier.fillMaxSize(),
                     )
-                    ViewerPage.Video -> VideoFeedCard(message, userInfo, focused = focused)
-                    ViewerPage.Body -> MessageContentCard(message, program, userInfo, glow = glow)
+                    is ViewerPage.Video -> VideoFeedCard(item.msg, userInfo, focused = focused)
+                    is ViewerPage.Body -> MessageContentCard(item.msg, program, userInfo, glow = glow)
                     is ViewerPage.Carousel -> CarouselFeedCard(item.images, glow = glow)
-                    ViewerPage.Guides -> GuidesFeedCard(message, glow = glow)
+                    is ViewerPage.Guides -> GuidesFeedCard(item.msg, glow = glow)
                     is ViewerPage.Meditation -> MeditationFeedCard(item.med, program, glow = glow?.let { Clear30Gradients.meditation })
+                    is ViewerPage.InstagramVideos -> VideosFeedCard(item.videos, focused = focused)
                     is ViewerPage.Reddit -> RedditFeedCard(item.res, userInfo, glow = glow?.let { Clear30Gradients.reddit }, onOpen = { redditUrl = it })
                     is ViewerPage.YouTube -> YouTubeFeedCard(item.res, userInfo, glow = glow?.let { Clear30Gradients.youtube }, focused = focused, onOpenWeb = { webUrl = it })
                     is ViewerPage.Resources -> ResourcesCard(item.resources, userInfo, onOpen = { webUrl = it })
@@ -267,11 +274,12 @@ fun MessageDetail(
 /** One vertical-pager page of the viewer (iOS `ProgramMessageItem`). */
 private sealed interface ViewerPage {
     data object Topic : ViewerPage
-    data object Video : ViewerPage
-    data object Body : ViewerPage
+    data class Video(val msg: ProgramMessage) : ViewerPage
+    data class Body(val msg: ProgramMessage) : ViewerPage
     data class Carousel(val images: List<String>) : ViewerPage
-    data object Guides : ViewerPage
+    data class Guides(val msg: ProgramMessage) : ViewerPage
     data class Meditation(val med: ProgramMeditation) : ViewerPage
+    data class InstagramVideos(val videos: List<org.clear30.data.model.ProgramVideo>) : ViewerPage
     data class Reddit(val res: ProgramResource) : ViewerPage
     data class YouTube(val res: ProgramResource) : ViewerPage
     data class Resources(val resources: List<ProgramResource>) : ViewerPage
@@ -279,24 +287,6 @@ private sealed interface ViewerPage {
     data class Claire(val prompt: ProgramClairePrompt) : ViewerPage
     data class Journal(val prompts: List<String>) : ViewerPage
     data object FeedEnd : ViewerPage
-}
-
-/**
- * The favorite heart (iOS `ProgramMessagesView` header :319-348): a gradient
- * disc when favorited, a dim gray heart when not.
- */
-@Composable
-private fun FavoriteHeart(favorited: Boolean, onToggle: () -> Unit) {
-    if (favorited) {
-        Box(
-            Modifier.size(40.dp).clip(CircleShape).background(Clear30Gradients.clear30).pressScale { onToggle() },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(sfSymbol("heart.fill"), contentDescription = "Unfavorite", tint = Color.White, modifier = Modifier.size(18.dp))
-        }
-    } else {
-        IconButton("heart.fill", tint = Clear30Colors.text.copy(alpha = 0.25f), onClick = onToggle)
-    }
 }
 
 /** Non reddit/youtube cross-links, one page (each opens the in-app web viewer). */

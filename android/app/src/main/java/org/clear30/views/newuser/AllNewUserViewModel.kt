@@ -146,7 +146,10 @@ class AllNewUserViewModel(
     fun handlePayment(entitlement: EntitlementType?, setPaidFalseOn: kotlinx.datetime.Instant? = null) {
         val isPaid = entitlement != null
         userInfo.notificationSettings = ToggleSettings.notificationDefaults(paid = isPaid)
-        // TODO(port): if paid, onboardingSetup.setup (groups)
+        // onboardingSetup.setup(paid:) parity: the groupToJoin half is consumed
+        // by AllTabs on first load (matching iOS's AllTabs fallback); the
+        // customCheckIn/accountabilityLevel halves are never set by the short
+        // flow (dormant on iOS too).
 
         // iOS: look up whether the paywall the user saw is hard (payment.hard_paywalls).
         // currentPaywallID is only set by Helium-driven paywalls, so this is dormant

@@ -6,10 +6,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -128,16 +132,24 @@ fun SmallTextHighlighted(
 }
 
 /**
- * Converts `**bold**` / `__bold__` markdown runs into bold spans (the rest stays
- * plain). iOS renders prompt/body strings as Markdown; this gives us the same
- * emphasis without a full Markdown engine.
+ * Converts `**bold**` / `__bold__` runs into bold spans and single-delimiter
+ * `*italic*` / `_italic_` runs into italic spans. iOS renders these strings as
+ * Markdown; this covers the syntax the live content actually uses (surveyed
+ * 2026-07-21: 411/435 message bodies use bold, a handful use italics, zero use
+ * links/headers/lists — so no full Markdown engine is needed).
  */
 fun markdownBold(text: String): AnnotatedString = buildAnnotatedString {
-    val regex = Regex("""(\*\*|__)(.+?)\1""")
+    val regex = Regex("""(\*\*|__)(.+?)\1|(?<![*\w])\*([^*\n]+)\*(?!\*)|(?<![_\w])_([^_\n]+)_(?!\w)""")
     var last = 0
     for (m in regex.findAll(text)) {
         if (m.range.first > last) append(text.substring(last, m.range.first))
-        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(m.groupValues[2]) }
+        val bold = m.groupValues[2]
+        if (bold.isNotEmpty()) {
+            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(bold) }
+        } else {
+            val italic = m.groupValues[3].ifEmpty { m.groupValues[4] }
+            withStyle(SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) { append(italic) }
+        }
         last = m.range.last + 1
     }
     if (last < text.length) append(text.substring(last))
@@ -179,3 +191,78 @@ fun SmallTextMarkdown(text: String, modifier: Modifier = Modifier, color: Color 
 @Composable
 fun Heading3Markdown(text: String, modifier: Modifier = Modifier, color: Color = Color.Unspecified) =
     MarkdownText(text, 22.sp, FontWeight.Medium, modifier, color)
+
+/**
+ * Full BLOCK markdown for guide bodies (iOS parses these with AttributedString
+ * `.full` and renders in SwiftUI Text): `#` headers → bold lines, `-`/`*`
+ * bullets → • glyphs, `[label](url)` → tappable underlined links, plus the
+ * inline bold/italic emphasis. The live guide content uses all of these
+ * (31/32 guides carry links + headers), which the inline-only renderer showed
+ * as raw syntax.
+ */
+fun markdownBlocks(text: String): AnnotatedString = buildAnnotatedString {
+    fun AnnotatedString.Builder.appendInline(s: String) {
+        val regex = Regex(
+            """\[([^\]]+)\]\(([^)\s]+)\)|(\*\*|__)(.+?)\3|(?<![*\w])\*([^*\n]+)\*(?!\*)|(?<![_\w])_([^_\n]+)_(?!\w)""",
+        )
+        var last = 0
+        for (m in regex.findAll(s)) {
+            if (m.range.first > last) append(s.substring(last, m.range.first))
+            val label = m.groupValues[1]
+            val bold = m.groupValues[4]
+            when {
+                label.isNotEmpty() -> withLink(
+                    LinkAnnotation.Url(
+                        m.groupValues[2],
+                        TextLinkStyles(
+                            style = SpanStyle(
+                                color = org.clear30.views.theme.Clear30Colors.meditation1,
+                                textDecoration = TextDecoration.Underline,
+                            ),
+                        ),
+                    ),
+                ) { append(label) }
+                bold.isNotEmpty() -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(bold) }
+                else -> {
+                    val italic = m.groupValues[5].ifEmpty { m.groupValues[6] }
+                    withStyle(SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)) { append(italic) }
+                }
+            }
+            last = m.range.last + 1
+        }
+        if (last < s.length) append(s.substring(last))
+    }
+
+    val lines = text.lines()
+    lines.forEachIndexed { i, raw ->
+        val line = raw.trim()
+        val header = Regex("""^#{1,6}\s+(.*)""").find(line)
+        val bullet = Regex("""^[-*]\s+(.*)""").find(line)
+        when {
+            header != null -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { appendInline(header.groupValues[1]) }
+            bullet != null -> { append("•  "); appendInline(bullet.groupValues[1]) }
+            else -> appendInline(raw)
+        }
+        if (i != lines.lastIndex) append("\n")
+    }
+}
+
+/** SmallText rendering full guide markdown (headers / bullets / tappable links). */
+@Composable
+fun SmallTextMarkdownBlocks(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = Color.Unspecified,
+    maxLines: Int = Int.MAX_VALUE,
+) = Text(
+    markdownBlocks(text),
+    modifier = modifier,
+    color = color,
+    fontFamily = Lexend,
+    fontWeight = FontWeight.Normal,
+    fontSize = 15.5.sp,
+    lineHeight = 15.5.sp * LINE_HEIGHT_RATIO,
+    maxLines = maxLines,
+    overflow = TextOverflow.Ellipsis,
+    style = ClearTextStyle,
+)

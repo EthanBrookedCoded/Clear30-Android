@@ -266,10 +266,15 @@ fun YouTubeEmbedPlayer(
     var playing by remember(videoId) { mutableStateOf(false) }
 
     // If the IFrame API never reaches a playable state (script blocked, dead
-    // network — cases with no error callback at all), fail over after 12s.
+    // network — cases with no error callback at all), fail over after 20s —
+    // long enough that a cold WebView + player boot on a slow connection isn't
+    // misreported as "can't play".
     androidx.compose.runtime.LaunchedEffect(videoId) {
-        kotlinx.coroutines.delay(12_000)
-        if (!playing) onFailed()
+        kotlinx.coroutines.delay(20_000)
+        if (!playing) {
+            android.util.Log.w("YouTubeEmbed", "load timeout for $videoId")
+            onFailed()
+        }
     }
 
     val webView = remember(videoId) {
@@ -321,7 +326,7 @@ fun YouTubeEmbedPlayer(
                 function onYouTubeIframeAPIReady() {
                   new YT.Player('player', {
                     videoId: '$videoId',
-                    playerVars: {autoplay: 1, playsinline: 1, fs: 1, rel: 0},
+                    playerVars: {autoplay: 1, playsinline: 1, fs: 1, rel: 0, origin: 'https://www.youtube.com'},
                     events: {
                       onReady: function(e) { e.target.playVideo(); },
                       onStateChange: function(e) { Clear30Bridge.playerStateChange(e.data); },

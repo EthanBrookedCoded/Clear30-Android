@@ -45,9 +45,11 @@ internal fun <T> buildLibraryTabs(
     extract: (unlockedMessages: List<ProgramMessage>) -> List<T>,
 ): List<LibraryTabData<T>> {
     fun sectionsFor(entries: List<Map.Entry<PlainDate, ContentInfo>>): List<LibrarySectionData<T>> {
-        // Group by stage, preserving stage order by first-seen date.
+        // Group by stage, NEWEST FIRST — iOS renders both the section loop and
+        // the items inside each section `.reversed()` (AllMessagesView.swift:139,
+        // W18), so the latest stage and latest content lead.
         val grouped = LinkedHashMap<String, MutableList<ContentInfo>>()
-        entries.sortedBy { it.key }.forEach { e ->
+        entries.sortedByDescending { it.key }.forEach { e ->
             grouped.getOrPut(e.value.stage?.title ?: "") { mutableListOf() }.add(e.value)
         }
         return grouped.map { (_, group) ->
@@ -56,10 +58,14 @@ internal fun <T> buildLibraryTabs(
         }.filter { it.items.isNotEmpty() }
     }
 
-    val byBreak = program.breaks.sortedBy { it.startDate }.mapNotNull { br ->
+    // Newest break first (iOS AllMessagesView.swift:222-229 `.reversed()`), and
+    // the HALF-OPEN [start, end) window — endDate is the first day OUT of the
+    // break; `<=` double-listed the main break's Day-0 lesson in the
+    // Preparation tab and leaked the first Life topic into the Clear30 tab.
+    val byBreak = program.breaks.sortedByDescending { it.startDate }.mapNotNull { br ->
         val lo = PlainDate.from(br.startDate)
         val hi = PlainDate.from(br.endDate)
-        val entries = program.contentInfo.entries.filter { it.key >= lo && it.key <= hi }
+        val entries = program.contentInfo.entries.filter { it.key >= lo && it.key < hi }
         val sections = sectionsFor(entries)
         if (sections.isEmpty()) null else LibraryTabData(br.name, sections)
     }
@@ -72,7 +78,8 @@ internal fun <T> buildLibraryTabs(
 /** Default tab index = the current break's tab, else the most recent (iOS opens on the active break). */
 internal fun <T> defaultLibraryTab(program: Program, tabs: List<LibraryTabData<T>>): Int {
     val currentName = program.getBreak(org.clear30.util.now())?.name
-    return tabs.indexOfFirst { it.name == currentName }.takeIf { it >= 0 } ?: tabs.lastIndex.coerceAtLeast(0)
+    // Tabs are newest-first, so the most-recent fallback is index 0.
+    return tabs.indexOfFirst { it.name == currentName }.takeIf { it >= 0 } ?: 0
 }
 
 /** Horizontal break-tab pill row (iOS BreakFilterOption). */

@@ -144,6 +144,10 @@ object AssessmentSubmissionHandler {
 
         Clear30Store.save(userInfo)
         Logger.logEvent(userInfo.loggingID, LogEventType.completedAssessment, mapOf(LogEventExtraDataType.TYPE to "clear30"))
+        // iOS re-anchors the abandoned-onboarding reminders to the successful
+        // submit (AllSignUpViewModel.swift:181) — the pre-payment window is
+        // where they matter.
+        runCatching { NotificationHandler.scheduleAbandonedOnboarding(userInfo, program) }
         return null
     }
 

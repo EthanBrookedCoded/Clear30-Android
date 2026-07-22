@@ -76,6 +76,15 @@ class ProgramBreak(
         return option.filter { it.isDigit() }.toIntOrNull()      // "$50" -> 50
     }
 
+    /** The badge string configured for the user's own answer to [strippedPrompt]
+     *  (iOS `getBadgeText` — personalizes message-card heading pills). */
+    fun getBadgeText(strippedPrompt: String, questionResponse: String): String? {
+        val qr = getAssessmentResponse(strippedPrompt) ?: return null
+        val responseIndex = qr.question.options.indexOf(questionResponse).takeIf { it >= 0 } ?: return null
+        val badge = qr.question.badges?.getOrNull(responseIndex) ?: return null
+        return badge.ifEmpty { null }
+    }
+
     val breakDescription: String?
         get() = when (type) {
             ProgramBreakType.CLEAR30 -> {

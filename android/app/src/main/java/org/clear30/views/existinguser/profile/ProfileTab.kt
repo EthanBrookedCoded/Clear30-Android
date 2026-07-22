@@ -57,6 +57,7 @@ import org.clear30.views.components.sfSymbol
 import org.clear30.views.theme.Clear30Colors
 import org.clear30.views.theme.Clear30Gradients
 import org.clear30.views.theme.Dimens
+import org.clear30.util.adding
 import org.clear30.util.daysTo
 import org.clear30.util.now
 
@@ -122,15 +123,19 @@ fun ProfileTab(
                 CircleIconButton("gearshape.fill") { showSettings = true }
             }
 
-            // Pending post-assessment card (iOS Profile.swift:181-184).
-            val postAssessmentText = program.postAssessmentCardText
-            if (postAssessmentText != null && onOpenPostAssessment != null) {
-                org.clear30.views.existinguser.postassessment.PostAssessmentPopupCard(
-                    text = postAssessmentText,
-                    onClick = onOpenPostAssessment,
-                )
+            // Day 0 of an upcoming break (iOS Profile.displayMode →
+            // .programBreakStartSoon → programBreakStartSoonLayout): the page
+            // shows ONLY the green break-start countdown plus the Journal /
+            // Previous Breaks buttons — no why card, timer, health,
+            // achievements, program card, calendar, or stat cards.
+            val startSoonBreak = remember(refresh) {
+                program.currentBreakNotStartSoon?.takeIf {
+                    !program.inCoreProgram && it.currentBreakDay <= 0
+                }
             }
-
+            if (startSoonBreak != null) {
+                BreakStartCountdown(program, userInfo, startSoonBreak) { refresh++ }
+            } else {
             // ===== Overall Progress =====
             SectionLabel("Overall Progress")
             UserWhyCard(userInfo)
@@ -143,12 +148,22 @@ fun ProfileTab(
                 refresh++
                 scope.launch { runCatching { Clear30Store.save(program) } }
             }
-            AchievementsSection(userInfo)
+            AchievementsSection(userInfo, program)
 
             // ===== Your Program / Your Break =====
             val calendarBreak = program.currentBreak
             SectionLabel(if (calendarBreak != null) "Your Break" else "Your Program")
-            ProgramCard(program, userInfo, revision = refresh)
+            // iOS lifeLayout (Profile.swift:181-190): a pending post-assessment
+            // REPLACES the program card in this slot.
+            val postAssessmentText = program.postAssessmentCardText
+            if (calendarBreak == null && postAssessmentText != null && onOpenPostAssessment != null) {
+                org.clear30.views.existinguser.postassessment.PostAssessmentPopupCard(
+                    text = postAssessmentText,
+                    onClick = onOpenPostAssessment,
+                )
+            } else {
+                ProgramCard(program, userInfo, revision = refresh, onChanged = { refresh++ })
+            }
             // Calendar — iOS branches: in-break → the 30-day snake calendar
             // (Profile.swift programBreakLayout), Life → the Roman month calendar
             // (lifeLayout). Both sit between the program card and the stat cards.
@@ -174,7 +189,7 @@ fun ProfileTab(
             if (moneySaved != null) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
                     ProfileDaysWithoutWeed(program.numDaysSober, Modifier.weight(1f))
-                    ProfileMoneySaved(moneySaved, Modifier.weight(1f))
+                    ProfileMoneySaved(moneySaved, program, revision = refresh, modifier = Modifier.weight(1f)) { refresh++ }
                 }
                 if (canStartBreak) {
                     ProfileNewBreakButton(Modifier.fillMaxWidth()) { showNewBreak = true }
@@ -188,9 +203,10 @@ fun ProfileTab(
                 }
             }
 
-            // In-break management (Restart / Change start date / End) or the Day-0
-            // "Start break now" — renders nothing in Life. Wired to ProgramTimelineHandler.
+            // In-break management (Restart / Change start date / End) — renders
+            // nothing in Life. Wired to ProgramTimelineHandler.
             ProfileBreakOptions(program, userInfo, revision = refresh) { refresh++ }
+            }
 
             // ===== Journal & Previous Breaks (each opens its own full page) =====
             BrowseButton("Journal", "book.closed.fill", Clear30Gradients.journals) {
@@ -350,10 +366,11 @@ private fun UserWhyCard(userInfo: UserInfo) {
 // MARK: - Program card (iOS `ProgramCard`, Life branch)
 
 @Composable
-private fun ProgramCard(program: Program, userInfo: UserInfo, revision: Int) {
+private fun ProgramCard(program: Program, userInfo: UserInfo, revision: Int, onChanged: () -> Unit = {}) {
     val scope = rememberCoroutineScope()
     var refresh by remember { mutableIntStateOf(0) }
     var showSwitchConfirm by remember { mutableStateOf(false) }
+    var showEndConfirm by remember { mutableStateOf(false) }
     var detailInfo by remember { mutableStateOf<org.clear30.data.model.ProgramDetailSheetInfo?>(null) }
     @Suppress("UNUSED_EXPRESSION") refresh // read so toggles recompose
     // `program` is mutated in place, so `revision` is what invalidates this card
@@ -361,13 +378,51 @@ private fun ProgramCard(program: Program, userInfo: UserInfo, revision: Int) {
     // used (unused params are excluded from the skip comparison).
     val currentBreak = remember(revision, refresh) { program.currentBreak }
 
-    // iOS info button → detail sheet about the current program / break.
+    // iOS info button → detail sheet about the current program / break; during a
+    // break the sheet also offers "End Break" (iOS sheetInfoView).
     detailInfo?.let { info ->
         AlertDialog(
             onDismissRequest = { detailInfo = null },
             title = { Text(info.title) },
             text = { Text(info.description) },
             confirmButton = { TextButton(onClick = { detailInfo = null }) { Text("Got it") } },
+            dismissButton = if (currentBreak != null) {
+                { TextButton(onClick = { detailInfo = null; showEndConfirm = true }) { Text("End Break") } }
+            } else {
+                null
+            },
+        )
+    }
+
+    // iOS `handleEnd()` (ProfileCards.swift:292-315): yes/no alert → endBreak →
+    // the Life program.
+    if (showEndConfirm && currentBreak != null) {
+        AlertDialog(
+            onDismissRequest = { showEndConfirm = false },
+            title = { Text("End ${currentBreak.name}?") },
+            text = { Text("This will end your break and put you in The Life Program.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showEndConfirm = false
+                    // App-lifetime scope: endBreak nulls currentBreak in place, so
+                    // this card recomposes mid-flight — a composition-tied scope
+                    // would cancel the mutation halfway through.
+                    org.clear30.Clear30Application.appScope.launch {
+                        try {
+                            org.clear30.data.LoadingCoordinator.tracked {
+                                val error = org.clear30.data.ProgramTimelineHandler.endBreak(program)
+                                if (error != null) org.clear30.data.AlertHandler.error(message = error)
+                            }
+                        } catch (t: Throwable) {
+                            android.util.Log.e("ProgramCard", "endBreak failed", t)
+                        } finally {
+                            refresh++
+                            onChanged()
+                        }
+                    }
+                }) { Text("End break") }
+            },
+            dismissButton = { TextButton(onClick = { showEndConfirm = false }) { Text("Cancel") } },
         )
     }
 
@@ -384,15 +439,24 @@ private fun ProgramCard(program: Program, userInfo: UserInfo, revision: Int) {
             confirmButton = {
                 TextButton(onClick = {
                     showSwitchConfirm = false
-                    scope.launch {
-                        org.clear30.data.LoadingCoordinator.tracked {
-                            val error = org.clear30.data.ProgramTimelineHandler.switchCore(
-                                program,
-                                clientName = userInfo.name,
-                            )
-                            if (error != null) org.clear30.data.AlertHandler.error(message = error)
+                    // App-lifetime scope — the switch submits an assessment and
+                    // refetches content; a composition-tied scope would cancel
+                    // it mid-flight on a tab switch, leaving the backend flipped
+                    // but the local mode unswitched.
+                    org.clear30.Clear30Application.appScope.launch {
+                        try {
+                            org.clear30.data.LoadingCoordinator.tracked {
+                                val error = org.clear30.data.ProgramTimelineHandler.switchCore(
+                                    program,
+                                    clientName = userInfo.name,
+                                )
+                                if (error != null) org.clear30.data.AlertHandler.error(message = error)
+                            }
+                        } catch (t: Throwable) {
+                            android.util.Log.e("ProgramCard", "switchCore failed", t)
+                        } finally {
+                            refresh++
                         }
-                        refresh++
                     }
                 }) { Text("Switch") }
             },
@@ -406,24 +470,43 @@ private fun ProgramCard(program: Program, userInfo: UserInfo, revision: Int) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     SmallText(currentBreak.name)
                     Spacer(Modifier.weight(1f))
-                    InfoButton { detailInfo = program.detailSheetInfo }
+                    // iOS shows the ⓘ only when the BREAK has sheet info — the
+                    // start-soon bridge has none, and falling back to
+                    // program.detailSheetInfo displayed the Life sheet on the
+                    // break card.
+                    currentBreak.detailSheetInfo?.let { sheet ->
+                        InfoButton { detailInfo = sheet }
+                    }
                 }
                 currentBreak.breakDescription?.let {
-                    SmallText(it, color = Clear30Colors.text.copy(alpha = 0.5f))
+                    // W13: white on the gradient card (Clear30Colors.text is
+                    // black in light mode).
+                    SmallText(it, color = Color.White.copy(alpha = 0.5f))
                 }
+                // iOS ProfileCards:143-158: "Day N" only while N is inside the
+                // break (dayValid), plus the start→end date-range badge.
                 Row(horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-                    Badge("Day ${currentBreak.currentBreakDay}", gradientBackground = false)
+                    val day = currentBreak.currentBreakDay
+                    val dayValid = day <= currentBreak.type.raw
+                    if (dayValid) Badge("Day $day", gradientBackground = false)
+                    Badge(
+                        "${shortMonthDate(currentBreak.startDate.adding(days = 1))} to " +
+                            shortMonthDate(currentBreak.endDate.adding(days = -1)),
+                        gradientBackground = dayValid,
+                    )
                 }
             } else {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     SmallText("Life")
                     Spacer(Modifier.weight(1f))
-                    InfoButton { detailInfo = program.detailSheetInfo }
+                    program.detailSheetInfo?.let { sheet ->
+                        InfoButton { detailInfo = sheet }
+                    }
                 }
-                SmallText(
-                    program.programDescription ?: "Your long term support program.",
-                    color = Clear30Colors.text.copy(alpha = 0.5f),
-                )
+                program.programDescription?.let {
+                    // W13: white on the gradient card.
+                    SmallText(it, color = Color.White.copy(alpha = 0.5f))
+                }
                 if (userInfo.mode != AppMode.ADOLESCENT) {
                     Row(horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
                         Badge(
@@ -444,6 +527,20 @@ private fun ProgramCard(program: Program, userInfo: UserInfo, revision: Int) {
             }
         }
     }
+}
+
+/** iOS `Date.shortMonthDate` — "Jul 22nd" (MMM d + ordinal suffix). */
+private fun shortMonthDate(instant: kotlinx.datetime.Instant): String {
+    val d = org.clear30.data.model.PlainDate.from(instant)
+    val suffix = when {
+        d.day in 11..13 -> "th"
+        d.day % 10 == 1 -> "st"
+        d.day % 10 == 2 -> "nd"
+        d.day % 10 == 3 -> "rd"
+        else -> "th"
+    }
+    val months = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+    return "${months[d.month - 1]} ${d.day}$suffix"
 }
 
 /** iOS `detailedInfoButton` — white ⓘ on the gradient program card. */
@@ -516,8 +613,56 @@ private fun ProfileDaysWithoutWeed(days: Int, modifier: Modifier = Modifier) {
 // MARK: - Money saved (iOS `ProfileMoneySaved`)
 
 @Composable
-private fun ProfileMoneySaved(moneySaved: Int, modifier: Modifier = Modifier) {
-    Clear30Card(modifier = modifier) {
+private fun ProfileMoneySaved(
+    moneySaved: Int,
+    program: Program,
+    revision: Int,
+    modifier: Modifier = Modifier,
+    onChanged: () -> Unit = {},
+) {
+    val scope = rememberCoroutineScope()
+    var showEditor by remember { mutableStateOf(false) }
+    @Suppress("UNUSED_EXPRESSION") revision // re-read after an adjustment saves
+
+    // iOS handleEditMoneySaved: a numeric prompt; the desired total is stored
+    // as an adjustment over the auto-calculated savings on the current break.
+    if (showEditor) {
+        var draft by remember { mutableStateOf("$moneySaved") }
+        AlertDialog(
+            onDismissRequest = { showEditor = false },
+            title = { Text("Edit Money Saved") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+                    Text("Enter your total dollars saved.")
+                    androidx.compose.material3.OutlinedTextField(
+                        draft, { draft = it.filter(Char::isDigit) },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Amount") },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                        ),
+                        singleLine = true,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val desired = draft.trim().toIntOrNull()
+                    val currentBreak = program.currentBreak ?: program.lastBreak
+                    if (desired != null && desired >= 0 && currentBreak != null) {
+                        val auto = program.getAutoCalculatedMoneySavedOverBreak(currentBreak) ?: 0
+                        currentBreak.moneySavedAdjustment = desired - auto
+                        scope.launch { Clear30Store.save(program) }
+                        onChanged()
+                    }
+                    showEditor = false
+                }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { showEditor = false }) { Text("Cancel") } },
+        )
+    }
+
+    Clear30Card(modifier = modifier.pressScale { showEditor = true }) {
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,

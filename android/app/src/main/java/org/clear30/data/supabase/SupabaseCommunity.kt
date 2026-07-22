@@ -62,6 +62,49 @@ suspend fun SupabaseController.getCommunityFeed(
         .data
 }.onFailure { android.util.Log.w("SupabaseCommunity", "community feed failed: ${it.message}") }
 
+/**
+ * The Today carousel's FALLBACK source (iOS `getCommunityFeedByDayName`):
+ * resolve the "Day N" + program tags, pull the filtered feed for them, and
+ * prefer posts matching BOTH tags over program-only matches.
+ */
+suspend fun SupabaseController.getCommunityFeedByDayName(
+    dayName: String,
+    programName: String,
+    excludePinned: Boolean = true,
+    minComments: Int = 1,
+    minDate: String,
+    sortBy: String = "views",
+): Result<List<Post>> = runCatching {
+    val tags = client.postgrest.from(COMMUNITY_SCHEMA, "tags")
+        .select {
+            filter {
+                or {
+                    eq("name", dayName)
+                    eq("name", programName)
+                }
+            }
+        }
+        .decodeList<PostTag.Tag>()
+    if (tags.isEmpty()) return@runCatching emptyList()
+
+    val params = buildJsonObject {
+        put("start_range", 0)
+        put("end_range", 10)
+        put("tag_ids", JsonArray(tags.map { JsonPrimitive(it.id) }))
+        put("only_my_posts", false)
+        put("exclude_pinned", excludePinned)
+        put("min_comments", minComments)
+        put("min_date", minDate)
+        put("sort_by", sortBy)
+    }
+    val posts = client.postgrest.rpc("get_filtered_posts", params) { schema = COMMUNITY_SCHEMA }
+        .decodeAs<FilteredPostsResponse>()
+        .data
+    val programMatch = posts.filter { p -> p.postTags?.any { it.tag?.name == programName } == true }
+    val programAndDay = programMatch.filter { p -> p.postTags?.any { it.tag?.name == dayName } == true }
+    programAndDay.ifEmpty { programMatch }
+}.onFailure { android.util.Log.w("SupabaseCommunity", "feed by day name failed: ${it.message}") }
+
 /** All community tags (community.tags) for the Filter-by-Tag sheet, sorted by name. */
 suspend fun SupabaseController.getCommunityTags(): Result<List<PostTag.Tag>> = runCatching {
     client.postgrest.from(COMMUNITY_SCHEMA, "tags")
@@ -305,6 +348,10 @@ suspend fun SupabaseController.getCommunityPostsByTitles(
         minDate?.let { put("min_date", it) }
         limitCount?.let { put("limit_count", it) }
     }
+    // The RPC returns { data, total_count } like get_filtered_posts (iOS
+    // decodes FilteredPost) — decodeList on the object shape silently threw
+    // and every prompt search came back empty.
     client.postgrest.rpc("get_posts_by_titles", params) { schema = COMMUNITY_SCHEMA }
-        .decodeList<Post>()
+        .decodeAs<FilteredPostsResponse>()
+        .data
 }.onFailure { android.util.Log.w("SupabaseCommunity", "posts by titles failed: ${it.message}") }

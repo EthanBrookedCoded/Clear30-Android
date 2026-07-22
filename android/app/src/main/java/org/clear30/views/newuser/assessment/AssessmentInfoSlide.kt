@@ -117,7 +117,9 @@ fun AssessmentInfoSlide(
         data.id == AssessmentInfoDataID.features ||
         data.id == AssessmentInfoDataID.expectations ||
         data.id == AssessmentInfoDataID.clear30Context ||
-        data.id == AssessmentInfoDataID.planPath
+        // planPath and goalsAffirmation share the `goals_affirmation` raw (iOS
+        // parity) — only the card-less plan-path variant shows the base copy.
+        (data.id == AssessmentInfoDataID.planPath && data.affirmationCards == null)
 
     CompositionLocalProvider(LocalInfoSlideController provides controller) {
     Column(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding)) {
@@ -194,11 +196,15 @@ private fun customViewFor(data: AssessmentInfoData, vm: AssessmentViewModel?): (
                 weeklySpend = weeklySpend(vm) ?: 0,
             )
         })
-        AssessmentInfoDataID.goalsAffirmation -> ({ AffirmationCardsView(data) })
+        // goalsAffirmation and planPath share the `goals_affirmation` raw —
+        // the goals slide carries affirmationCards, the plan-path slides don't.
+        AssessmentInfoDataID.goalsAffirmation -> ({
+            if (data.affirmationCards != null) AffirmationCardsView(data) else PlanPathCard(data.badge)
+        })
+        AssessmentInfoDataID.triggersAffirmation -> ({ AffirmationCardsView(data) })
         AssessmentInfoDataID.whereYouAre -> ({ WhereYouAreSlide(vm.name) })
         AssessmentInfoDataID.whereYouGoing -> ({ WhereYouGoingSlide() })
         AssessmentInfoDataID.clear30Context -> ({ Clear30ContextEmojis() })
-        AssessmentInfoDataID.planPath -> ({ PlanPathCard(data.badge) })
         else -> null
     }
 

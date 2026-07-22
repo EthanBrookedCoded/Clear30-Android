@@ -1,8 +1,14 @@
 package org.clear30.views.existinguser.today
 
 import androidx.compose.foundation.background
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.VectorConverter
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,9 +40,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
@@ -52,6 +61,7 @@ import org.clear30.data.Logger
 import org.clear30.data.RedditScraper
 import org.clear30.data.RedditThread
 import org.clear30.data.redditInlinePreview
+import org.clear30.data.model.JournalEntry
 import org.clear30.data.model.Program
 import org.clear30.data.model.ProgramClairePrompt
 import org.clear30.data.model.ProgramMeditation
@@ -73,6 +83,8 @@ import org.clear30.views.components.pressScale
 import org.clear30.views.components.SmallText
 import org.clear30.views.components.SmallTextHighlighted
 import org.clear30.views.components.TinyText
+import org.clear30.views.existinguser.support.schoolGradient
+import org.clear30.views.theme.Haptics
 import org.clear30.views.components.VideoThumbnail
 import org.clear30.views.components.sfSymbol
 import org.clear30.views.components.youTubeId
@@ -214,6 +226,43 @@ internal fun VideoFeedCard(msg: ProgramMessage, userInfo: UserInfo, focused: Boo
     }
 }
 
+/**
+ * Instagram videos — iOS `VideosFeedView`: a horizontal PAGED carousel of bare
+ * native videos (one per snapping page, page dots below). The "Instagram"
+ * videos are plain hosted MP4 URLs (`video_url`), played inline with the same
+ * native player as the lesson video; only the settled page plays while the
+ * feed page is focused.
+ */
+@Composable
+internal fun VideosFeedCard(videos: List<org.clear30.data.model.ProgramVideo>, focused: Boolean = false) {
+    if (videos.isEmpty()) return
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { videos.size })
+    Column(Modifier.fillMaxSize()) {
+        androidx.compose.foundation.pager.HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            pageSpacing = Dimens.cardSpacing,
+        ) { page ->
+            org.clear30.views.components.FeedNativeVideoPlayer(
+                videos[page].videoURL,
+                Modifier
+                    .fillMaxSize()
+                    .softShadow(Clear30Colors.shadow, Dimens.cornerRadius)
+                    .clip(RoundedCornerShape(Dimens.cornerRadius))
+                    .background(Color.Black),
+                playTrigger = focused && page == pagerState.settledPage,
+            )
+        }
+        if (videos.size > 1) {
+            FeedPagerDots(
+                count = videos.size,
+                current = pagerState.currentPage,
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = Dimens.cardSpacing / 2),
+            )
+        }
+    }
+}
+
 /** The main lesson text (topic + body). Marks the message visited on first view. */
 @Composable
 internal fun MessageContentCard(msg: ProgramMessage, program: Program, userInfo: UserInfo, glow: Brush? = null) {
@@ -233,12 +282,35 @@ internal fun MessageContentCard(msg: ProgramMessage, program: Program, userInfo:
         }
     }
     ExpandingFeedCard(glow = glow) {
-        SmallTextHighlighted(formats = listOf(HighlightedTextFormat("Message", highlighted = true)))
+        // iOS MessageFeedView badge (TodayFeedViews.swift:154-169): a school
+        // pill for school messages, else the badge configured for the user's
+        // own assessment answer (personalized), top-right of the heading.
+        val school = userInfo.schoolData
+        val badge: Pair<String, Brush>? = when {
+            msg.isSchoolMessage && school != null -> school.short_name to school.schoolGradient()
+            else -> {
+                val qid = msg.questionID
+                val qresp = msg.questionResponse
+                if (qid != null && qresp != null) {
+                    program.currentBreak?.getBadgeText(qid, qresp)?.let { it to Clear30Gradients.clear30 }
+                } else {
+                    null
+                }
+            }
+        }
+        FeedCardHeading(
+            "Message", Clear30Gradients.clear30,
+            trailing = badge?.let { (text, gradient) -> { FeedBadgePill(text, gradient) } },
+        )
         TopicRow(msg)
         // iOS content-opacity hierarchy (TodayFeedViews.swift:125-129):
-        // subtitle at 0.75, body at 0.5.
+        // subtitle at 0.75, body at 0.5. The body renders inline markdown +
+        // links (iOS SmallTextWithLinks) — 411/435 live bodies use **bold**,
+        // which plain SmallText showed as raw asterisks.
         if (msg.subtitle.isNotBlank()) SmallText(msg.subtitle, color = Clear30Colors.text.copy(alpha = 0.75f))
-        if (msg.message.isNotBlank()) SmallText(msg.message, color = Clear30Colors.text.copy(alpha = 0.5f))
+        if (msg.message.isNotBlank()) {
+            org.clear30.views.components.SmallTextMarkdownBlocks(msg.message, color = Clear30Colors.text.copy(alpha = 0.5f))
+        }
     }
 }
 
@@ -249,6 +321,7 @@ internal fun MessageContentCard(msg: ProgramMessage, program: Program, userInfo:
  */
 @Composable
 internal fun CarouselFeedCard(images: List<String>, glow: Brush? = null) {
+    var zoomedImage by remember { mutableStateOf<String?>(null) }
     Clear30Card(modifier = Modifier.fillMaxSize(), glowGradient = glow) {
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
             SmallTextHighlighted(formats = listOf(HighlightedTextFormat("Frames", highlighted = true)))
@@ -265,7 +338,13 @@ internal fun CarouselFeedCard(images: List<String>, glow: Brush? = null) {
                         model = images[page],
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(Dimens.cornerRadius)),
+                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(Dimens.cornerRadius))
+                            // iOS CarouselImageView: tapping a loaded image opens the
+                            // pinch-zoom overlay with a medium haptic.
+                            .clickable {
+                                Haptics.mediumImpact()
+                                zoomedImage = images[page]
+                            },
                     )
                 }
             }
@@ -278,6 +357,7 @@ internal fun CarouselFeedCard(images: List<String>, glow: Brush? = null) {
             }
         }
     }
+    zoomedImage?.let { url -> ZoomableImageOverlay(url) { zoomedImage = null } }
 }
 
 /**
@@ -307,7 +387,9 @@ internal fun GuidesFeedCard(msg: ProgramMessage, glow: Brush? = null) {
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
                     SmallTextHighlighted(formats = listOf(HighlightedTextFormat("Guide", highlighted = true)))
                     Heading3(guide.title)
-                    SmallText(
+                    // Guides carry real markdown (headers/bullets/links) — render
+                    // it instead of showing the raw syntax (iOS SmallTextMarkdown).
+                    org.clear30.views.components.SmallTextMarkdownBlocks(
                         guide.body,
                         color = Clear30Colors.text.copy(alpha = 0.5f),
                         modifier = Modifier.weight(1f, fill = false),
@@ -342,7 +424,7 @@ internal fun GuidesFeedCard(msg: ProgramMessage, glow: Brush? = null) {
                 verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
             ) {
                 Heading3(guide.title)
-                org.clear30.views.components.SmallTextMarkdown(guide.body, color = Clear30Colors.text)
+                org.clear30.views.components.SmallTextMarkdownBlocks(guide.body, color = Clear30Colors.text)
                 Spacer(Modifier.height(Dimens.cardSpacing * 2))
             }
         }
@@ -351,7 +433,7 @@ internal fun GuidesFeedCard(msg: ProgramMessage, glow: Brush? = null) {
 
 /** FeedView `pageDots` — small dots in a translucent capsule, current darker. */
 @Composable
-private fun FeedPagerDots(count: Int, current: Int, modifier: Modifier = Modifier) {
+internal fun FeedPagerDots(count: Int, current: Int, modifier: Modifier = Modifier) {
     Row(
         modifier
             .clip(RoundedCornerShape(99.dp))
@@ -419,12 +501,23 @@ internal fun VisitedNode(visited: Boolean, gradient: Brush) {
  * lives on the play disc / progress fill, not the card background.
  */
 @Composable
-internal fun MeditationFeedCard(med: ProgramMeditation, program: Program, glow: Brush? = null) {
+internal fun MeditationFeedCard(
+    med: ProgramMeditation,
+    program: Program,
+    glow: Brush? = null,
+    // The sleep/cravings hub hides the visited checkbox in the card corner.
+    showVisited: Boolean = true,
+) {
     Clear30Card(modifier = Modifier.fillMaxSize(), glowGradient = glow) {
         Column(Modifier.fillMaxSize()) {
-            FeedCardHeading("Meditation", Clear30Gradients.meditation) {
-                VisitedNode(med.visited, Clear30Gradients.meditation)
-            }
+            FeedCardHeading(
+                "Meditation", Clear30Gradients.meditation,
+                trailing = if (showVisited) {
+                    { VisitedNode(med.visited, Clear30Gradients.meditation) }
+                } else {
+                    null
+                },
+            )
             androidx.compose.foundation.layout.Box(
                 Modifier.fillMaxWidth().weight(1f),
                 contentAlignment = Alignment.Center,
@@ -444,33 +537,45 @@ internal fun MeditationFeedCard(med: ProgramMeditation, program: Program, glow: 
  */
 @Composable
 internal fun RedditFeedCard(res: ProgramResource, userInfo: UserInfo, glow: Brush? = null, onOpen: (String) -> Unit) {
+    // The thread JSON comes from the reddit_proxy edge function, which serves
+    // from the backend `library.reddit_threads` cache (like iOS); until (or
+    // unless) it arrives the seed `res.title` shows on its own.
     var thread by remember(res.url) { mutableStateOf<RedditThread?>(null) }
     LaunchedEffect(res.url) { thread = RedditScraper.fetch(res.url) }
-    ExpandingFeedCard(
-        glow = glow,
-        tapHint = "Tap to see more",
-        onTapOverride = {
+    Clear30Card(
+        modifier = Modifier.fillMaxSize().pressScale {
             Logger.logEvent(userInfo.loggingID, LogEventType.openedRedditThread, mapOf(LogEventExtraDataType.URL to res.url))
             onOpen(res.url)
         },
+        glowGradient = glow,
     ) {
-        SmallTextHighlighted(
-            formats = listOf(HighlightedTextFormat("Reddit Thread", highlighted = true)),
-            highlightBrush = Clear30Gradients.reddit,
-        )
-        val t = thread
-        Heading3(t?.post?.title ?: res.title)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+            SmallTextHighlighted(
+                formats = listOf(HighlightedTextFormat("Reddit Thread", highlighted = true)),
+                highlightBrush = Clear30Gradients.reddit,
+            )
+            val t = thread
+            Heading3(t?.post?.title ?: res.title)
             t?.post?.let { post ->
-                RedditStat(if (post.score >= 0) "chevron.up" else "chevron.down", kotlin.math.abs(post.score))
-                RedditStat("text.bubble.fill", post.numComments)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
+                    RedditStat(if (post.score >= 0) "chevron.up" else "chevron.down", kotlin.math.abs(post.score))
+                    RedditStat("text.bubble.fill", post.numComments)
+                }
             }
+            val preview = t?.post?.body?.let { redditInlinePreview(it) }.orEmpty()
+            if (preview.isNotBlank()) {
+                SmallText(
+                    preview,
+                    color = Clear30Colors.text.copy(alpha = 0.5f),
+                    modifier = Modifier.weight(1f, fill = false),
+                    maxLines = 12,
+                )
+            }
+            // "Tap to see more" pinned at the bottom of the card (like the guides).
             Spacer(Modifier.weight(1f))
-            TinyText("Tap to see more", color = Clear30Colors.text.copy(alpha = 0.5f))
-        }
-        val preview = t?.post?.body?.let { redditInlinePreview(it) }.orEmpty()
-        if (preview.isNotBlank()) {
-            SmallText(preview, color = Clear30Colors.text.copy(alpha = 0.5f))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                TinyText("Tap to see more", color = Clear30Colors.text.copy(alpha = 0.5f))
+            }
         }
     }
 }
@@ -713,16 +818,18 @@ internal fun JournalPromptsFeedCard(prompts: List<String>, glow: Brush? = null, 
     var current by remember(prompts) { mutableStateOf(0) }
     val index = current.coerceIn(0, (prompts.size - 1).coerceAtLeast(0))
     Clear30Card(modifier = Modifier.fillMaxSize(), glowGradient = glow) {
-        // Full page height, content centered like the other compact cards.
+        // Title block at the top, "Write entry" pinned at the bottom — the
+        // stretch space between them keeps the tap target off the prompt text.
         Column(
             Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2, Alignment.CenterVertically),
+            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
         ) {
             SmallTextHighlighted(
                 formats = listOf(HighlightedTextFormat("New Journal", highlighted = true)),
                 highlightBrush = Clear30Gradients.journals,
             )
             Heading3(prompts.getOrNull(index) ?: "Create a new journal.")
+            Spacer(Modifier.weight(1f))
             if (prompts.size > 1) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     val canPrev = index > 0
@@ -743,7 +850,8 @@ internal fun JournalPromptsFeedCard(prompts: List<String>, glow: Brush? = null, 
                 }
             }
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(Dimens.cornerRadius))
+                Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(Dimens.cornerRadius))
                     .background(Clear30Gradients.journals)
                     .pressScale { onJournal(prompts.getOrNull(index).orEmpty()) }
                     .padding(vertical = Dimens.cardSpacing * 0.75f),
@@ -788,3 +896,276 @@ private fun TopicRow(msg: ProgramMessage) {
         Heading3(msg.topicTitle)
     }
 }
+
+/** Small gradient pill for feed-card headings (iOS `Badge` — disabled TinyTextButton look). */
+@Composable
+internal fun FeedBadgePill(text: String, gradient: Brush) {
+    TinyText(
+        text,
+        modifier = Modifier
+            .clip(RoundedCornerShape(Dimens.cornerRadius))
+            .background(gradient)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        color = Color.White,
+    )
+}
+
+/**
+ * Fullscreen pinch-zoom viewer for carousel images (iOS `ZoomableImageOverlay`):
+ * pinch scales 1×–5× and pans with the two-finger centroid; releasing springs
+ * back to fit (zoom is deliberately not persistent, like iOS). Tap anywhere or
+ * the ✕ dismisses. iOS dims with ultraThinMaterial; here the app background at
+ * 0.75 alpha stands in.
+ */
+@Composable
+internal fun ZoomableImageOverlay(imageUrl: String, onDismiss: () -> Unit) {
+    val scale = remember { Animatable(1f) }
+    val offset = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+    val scope = rememberCoroutineScope()
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        androidx.compose.foundation.layout.Box(
+            Modifier.fillMaxSize()
+                .background(Clear30Colors.background.copy(alpha = 0.75f))
+                .clickable { onDismiss() },
+        ) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(Dimens.horizontalPadding)
+                    .graphicsLayer {
+                        scaleX = scale.value
+                        scaleY = scale.value
+                        translationX = offset.value.x
+                        translationY = offset.value.y
+                    }
+                    .clip(RoundedCornerShape(Dimens.cornerRadius))
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            awaitFirstDown()
+                            var event = awaitPointerEvent()
+                            while (event.changes.any { it.pressed }) {
+                                // iOS PinchGestureView: transform only while two
+                                // fingers are down — a single finger neither zooms
+                                // nor pans (and leaves taps to the dismiss handler).
+                                if (event.changes.size > 1) {
+                                    val zoom = event.calculateZoom()
+                                    val pan = event.calculatePan()
+                                    scope.launch {
+                                        val newScale = (scale.value * zoom).coerceIn(1f, 5f)
+                                        scale.snapTo(newScale)
+                                        // pointerInput sits after graphicsLayer, so pan
+                                        // deltas arrive in the untransformed local space
+                                        // — scale them or the image lags the fingers
+                                        // while zoomed.
+                                        offset.snapTo(offset.value + pan * newScale)
+                                    }
+                                    event.changes.forEach { it.consume() }
+                                }
+                                event = awaitPointerEvent()
+                            }
+                            scope.launch { scale.animateTo(1f) }
+                            scope.launch { offset.animateTo(Offset.Zero) }
+                        }
+                    },
+            )
+            org.clear30.views.components.IconButton(
+                icon = "xmark",
+                onClick = onDismiss,
+                modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(Dimens.horizontalPadding),
+            )
+        }
+    }
+}
+
+/**
+ * An existing journal entry surfaced in the Today feed (iOS `TextJournalFeedView`):
+ * "Journal Entry" heading, title, dim body, tap to open the full editor.
+ */
+@Composable
+internal fun JournalEntryFeedCard(entry: JournalEntry, glow: Brush? = null, onOpen: () -> Unit) {
+    Clear30Card(modifier = Modifier.fillMaxSize().pressScale { onOpen() }, glowGradient = glow) {
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+            FeedCardHeading("Journal Entry", Clear30Gradients.journals)
+            Heading3(entry.title)
+            SmallText(
+                entry.content,
+                color = Clear30Colors.text.copy(alpha = 0.5f),
+                // Cap long entries so the fixed-height page keeps "Tap to see
+                // more" visible instead of the body clipping over it.
+                modifier = Modifier.weight(1f, fill = false),
+                maxLines = 12,
+            )
+            Spacer(Modifier.weight(1f))
+            TinyText(
+                "Tap to see more",
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+                color = Clear30Colors.text.copy(alpha = 0.5f),
+            )
+        }
+    }
+}
+
+/** One feed page holding the day's journal entries as a snapping carousel
+ *  (iOS `JournalFeedView` with multiple items). */
+@Composable
+internal fun JournalEntriesFeedCard(entries: List<JournalEntry>, glow: Brush? = null, onOpen: (JournalEntry) -> Unit) {
+    if (entries.size == 1) {
+        JournalEntryFeedCard(entries[0], glow = glow) { onOpen(entries[0]) }
+        return
+    }
+    Column(Modifier.fillMaxSize()) {
+        val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { entries.size })
+        androidx.compose.foundation.pager.HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            pageSpacing = Dimens.cardSpacing,
+        ) { page ->
+            JournalEntryFeedCard(entries[page], glow = glow) { onOpen(entries[page]) }
+        }
+        FeedPagerDots(
+            count = entries.size,
+            current = pagerState.currentPage,
+            modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = Dimens.cardSpacing / 2),
+        )
+    }
+}
+
+/** Cache key for permanently hiding the catch-up card (iOS `UnreadMessagesFeedView.cacheKey`). */
+internal const val HIDE_CATCH_UP_KEY = "hide_catch_up_card"
+
+/**
+ * "Catch Up 📈" (iOS `UnreadMessagesFeedView`) — today-only nudge listing up to
+ * 3 missed days (feed never started, `progress == 0`) as compact topic rows;
+ * dismissable forever. The trigger (today + active break + ≥3 missed days +
+ * not dismissed) lives at the call site, like iOS `buildFeedItems`.
+ */
+@Composable
+internal fun CatchUpFeedCard(
+    groups: List<List<ProgramMessage>>,
+    program: Program,
+    glow: Brush? = null,
+    onOpenDay: (List<ProgramMessage>) -> Unit,
+    onAllMessages: () -> Unit,
+    onDismissForever: () -> Unit,
+) {
+    var dismissed by remember { mutableStateOf(false) }
+    Clear30Card(modifier = Modifier.fillMaxSize(), glowGradient = glow) {
+        Column(Modifier.fillMaxSize()) {
+            Heading3("Catch Up 📈")
+            SmallText(
+                "Key messages from the ${groups.size} day${if (groups.size == 1) "" else "s"} you missed.",
+                color = Clear30Colors.text.copy(alpha = 0.5f),
+                modifier = Modifier.padding(bottom = Dimens.cardSpacing),
+            )
+            Spacer(Modifier.weight(1f))
+            if (groups.isEmpty()) {
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    SmallText("You're all caught up!")
+                    TinyText(
+                        "Dive in for today",
+                        modifier = Modifier.padding(bottom = Dimens.cardSpacing * 2),
+                        color = Clear30Colors.text.copy(alpha = 0.5f),
+                    )
+                    Icon(
+                        sfSymbol("arrow.down"),
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(35.dp).feedGradientTint(Clear30Gradients.clear30),
+                    )
+                }
+            } else {
+                groups.take(3).forEach { group ->
+                    CatchUpMessageRow(group, program, Modifier.padding(bottom = Dimens.cardSpacing)) { onOpenDay(group) }
+                }
+                val more = groups.size - 3
+                if (more > 1) {
+                    TinyText(
+                        "+ $more more",
+                        modifier = Modifier.align(Alignment.CenterHorizontally).clickable { onAllMessages() },
+                        color = Clear30Colors.text.copy(alpha = 0.5f),
+                    )
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            TinyText(
+                if (dismissed) "✓ Won't show again" else "Don't show again",
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(top = Dimens.cardSpacing)
+                    .clickable(enabled = !dismissed) {
+                        dismissed = true
+                        onDismissForever()
+                    },
+                color = Clear30Colors.text.copy(alpha = 0.5f),
+            )
+        }
+    }
+}
+
+/** Compact missed-day row: topic line (+ second topic when the day has more),
+ *  and a Day-N pill (iOS `MessageCard` — ring always empty here, progress is 0). */
+@Composable
+private fun CatchUpMessageRow(
+    group: List<ProgramMessage>,
+    program: Program,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val msg = group.firstOrNull() ?: return
+    val day = program.getBreak(msg.unlockOn)?.let { "Day ${it.getBreakDay(msg.unlockOn)}" } ?: ""
+    Row(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(Dimens.cornerRadius))
+            .background(Clear30Colors.opacityGray)
+            .pressScale { onClick() }
+            .padding(Dimens.cardSpacing),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Column(Modifier.weight(1f)) {
+            SmallText("${msg.topicEmoji ?: "💬"} ${msg.topicTitle}")
+            if (group.size > 1) {
+                val second = group[1]
+                TinyText(
+                    "${second.topicEmoji ?: "💬"} ${second.topicTitle}",
+                    modifier = Modifier.padding(top = Dimens.cardSpacing / 2),
+                    color = Clear30Colors.text.copy(alpha = 0.5f),
+                )
+            }
+        }
+        if (day.isNotEmpty()) {
+            Row(
+                Modifier
+                    .padding(start = Dimens.cardSpacing / 2)
+                    .clip(RoundedCornerShape(Dimens.cornerRadius))
+                    .border(2.dp, Clear30Colors.text.copy(alpha = 0.25f), RoundedCornerShape(Dimens.cornerRadius))
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TinyText(day)
+                Spacer(Modifier.width(Dimens.cardSpacing / 2))
+                Icon(
+                    sfSymbol("arrow.right"),
+                    contentDescription = null,
+                    tint = Clear30Colors.text.copy(alpha = 0.5f),
+                    modifier = Modifier.size(13.dp),
+                )
+            }
+        }
+    }
+}
+
+/** iOS `.foregroundStyle(gradient)` on an icon — stamps the gradient over the
+ *  rendered pixels (SrcAtop), same pattern as ReviewsSlide. */
+private fun Modifier.feedGradientTint(brush: Brush): Modifier = this
+    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        drawRect(brush = brush, blendMode = androidx.compose.ui.graphics.BlendMode.SrcAtop)
+    }

@@ -58,7 +58,7 @@ import org.clear30.views.theme.Dimens
  * locally — earned-but-unvisited tiles render as "New" until opened.
  */
 @Composable
-fun AchievementsSection(userInfo: UserInfo) {
+fun AchievementsSection(userInfo: UserInfo, program: org.clear30.data.model.Program) {
     val scope = rememberCoroutineScope()
     var defs by remember { mutableStateOf<List<AchievementDefinition>>(emptyList()) }
     var earned by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }  // key -> isVisited
@@ -68,39 +68,22 @@ fun AchievementsSection(userInfo: UserInfo) {
 
     LaunchedEffect(Unit) {
         Logger.logEvent(userInfo.loggingID, LogEventType.viewedAchievementsList)
+        // Refresh the cache from the backend (definitions + server-side earns,
+        // preserving local visited/unsynced state), then retroactively evaluate
+        // so anything already qualified is awarded right now — this covers
+        // check-ins that ran while the definitions cache was still empty.
+        org.clear30.data.supabase.refreshAchievementsCache(userInfo.userID)
+        runCatching { org.clear30.data.AchievementEngine.evaluateNow(userInfo, program) }
+
+        // Display straight from the (now-merged) cache — server AND local earns.
         val ad = Clear30Store.loadAchievementData()
-        val rarities = SupabaseController.getAchievementRarities()
-        val stats = SupabaseController.getAchievementStats()
-        val fetched = SupabaseController.getAchievementDefinitions().withRarityAndStats(rarities, stats)
-        val userAchievements = SupabaseController.getUserAchievements(userInfo.userID)
-
-        // The achievements tables are RLS-gated to authenticated users — an
-        // unauthenticated client gets 0 rows back (no error). When the live read
-        // comes up empty, keep showing the last cached definitions instead of
-        // blanking the screen (and never overwrite a good cache with empty).
-        // Diagnostic: all-zero ⇒ RLS/auth (not signed in); defs 0 but rarities > 0
-        // ⇒ a definitions decode problem.
-        android.util.Log.i(
-            "Achievements",
-            "fetched defs=${fetched.size} rarities=${rarities.size} stats=${stats.size} earned=${userAchievements.size}",
-        )
-
-        // Merge isVisited from the local cache so freshly-synced earns stay "New".
-        val localVisited = ad.earnedAchievements.filter { it.isVisited == true }.map { it.achievementKey }.toSet()
-
-        defs = fetched.ifEmpty { ad.definitions }
-        earned = userAchievements.associate { ua ->
-            ua.achievementKey to (ua.isVisited == true || ua.achievementKey in localVisited)
-        }
+        defs = ad.definitions
+        earned = ad.earnedAchievements.associate { it.achievementKey to (it.isVisited == true) }
         loaded = true
 
-        if (fetched.isNotEmpty()) {
-            ad.definitions = fetched.toMutableList()
-            ad.earnedAchievements = userAchievements.map { ua ->
-                if (ua.achievementKey in localVisited) ua.apply { isVisited = true } else ua
-            }.toMutableList()
-            Clear30Store.save(ad)
-        }
+        // Diagnostic: defs 0 ⇒ RLS/auth (not signed in) or network; earned 0
+        // with defs > 0 ⇒ genuinely nothing earned yet.
+        android.util.Log.i("Achievements", "defs=${defs.size} earned=${earned.size}")
     }
 
     fun markVisited(key: String) {

@@ -32,6 +32,9 @@ sealed interface DeepLinkRoute {
     data class Claire(val prompt: String = "") : DeepLinkRoute
     data object DrFred : DeepLinkRoute
     data object Settings : DeepLinkRoute
+    /** The day-30 "breakdown 📦" push — opens the post-assessment when pending
+     *  (iOS URLManager.swift:184-193). */
+    data object Breakdown : DeepLinkRoute
 
     data class Unrecognized(val uri: String) : DeepLinkRoute
 }
@@ -87,6 +90,7 @@ object URLManager {
                 "fred", "drfred", "dr_fred", "dr-fred" -> DeepLinkRoute.DrFred
                 else -> DeepLinkRoute.Claire()
             }
+            "breakdown" -> DeepLinkRoute.Breakdown
 
             else -> DeepLinkRoute.Unrecognized(raw)
         }

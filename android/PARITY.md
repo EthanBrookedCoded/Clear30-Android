@@ -1,9 +1,13 @@
 # Clear30 Android — Parity & Bug Tracker
 
-> Single source of truth for iOS→Android parity work. Merges the 2026-07-13 code
-> audit (5-agent deep dive), Thatcher's emulator smoke-test findings, prod-DB
-> verification, and Thatcher's product decisions (§17). **Supersedes `TODO.md`
-> for planning** (TODO.md is stale in both directions — see §14).
+> Single source of truth for iOS→Android parity work. **Supersedes `TODO.md`.**
+> Cleaned up 2026-07-21: Waves 1–8 plus the T10/T11 follow-ups are DONE — the
+> full per-item history (evidence, fix notes, verification detail) lives in git
+> (`git log --follow android/PARITY.md`, last full version at `d62f296`).
+> This version keeps: remaining work, the decision log, verification debt,
+> and the implementation gotchas still worth knowing.
+> **Active work: Wave 9 (§1a-ii) — Thatcher's 2026-07-21 emulator smoke-test
+> notes.**
 
 ## For AI agents working from this doc
 
@@ -13,985 +17,990 @@
 - **Run against the LOCAL Supabase stack** (`SUPABASE_LOCAL=true`). Never point
   a dev build or test account at prod. The backend lives in the iOS repo:
   `~/Workspace/iOS/Clear30/Backend/` (run `supabase` CLI from there).
-- **iOS is the behavior spec** unless an item says otherwise. Verify against the
-  cited iOS source before implementing — don't trust this doc's summary over
-  the code. Scheduling/break/restore semantics are additionally specced in
+- **iOS is the behavior spec** unless an item says otherwise (intentional
+  divergences are in the decision log, §5). Verify against the cited iOS source
+  before implementing. Scheduling/break/restore semantics are specced in
   `~/Workspace/iOS/Clear30/Docs/MESSAGE_TIMELINE_ARCHITECTURE.md`.
-- **Every item cites evidence** as `file:line` (valid as of 2026-07-13; re-grep
-  if lines have drifted). Paths: `A/` = `android/app/src/main/java/org/clear30/`,
+- Paths: `A/` = `android/app/src/main/java/org/clear30/`,
   `iOS/` = `~/Workspace/iOS/Clear30/App/Clear30/`, `BE/` =
   `~/Workspace/iOS/Clear30/Backend/`.
 - **Verify by building and exercising the flow** (CLI runbook in
-  `android/README.md`), and where an item touches the backend contract, inspect
-  the local DB rows (`psql postgresql://postgres:postgres@127.0.0.1:54322/postgres`)
-  to confirm the written JSON matches the iOS shape.
-- **Tick the checkbox and append `(done <date>, <commit>)`** to an item when it
-  lands. Don't remove items; strike through only if invalidated.
+  `android/README.md`); for backend-contract items, inspect the local DB rows
+  (`psql postgresql://postgres:postgres@127.0.0.1:54322/postgres`).
+- **Tick items with `(done <date>, <commit>)`** when they land.
 
 Severity: **P0** = data integrity / prod blocker · **P1** = core-flow bug ·
 **P2** = needed feature gap · **P3** = polish.
-Status: `bug` (confirmed in code) · `missing` · `divergent` (works, differs
-from iOS) · `env` (local/dev environment task).
-
-## P0 quick list (prod gate — nothing ships before these)
-
-| ID | Item |
-|----|------|
-| X1 | `encodeDefaults=false` serializer bug (breaks iOS restore; drops `platform`; 3 symptoms, 1 fix) |
-| X2 | Double assessment submission per signup (fix with B4) |
-| X3 | Live content path (`fetchAndApply`) wipes per-day progress; faithful scheduler is dead code |
-| X4 | No existing-account detection in sign-up path (data-loss risk) |
-| X5 | `latest_check_in_method` write to a column that doesn't exist in prod |
-| B1 | `restartBreak` off-by-one (today's progress not reset) |
-| B2 | `endBreak` must land users in weed-free, mirroring iOS (decided §17-Q5) |
-
-## Suggested implementation order
-
-1. **Wave 1 — P0 data integrity:** X1 → X2+B4 → X5 → B1 → B2 → X3 → X4.
-2. **Wave 2 — onboarding correctness:** O1, O2, O3, O4+X7, O6, O7, O8, O10.
-3. **Wave 3 — environment (unblocks testing):** E1–E4, N1.
-4. **Wave 4 — content & viewers:** T7+S5 (reddit), S8 (YouTube), S6, T5, T6,
-   S1–S4, S7, S9–S11.
-5. **Wave 5 — check-in / profile / community / groups:** T2–T4, P1–P6, C1–C3, G1.
-6. **Wave 6 — pilot features:** F1–F3, O11, B3, X6, S12, N2. *(done 2026-07-13,
-   72b9af9 — N2's pop-in half deferred per §17-Q13; F1's school-library UI
-   split out as F1b. Backend seeds 40/41 landed in the iOS repo, 3d986e12.)*
-7. **Wave 7 — post-Wave-5 feedback (Thatcher 2026-07-13):** T8 (reward-bar
-   radii), P7 (health timeline cards), G3 (Groups UI exact copy), F1b (school
-   Support-tab section). *(done 2026-07-13, 89941d2 — backend seed 42 landed
-   in the iOS repo, 1e035597.)*
-8. **Wave 8 — post-Wave-7 feedback (Thatcher 2026-07-14, decisions §17-Q14+):**
-   X10 (card opacity bug — do FIRST, it may explain other visual complaints) →
-   P9 (profile reload after break mutations) → B6 (Life toggle switchCore) →
-   B5+P8 (remove start-date picker + settings overhaul) → T9 (Today tab
-   parity) → O5 (social-proof sheets) → S13 (symptom carousel) → A1 (verify
-   only) → N3 (verify iOS timing first) → X9, A3, O9-styling as polish.
-   *(done 2026-07-14, 3f171e9 — all items landed + verified on-device except the noted
-   halves (T9c autoplay + N3 fire time verified by port only). Extra fixes on
-   the way: `arrow.down` / `calendar.badge.checkmark` sfSymbol mappings were
-   falling back to a circle glyph; break mutations moved to an app-lifetime
-   scope (see B6 note).)*
 
 ---
 
-## 1. Cross-cutting / data integrity
+## 1. Remaining work
 
-- [x] **X1 · P0 · bug — Serializer omits default/empty fields; breaks the backend contract.** (done 2026-07-13, 3a63877 — verified locally: `platform='android'`, `loggedSymptoms` in day_info, `message_ids` in content_info; iOS-simulator cross-check still worth doing)
-  The shared push encoder sets `explicitNulls=false` and leaves `encodeDefaults`
-  false (`A/data/supabase/SupabaseController.kt:36-39`). Three confirmed symptoms:
-  (a) `SupabaseNewUser.platform: String = "android"` (`A/data/supabase/SupabaseUser.kt:46`)
-  is omitted from the `create_user` payload → the RPC defaults the row to `'ios'`
-  (verified against the live `create_user` function — it validates `platform`
-  correctly; the bug is purely client-side).
-  (b) Empty `loggedSymptoms` omitted from `day_info` objects
-  (`A/data/model/ProgramCheckIns.kt:145-151`) → iOS decodes that key
-  **non-optionally** (`iOS/Data/Program/ProgramCheckIns.swift:66`) → iOS sign-in
-  restore of Android-written data **throws**.
-  (c) Empty `message_ids` omitted from `content_info` entries
-  (`A/data/supabase/SupabaseRestore.kt:38-40`) → same iOS decode failure.
-  **Fix:** `encodeDefaults = true` on the push/create encoder (or emit those
-  fields explicitly). **Verify:** sign up on Android against local DB, then
-  sign in on the iOS simulator with the same account — restore must succeed;
-  inspect the `users` row: `platform='android'`, `day_info` objects contain
-  `loggedSymptoms`, `content_info` entries contain `message_ids`.
+### 1a. Open items
 
-- [x] **X2 · P0 · bug — Assessment submitted twice per signup.** (done 2026-07-13, 3a63877 — verified: exactly one `program_assessment_responses` row after full signup incl. payment; `verifyProgramSetup` ported, closing B4)
-  `AssessmentSubmissionHandler.submitAssessment` runs after OTP verify
-  (`A/views/newuser/signup/AllSignUp.kt:183-187`) AND again at payment
-  (`A/views/newuser/AllNewUserViewModel.kt:175-182`) → duplicate
-  `program_assessment_responses` rows, double break registration. iOS submits
-  once and runs only `verifyProgramSetup` at payment
-  (`iOS/Views/New User/Assessment/AssessmentSubmissionHandler.swift:443-467`,
-  called from `AllNewUser.swift:290`). **Fix:** remove the payment-path
-  re-submit; port `verifyProgramSetup` there instead (closes B4). **Verify:**
-  one `program_assessment_responses` row per signup in local DB.
-
-- [x] **X3 · P0 · bug/divergent — Two parallel schedulers; live path is the wrong one.** (done 2026-07-13, 3a63877 — onboarding now runs `ProgramTimelineHandler.start` → faithful `schedule()`/`scheduleStartSoon()`; `fetchAndApply`/12h timer deleted; refresh = iOS `updateMessages` port: in-place field copy by messageID keyed on `program_get_latest_update`, so buckets/progress/unlockOn are never rebuilt. `ensureContent` keeps an empty-timeline repair path for old dev installs.)
-  Faithful ports exist (`ProgramMessageHandler.schedule()`/`scheduleStartSoon()`,
-  `A/data/ProgramMessageHandler.kt:122,151`) but the onboarding/refresh path uses
-  simplified `fetchAndApply()` (`:86`, called from TodayTab/SupportTab) which:
-  has no `removePrefix`; never schedules `start_soon_messages`; and
-  `putAll(byDate)` **replaces ContentInfo buckets with `progress=null`** on every
-  12h refresh — wiping completed-day progress (`:104`). Also uses a local 12h
-  staleness timer instead of the server `program_get_latest_update` version
-  (`:106,222-226`). `ProgramTimelineHandler.start()/startWithClear30()` are dead
-  code (no call sites). **Fix:** wire onboarding + refresh through the faithful
-  scheduler; refresh must merge in place (preserve `progress`) and use the
-  server content version. **Verify:** complete a day, force a refresh, progress
-  survives; future-dated break produces start-soon topics.
-
-- [x] **X4 · P0 · bug — No DB-level existing-account detection at sign-up.** (done 2026-07-13, 3a63877 — `checkIfReturningUser` runs after every OTP verify; verified: wipe + sign-in restores the full program state incl. the day's check-in. Also fixed the restore decode of `fetch_messages_by_ids` raw column shapes — meditation/resources/legacy claire_prompts are `{title: value}` maps, converted like iOS `SupabaseModels.swift:247-274`; A5's non-empty-content_info validation folded in as planned.)
-  New-vs-returning decided solely by the "Sign In" button flag
-  (`A/views/newuser/signup/AllSignUp.kt:183`). **Fix:** port iOS
-  `checkIfReturningUser` (`iOS/.../AllSignUpViewModel.swift:249-301`): after
-  every OTP verify, `getUserID` + non-empty `content_info` → route to restore.
-  Old-Android-app users (~3.1k prod rows with EMPTY content_info/breaks —
-  verified) will correctly fall through to fresh onboarding while keeping their
-  users row/ID; their fuller local-data migration is deferred (§18-D2).
-
-- [x] **X5 · P0 · bug — Write to nonexistent column.** (done 2026-07-13, 3a63877 — write deleted from syncProgramState + CheckInLogger; `latestCheckInMethod` stays device-local) `syncProgramState` writes
-  `latest_check_in_method` (`A/data/supabase/SupabaseProgramSync.kt:86-93,110`);
-  the column **does not exist in prod** (verified). **Fix:** delete the write.
-
-- [x] (done 2026-07-13 — `SlipPlan` model + `updateTriggerResponses` + restore mapping in `restoreToModels`; verified: plan saved in the slipped sheet lands in `users.trigger_responses` with the exact iOS wire shape) **X6 · P1 · missing — `trigger_responses` (if-then slip plans) never restored or written.**
-  Wire model carries it (`A/data/supabase/SupabaseRestore.kt:121`) but
-  `restoreToModels` drops it; no write path exists. iOS:
-  `iOS/Data/Program/ProgramRestoreHandler.swift:103-115`. (Pairs with S12.)
-
-- [x] (done 2026-07-13 — response ID in 3a63877, normative_feedback in 6d33fe8; both verified in the users row) **X7 · P1 · missing — Break rows pushed with null `assessment_response_id` + `normative_feedback`.**
-  Android never captures the submit-response ID onto the break and never calls
-  `program_get_feedback` (`A/data/AssessmentSubmissionHandler.kt:82-99`; iOS:
-  `AssessmentSubmissionHandler.swift:151,166`). Fix together with O4.
-  *(2026-07-13, 3a63877: half done — `assessment_response_id` is now captured
-  onto the break at submit; only the `normative_feedback` fetch remains, O4.)*
-
-- [ ] ~~**X8 · P2 · divergent — loggingID fallback is a fresh random UUID per install**
-  (`A/AppRootViewModel.kt:79-80`) vs iOS's stable `identifierForVendor`
-  (`iOS/Views/ContentView.swift:198-216`). Pollutes the prod `logging_id`
-  append-history array (verified it's an array). **Fix:** stable device ID
-  (e.g. `Settings.Secure.ANDROID_ID`).~~ **CLOSED — won't fix (Thatcher
-  2026-07-14, §17-Q15).**
-
-- [x] (done 2026-07-14, 3f171e9 — the suspected root cause was exactly right: the
-  `graphicsLayer { alpha = outlineOpacity }` sat before `.border` in the chain,
-  dimming the border AND everything drawn after it — including all card
-  content. 22 call sites pass `outlineOpacity < 1` (reward/health/achievement/
-  day/school cards), which is the app-wide wash. Fixed centrally: the stroke is
-  now drawn manually via `drawWithContent` with per-draw `alpha`, exactly iOS's
-  stroke-only `.opacity` (Cards.swift:650,657). Verified on-device: topic-card
-  break badge, health `hasNew` gradient cards, and Day badges all render
-  full-opacity content with a dimmed outline.) **X10 · P2 · bug — Unintended
-  reduced opacity on card content app-wide**
-  (Thatcher, 2026-07-14, post-Wave-7). "A lot of the cards in the app seem to
-  have decreased opacity which is not intended. Like the text on them and
-  stuff." Suspect a shared modifier — audit `CardStyle`/`Clear30Card`
-  (`A/views/components/defaults/CardStyle.kt`) first: prime suspect is the
-  outline path, which applies `graphicsLayer { alpha = outlineOpacity }` to the
-  WHOLE chain built up to that point (`:129`) rather than to just the border —
-  any card passing `outlineOpacity < 1` may be dimming its background + shadow
-  (and possibly content) instead of only the outline. Compare against iOS
-  `CardStyle` (Cards.swift), where `outlineOpacity` dims ONLY the stroke
-  overlay. Fix centrally, then spot-check the heavy users (reward cards, feed
-  cards, health cards, school cards). Do this FIRST in Wave 8 — it likely
-  explains part of T9's "off" look.
-
-- [x] (done 2026-07-14, 3f171e9 — MainActivity relays onStart/onStop into a new
-  `AppState.foregrounded` flow; `AppRootViewModel.observeScenePhase` handles it
-  (it owns the loaded models): foreground → session append + `openedApp`;
-  background → `Clear30Store.save(program)` (the iOS `flushContentInfo`
-  equivalent — captures in-place message.visited/progress edits) +
-  `endedSession` + `StatsWidget().updateAll` (iOS `reloadAllTimelines`). The
-  launch transition is skipped — patchUserInfo already records it.)
-  **X9 · P3 · divergent — Lifecycle hooks stubbed:** no content-info flush /
-  `endedSession` on background, no `openedApp` on start
-  (`A/MainActivity.kt:58,63` TODOs).
-
-## 2. Auth / sign-up / sign-in
-
-*(User-ID resolution matches iOS cross-platform — same `auth_id → users.id`
-lookup, no client-minted IDs. Restore pipeline verified faithful except X6.
-Google Sign-In: NOT needed — phone/email OTP is enough for launch, §17-Q8.)*
-
-- [x] (VERIFIED no code needed, 2026-07-14 — signed in on-device with the
-  already-registered `wave2test@example.com` against the local DB: GoTrue sent
-  the magiclink-template OTP (the existing-user path iOS's fallback exists
-  for) and Android's single `OtpType.Email.EMAIL` verify succeeded, restoring
-  the account. `EMAIL` is the broad type covering signup + magiclink, so the
-  iOS `signup`→`email` retry is unnecessary. Closed per §17-Q14.)
-  **A1 · P1 · missing — Email OTP verify fallback.** iOS tries `signup` then
-  `.email` types (`iOS/Data/Supabase/SupabaseFunctions.swift:105-119`); Android
-  single type (`A/data/supabase/SupabaseAuth.kt:28-30`) → existing email users
-  may fail to verify. **Decision (§17-Q14): likely fine given how Supabase
-  handles OTP types — VERIFY, don't assume: sign in on Android with an
-  already-registered email account (local DB) and confirm the verify succeeds;
-  only port the fallback if it fails.**
-- [x] (done 2026-07-14, 3f171e9 — the prefix chip is now a DropdownMenu over iOS's
-  `PhoneNumberRegionView.prefixes` NANP list (sorted, selection updates the
-  chip). "E164 normalization" on iOS is just `prefix + digits`, which Android's
-  `fullContact()` already did.) **A3 · P3 · partial — Phone entry:** no E164
-  normalization; region picker hardcoded `+1`
-  (`A/views/newuser/signup/AllSignUp.kt:99,282-294`).
-- [ ] ~~**A4 · P3 · partial — Attribution:** `appstack_id` never populated,
-  `appstack_attribution` field absent (`A/data/supabase/SupabaseUser.kt:41-42`).~~
-  **CLOSED — won't fix, appstack not needed (Thatcher 2026-07-14, §17-Q16).**
-- [ ] ~~**A5 · P3 · partial — Restore misc:** adolescent-mode not set on restore;
-  returning-user validation doesn't require non-empty content_info (folded into
-  X4's fix).~~ **CLOSED — validation half landed with X4; adolescent-mode on
-  restore not needed (Thatcher 2026-07-14, §17-Q16).**
-
-## 3. Onboarding & assessment
-
-- [x] (done 2026-07-13, 6d33fe8 — verified: Moderation → back → Taking-a-break lands the Clear30 track) **O1 · P1 · bug — "Quitting → Better Life Program" routing.**
-  **Requirement (§17-Q1): the most recent What-brings-you-here choice must win.**
-  Root cause: only the Moderation branch touches `choseClear30` (sets `false`,
-  `A/views/newuser/assessment/AssessmentSlides3.kt:203`); nothing resets it to
-  `true`, so back-navigating after touching Moderation poisons the flag; the
-  program-confirmation slide branches on it (`:113-114`). **Fix:** explicitly
-  set `choseClear30 = true` in the Quit/Break/Don't-know branches (0/1/3) so the
-  latest answer always determines the track.
-
-- [x] **O2 · P1 · bug — Wrong assessment ID for Life onboarding.** Android submits
-  `"life"` (`A/data/AssessmentSubmissionHandler.kt:76-80`); must be
-  `"life-onboarding"` with all onboarding answers (iOS
-  `AssessmentSubmissionHandler.swift:224-225`). `"life"` is the post-assessment
-  ID (used by F3). One-line change; payload already sends all responses.
-  (done 2026-07-13, 3a63877 — landed as part of X3's `handleLife` port, which
-  submits `AssessmentType.LifeOnboarding`)
-
-- [x] (done 2026-07-13, 6d33fe8) **O3 · P2 · decided — Remove moderation-vs-weed-free question from the Life branch.**
-  **Decision (§17-Q2):** the ONLY route into Life is selecting "Moderation" on
-  What-brings-you-here; do not ask mod-vs-weed-free afterward — the auto-set
-  `LO_USE_STATE=1` (moderation) stands. **Fix:** drop `modAbsQuestion()` from the
-  `lifeContext` branch (`A/.../AssessmentSlides3.kt:123`). Note: current iOS
-  *does* still ask it (`iOS/.../AssessmentSlides3.swift:272-276`) — this is an
-  intentional Android divergence per Thatcher; iOS change out of scope here.
-
-- [x] (done 2026-07-13, 6d33fe8 — CORRECTION: the onboarding feedback comes from the `program_generate_normative_feedback` EDGE function (iOS `getNormativeFeedback`), NOT the `program_get_feedback` RPC — that RPC feeds the legacy `[ProgramAssessmentFeedback]` cards. Submit → feedback → break (X7) → `Feedback` screen after SignUp via `Program.initialFeedback`, all verified e2e. Locally requires `supabase functions serve --no-verify-jwt` (E1); the local runtime rejects even the local anon key without the flag.) **O4 · P2 · missing — Normative feedback never shown.** Three breaks:
-  `program_get_feedback` (plain RPC — no edge functions needed) has zero call
-  sites (`A/data/supabase/SupabaseController.kt:167`); the `Feedback` screen is
-  never inserted into the flow (`A/views/newuser/AllNewUserViewModel.kt:78-91`,
-  TODO at `:83`); submission runs post-payment so no break exists during the
-  sales slides. `NormativeFeedbackView` is fully ported. **Fix:** submit after
-  sign-up (see X2), call `program_get_feedback`, store on the break (X7), insert
-  the `Feedback` screen after `SignUp`.
-
-- [x] (done 2026-07-14, 3f171e9 — testimonial cards now open ModalBottomSheet details
-  (post: community pill + title + body; review: 20dp gradient-star header +
-  title + body — iOS DetailViewWrapper), and CommunityPostTestimonialCard
-  live-fetches via `getCommunityPostById(postId)`, keeping the inlined copy as
-  the loading/failure fallback so the card is never blank (deliberate softening
-  of iOS's empty state). Sheets exercised in code review; local stack lacks the
-  seeded prod post ids so the fallback path is what renders locally.)
-  **O5 · P2 · missing — Social-proof cards should open detail sheets** (review /
-  community post), incl. live `getCommunityPostById` fetch. Android only inline-
-  expands (`A/views/newuser/assessment/AssessmentSocialProof.kt:517-603`); iOS
-  sheets at `AssessmentSocialProof.swift:124-173`.
-
-- [x] (done 2026-07-13, 6d33fe8) **O6 · P2 · bug — Shuffle flag never consumed.** `shuffled=true` set on
-  breakReason/triggers (`A/data/model/ProgramAssessmentQuestions.kt:97,351`) but
-  no renderer reads it. **Fix:** port iOS's shuffle-once-with-"Other"-pinned-last
-  (`iOS/.../AssessmentMultipleChoice.swift:70-81`) into Android's
-  `AssessmentMultipleChoice`, computed in `remember{}` so redraws don't reshuffle.
-
-- [x] (done 2026-07-13, 6d33fe8 — Method badge + Monthly Spend cards added to the hero-card state; dead MoneyLossView removed; verified "🍪 Edible" + "😬 -$140") **O7 · P2 · decided — Pain-point slide: port the consumption-method variant.**
-  **Decision (§17-Q3):** target is iOS `AssessmentPainPoint.swift` (the variant
-  currently shipping on iOS — experiment off): `showCard` state shows a
-  **Method** card from `consumptionMethod.question.badges[responseIndex]`
-  (`:54-67`) + **Monthly Spend** card = `weeklySpend*4` rendered "✅ $0" /
-  "😬 -$X" (`:69-85`) + the age×help-harm Impact card. Android currently ported
-  the *other* variant (`AssessmentPainPoint2`) and even dropped its money stage
-  (`MoneyLossView` defined, never called — `A/.../AssessmentPainPoint.kt:342-360`).
-
-- [x] (done 2026-07-13, 6d33fe8 — 75sp emoji in 80dp frame on showDots, Heading1 otherwise; swapped semantics fixed) **O8 · P3 · bug — Help/harm emoji ~half size.** Spectrum `showDots` branch
-  renders `Heading1` (~32sp) (`A/.../AssessmentRenderers.kt:244-245`); iOS uses
-  75pt with 80pt frame (`AssessmentSpectrum.swift:47-61`). Note the branch
-  semantics are also swapped vs iOS (large-emoji belongs to `showDots==true`).
-
-- [x] (styling half done 2026-07-14, 3f171e9 — Play In-App Review on appear (new
-  `review-ktx` dependency; silently no-ops without Play, like StoreKit),
-  `fadeOutEdges(10.dp)` DstIn mask on the scroll (iOS `.fadeOut(fadeLength:
-  10)`), stars tinted with the journals gradient via a SrcAtop `gradientTint`
-  (iOS `foregroundStyle(journalsGradient)`), and the leading 🌿 mirrored so the
-  pair wraps the stars like the iOS wreath (no laurel drawable exists — unicode
-  stays, per the IntroScreen precedent). Verified on-device.)
-  **O9 · P3 · divergent — Reviews slide:** ~~static placeholder reviews (should
-  fetch `getReviews` like iOS `OnboardingReviews.swift:129-139`)~~ **(fetch
-  dropped — static reviews are fine, Thatcher 2026-07-14, §17-Q16)**, no Play
-  In-App Review prompt (iOS `requestReview()` `:71`), no edge fade, unicode 🌿
-  laurels, flat star color (`A/views/newuser/sales/ReviewsSlide.kt:69-194`).
-
-- [x] (done 2026-07-13, 6d33fe8 — TutorialController deleted along with the AllTabs trigger, settings reset row, and the popup payload/renderer) **O10 · P3 · decided — Delete the tab tutorial popups** ("Today (1/3)" etc.)
-  **for ALL tabs** (today/profile/community/groups — §17-Q4). Self-contained
-  Android plumbing: remove the `maybeShow` trigger (`A/views/existinguser/AllTabs.kt:68`)
-  and the flows (`A/data/TutorialController.kt:26-45`); also remove the reset
-  entry point (`A/.../settings/SettingsSection.kt:130`).
-
-- [x] (done 2026-07-13 — `NewUserScreen.StartDate` after Notifications, Clear30-only, RESTORED accounts skip it (break-started-today gate — re-picking would shift a real timeline); reuses `StartDateCalendarPicker` (−29/+14, default tomorrow); confirm ports `handleSelection` + `logPastDaysSober` via new `CheckInLogger.handleMultiCheckIn`/`resetLastSmoked`. Fresh-onboarding on-device pass still pending) **O11 · P2 · decided — Add the start-date step to onboarding** (§17-Q9).
-  Port iOS `Tutorial2DatePicker` behavior (`iOS/.../Tutorial2/Tutorial2DatePicker.swift`):
-  range today−29…today+14, default tomorrow; on confirm compute the Day-0 delta
-  and call `adjustBreakTime(days:)` (already ported & verified); past/today
-  selection back-fills sober check-ins (`logPastDaysSober` →
-  `CheckInLogger.handleMultiCheckIn`) and backdates `lastSmoked`; future
-  selection resets `lastSmoked`. **Placement (Thatcher): right after the
-  notification-permission popup** — confirm exact spot at implementation time.
-  Clear30 users only; Life/moderation users skip.
-
-- [ ] **O12 · P2 · missing — Assessment question script depth.** Remaining
+- [x] (done 2026-07-21, uncommitted — scoped to what can actually FIRE in prod:
+  (1) **remote assessment questions ported** — `RemoteAssessmentQuestion` model
+  + `SupabaseAssessmentData.kt` fetch (`programs.remote_assessment_questions`,
+  enabled only) + iOS-faithful injection in `AssessmentSlides3.addNextSlides`
+  (match on question strippedPrompt / info-id raw, prepend to branch slides,
+  splice-into-pending path with affirmation dedup). Prod has ONE live row:
+  "Planned-Usage" after `triggers_affirmation` — prod iOS users see it today,
+  Android now does too. (2) **Live normative data ported** — `library.one_offs`
+  key `normative_data` → pain-point percentile; baked-in defaults remain the
+  fallback. (3) **sliderWithCustom custom amount ported** (closes EXP4b) —
+  "Custom amount" link swaps the slider for a focused numeric field (<1000),
+  Next submits it as an input-style answer, iOS AssessmentSlider parity.
+  (4) **BONUS P1 BUG FOUND+FIXED: slider answers were off by one** — the raw
+  1-based slider value was recorded as the 0-based option index
+  (`AssessmentQuestionView` never applied iOS's mapping despite the comment
+  saying so). Every Days-Using/Money-Spent answer submitted the next-higher
+  option, skewing the assessment payload, pain-point percentile, dream-outcome
+  savings, and the profile weekly-spend/usage stats. NOT ported, documented:
+  guardian/adolescent branch (out of scope), Slides2 old-onboarding
+  (`new-onboarding` is show-100% + hardcoded), multiSpectrum renders as plain
+  spectrum + carousel/pop-up info views (no live question/slide uses them).
+  Compile-verified only — the local 54321 stack currently hosts ANOTHER
+  project's DB, so on-device exercise is folded into the §1b fresh-signup
+  pass; BE seeds 06/28 already carry the needed local rows.)
+  **O12 · P2 · missing — Assessment question script depth.** Remaining
   unported renderers (image-choice, date picker, carousel, pop-up cards,
   multi-spectrum emoji, slider-with-custom) and full Slides3 branching.
-  *(DEFERRED for now — Thatcher 2026-07-14, §17-Q17.)*
+  *(Was DEFERRED §17-Q17; un-deferred by Thatcher 2026-07-21.)*
 
-## 4. Break mechanics
+- [x] (done 2026-07-21, uncommitted — all four halves, specced against iOS
+  source first. (1) **ZoomableImageOverlay**: fullscreen dialog from tapping a
+  carousel image (medium haptic) — pinch 1×–5× with two-finger-centroid pan,
+  springs back to fit on release (iOS zoom is deliberately non-persistent),
+  tap/✕ dismiss; iOS's ultraThinMaterial dim approximated with the app
+  background at 0.75 alpha. (2) **Catch-up card** (iOS
+  `UnreadMessagesFeedView`): `Program.getContentInfo(break)` +
+  `getNonStartedMessages` ported; card inserts under the check-in page for
+  today+active-break+≥3 never-started days+not dismissed
+  (`hide_catch_up_card` cached bool); up to 3 missed-day rows (topic + second
+  topic + Day-N pill) opening the day's lesson in MessageDetail, "+N more" →
+  messages library, "Don't show again" persists. (3) **Journal feed cards**:
+  free-form same-day entries surface as a feed page (iOS
+  `TextJournalFeedView`, carousel when >1), message-less days get the New
+  Journal card in the check-in page's stretch space, and both paths open the
+  full-screen `TextEntryEditor` (create seeded/edit-in-place). (4) **Message
+  card badge**: `ProgramBreak.getBadgeText` ported — heading now carries the
+  school pill or the user's-own-answer assessment badge, via `FeedCardHeading`
+  trailing. iOS audit findings: the message card has NO animated emoji or
+  visited node on iOS either — the badge was the only missing rich part.
+  Noted divergences: catch-up rows open the day's FIRST message (Android's
+  viewer is per-message; iOS pushes the whole group), the day pill skips the
+  progress ring (always empty here by construction — these days have
+  progress 0), journal card keeps Android's single "Write entry" (no separate
+  Video button) and feed-surfaces text entries only. Compile-verified;
+  on-device checks folded into §1b.) **T12 · P3 · missing — Today feed
+  leftovers from T10/T11:** carousel pinch-zoom overlay (iOS
+  `ZoomableImageOverlay`), iOS's unread-catch-up + journal feed cards, and
+  the richer iOS message-card internals.
 
-*(Model, `adjustBreakTime` incl. start-soon bridge + overlap truncation,
-`day0StartNow`, `newClear30` mechanics, picker ranges: verified matching iOS.)*
+- [x] **EXP1 · P1 · audit — Experiment parity for onboarding / life / new-break
+  assessments** (Thatcher, 2026-07-21; audit done 2026-07-21). Prod
+  `experiments.experiments` (verified via MCP): `assessment-short-flow`,
+  `assessment-usage-duration`, `new-onboarding`, `new-tutorial`,
+  `onboarding-referral`, `meta-sdk`, `message-testimonial-submission` = show
+  100%; `video-testimonial-welcome` = 4 copy variants 25% each;
+  `post-assessment-coach-referral`, `post-assessment-testimonial`,
+  `testimonials` = hide 100%; `assessment-biological-sex` = **disabled**.
+  **Amplitude Experiment still serves some legacy flags to iOS** (the MCP
+  can't enumerate the deployment — analytics project 661074 shows no
+  deployments — but prod data proves it: see EXP4a). Android is Supabase-only,
+  so Amplitude-only keys resolve to their fallbacks on Android; for the
+  audited flows the effective behavior matches anyway (symptoms suppressed by
+  the short flow; interview hardcoded out per §17-Q22).
+  **Plumbing verdict: MATCHES.** Both `showFeature`s: present+show → true,
+  present+other-variant → hard false, absent/loading/failed → caller fallback;
+  both persist assignments and never evict (a later-disabled experiment keeps
+  serving the cached variant to previously-assigned users); neither awaits the
+  fetch before onboarding renders (`AppRootViewModel.loadStorage` refreshes
+  after state routing, mirroring iOS `LoadingCoordinator`).
+  **Flow verdicts:** Life post-assessment ✅ match (incl. per-break-reason
+  `*-Met` spectrums, `Used-Less` >8-days branch, LO-Use-State → Moderation-Tech
+  branch, `"life"` submit). New-break ✅ match (identical question list/order,
+  `"clear30"` submit; nits in EXP4). Onboarding ❌ — see EXP2.
 
-- [x] **B1 · P0 · bug — `restartBreak` off-by-one.** (done 2026-07-13, 3a63877 — `resetFutureProgress(includeToday = true)` for restartBreak only; adjustBreakTime keeps `>`) Progress reset uses `> today`
-  (`A/data/ProgramTimelineHandler.kt:72-74,361`); iOS uses `>= today`
-  (`iOS/Data/Program/ProgramTimelineHandler.swift:158`) → new Day 1 can render
-  already-complete. Note: `adjustBreakTime` correctly uses `> today` (matches
-  iOS) — the `>=` applies to restartBreak ONLY.
-- [x] **B2 · P0 · decided — `endBreak` lands users in weed-free** (mirror iOS,
-  §17-Q5). Android currently inverts it to moderation
-  (`A/data/ProgramTimelineHandler.kt:384-385` → `switchCore(newModeration=true)`).
-  iOS net effect: `coreModeration=false`, submits `LO-Use-State=0`
-  (`iOS/.../ProgramTimelineHandler.swift:223-224` + `ProgramMessageHandler.swift:368-420`).
-  (done 2026-07-13, 3a63877 — `switchCore(startOn = today, newModeration = false)`)
-- [x] (done 2026-07-13 — full `BreakAssessmentFlow` (newBreakType + 10 newClear30Questions + affirmations + "Setting up your break" terminal), `AssessmentSubmissionHandler.handleNewBreak`, START_DATE honored in `handleBreaks`; NewBreakSheet deleted. Verified on-device: new `clear30` assessment row + second break with `assessment_response_id` + normative feedback. Found+fixed on the way: Material DatePicker returned UTC-midnight millis → local-TZ conversion stored the picked date one day early at night) **B3 · P1 · bug — New Break skips the break assessment.** `NewBreakSheet` is a
-  name-only AlertDialog passing `emptyList()` responses
-  (`A/views/existinguser/profile/NewBreakSheet.kt:74-77`). iOS runs the full
-  break assessment → `handleNewBreak` (`iOS/.../AssessmentSubmissionHandler.swift:265`,
-  question set: newBreakType, breakReason, consumptionMethod, daysUsing,
-  moneySpent, helpHarm, newBreakStart (date, 0–14), previousBreak, triggers,
-  afterClear30, commitment — defined `iOS/.../BreakAssessmentAbstracted.swift:11,32-43`),
-  submits under `"clear30"`, sets `assessmentResponseID`, fetches normative
-  feedback. Android's assessment components under `A/views/newuser/assessment/`
-  can be reused.
-- [x] **B4 · P1 · missing — `verifyProgramSetup`** (midnight-crossing timeline
-  shift at payment) — implement together with X2. (done 2026-07-13, 3a63877 —
-  `AssessmentSubmissionHandler.verifyProgramSetup`, called from handlePayment;
-  submission time stamped via the iOS `initialAssessmentSubmission` cache key)
-- [x] (done 2026-07-14 with P8, 3f171e9 — `ProgramStartDatePicker.kt` deleted outright,
-  per §17-Q18; it was dangerous dead weight that desynced the timeline.)
-  **B5 · P2 · bug — Settings `ProgramStartDatePicker` writes `program.startDate`
-  directly** with no content/break shift
-  (`A/views/existinguser/profile/ProgramStartDatePicker.kt:71-78`) — desyncs the
-  timeline; not a port of any iOS behavior. **Decision (§17-Q18): REMOVE it**
-  (don't route through `adjustBreakTime`) — implement together with the P8
-  settings overhaul.
-- [x] (done 2026-07-14, 3f171e9 — confirm now runs `ProgramTimelineHandler.switchCore`
-  under `LoadingCoordinator.tracked` with errors to the master AlertHandler,
-  like iOS. VERIFIED on-device: Moderation → "Switch to weed free" → badge
-  flips to Weed free and a `life-short` row with `LO-Use-State: ["I want to
-  stop entirely"]` lands in `programs.program_assessment_responses`.
-  HARDENING found on the way: `ProfileBreakOptions` used
-  `rememberCoroutineScope`, but `endBreak` nulls `currentBreak` in place
-  BEFORE its network work finishes, so the composable leaves composition
-  mid-flight and cancels its own scope (observed: a cancelled
-  `program_submit_assessment_response_v2` POST + the profile stuck on
-  Moderation after End break). Break mutations now run on a new app-lifetime
-  `Clear30Application.appScope`.) **B6 · P1 · bug — Life mode toggle doesn't
-  call `switchCore`.** Profile
-  toggle flips `coreModeration` + saves locally
-  (`A/views/existinguser/profile/ProfileTab.kt:324-329`); never re-fetches Life
-  content. `switchCore` exists and is faithful
-  (`A/data/ProgramTimelineHandler.kt:259-288`) — call it from the confirm
-  handler (with a loading state, like iOS `ProfileCards.swift:317-323`).
-  **Confirmed in scope (Thatcher 2026-07-14).**
+- [x] (done 2026-07-21, uncommitted — short flow HARDCODED per §17-Q22, no
+  experiment read: `AssessmentSlides3.kt` drops consumption-method, bio-sex
+  gate, program-confirmation slides, previous-break, symptoms gate,
+  credibility, in-assessment referral + fair-trial; `clear30Recommendation` →
+  `Trigger` for everyone; dead builders deleted; progress estimate matches
+  prod-iOS numbers (27). Moderation users now share the main path and route to
+  Life at submission only — closes EXP3. Compiles; fresh-onboarding on-device
+  pass tracked in §1b.) **EXP2 · P1 · bug — Onboarding assessment ran the LONG
+  flow; prod iOS runs the SHORT flow** (`assessment-short-flow` = show 100%;
+  iOS gates ~8 slides at `iOS/.../AssessmentSlides3.swift:85,122-124,160,
+  196-206,255-287`). Android extras removed: `Consumption-Method`,
+  `clear30ProgramConfirmation`, `Previous-Break` (+affirmation), credibility,
+  **`Referral` double-ask** (sales slide is now the only ask, like prod iOS),
+  fair-trial. `handleClear30` defaults consumption to PEN when unanswered on
+  both platforms.
 
-## 5. Today tab & check-in
+- [x] (done 2026-07-21 with EXP2 — decision §17-Q22: MIRROR iOS, no
+  divergence) **EXP3 · P2 — Moderation/Life onboarding branch diverged beyond
+  §17-Q2.** Moderation users now get the same slides as everyone (incl.
+  `Trigger`); `choseClear30`/`LO-Use-State` auto-set at What-brings-you-here
+  (identical to iOS `AssessmentSlides3.swift:437-445`); Life routing at
+  submission only. §17-Q2 is moot: the short flow never reaches the modAbs
+  question on either platform.
 
-- [x] (done 2026-07-13, c6b3055 — verified on-device: slide phase on plain background, gray skip pill) **T2 · P3 · bug — Check-in slider screen background** uses the brand
-  gradient (`A/views/existinguser/today/checkin/CheckInSheet.kt:139`); iOS uses
-  plain `clear30Background` (`iOS/.../CheckIn.swift:66-68`). One-line. (Slider
-  track/handle already match iOS.)
-- [x] (done 2026-07-13, c6b3055 — full 15-type generator port incl. rigged day-0/1/2; `CheckInRewardViews.kt` with animated counters, live 1s-ticking WeedFreeTimer, per-reward confetti; SmokedStats renders; iOS sequencing (static-first sober on the gradient screen, variable-first slips). Verified on-device: sober flow → gradient screen, staggered ticking timer bars, variable reward pops in after. Known divergences noted in code: emoji pig, no overrideRewardType/group rows/3s auto-advance. Slip-side reward rendering not yet exercised on-device.) **T3 · P2 · missing — Rewards engine parity.** Android is a self-described
-  "faithful subset": 10/18 variable types
-  (`A/data/CheckInRewardVariableGenerator.kt:15-26,31-42`; `calendarFillAnimation`
-  filtered out at `:91`), flat non-animated views inlined in
-  `CheckInSheet.kt:616-774`; static rewards only mined for a money amount —
-  `WeedFreeTimer` (live timer) and `SmokedStats` never render
-  (`CheckInSheet.kt:516-519`); no per-reward confetti/animated counters.
-  iOS reference: `CheckInRewardViews.swift` (19 animated views),
-  `CheckInRewardVariableContainer.swift`, `CheckInRewardStaticContainer.swift`.
-- [x] (done 2026-07-13, c6b3055 — stateful card: per-method rows, remove/smoked-again, amount stepper, slip timestamps + drag-to-scrub hour detail editor; `onCheckInChange` = iOS updateCheckIn(old:new:). Verified on-device: sober log + X-remove round-trip incl. DataStore. IMPORTANT fix folded in: `program` is mutated in place, so strong skipping left the card/day-pills stale after edits — a `revision` counter is now threaded through TodayTopSection/WeekStrip/MonthGrid/DayNode/CheckInDayCard and must be genuinely READ in each leaf (unused params are excluded from the skip comparison). Slip timestamp rows/detail editor not yet exercised on-device.) **T4 · P2 · missing — Check-in card states.** Android card = 3 static
-  states + one button (`A/views/existinguser/today/checkin/CheckInDayCard.kt:57-138`);
-  iOS shows per-method `CheckInStatus` rows with remove (`xmark.circle.fill`),
-  "smoked again" (+), inline amount picker, timestamps, and a detail editor
-  (`iOS/.../CheckInDayCard.swift:97-104,182-234,388-472`). Port the stateful card.
-- [x] (done 2026-07-13, 8c944dd — cards fill the page height, overflow clips behind a fade + tap-to-expand full-screen reader; reddit preview expands; YouTube plays inline in the card) **T5 · P2 · divergent — Feed cards internally scroll instead of expanding.**
-  `MessageContentCard`/`GuidesFeedCard`/`RedditFeedCard` cap at 62% screen height
-  with inner `verticalScroll`
-  (`A/views/existinguser/today/feed/FeedContentCards.kt:91-92,132,173,218`).
-  Wanted: cards take max page height, tap-to-expand instead of inner scroll,
-  and inline reddit/YouTube embeds (`RedditFeedCard` is preview-only `:214-245`;
-  `YouTubeFeedCard` static thumbnail `:258-289`). Depends on T7 (reddit data)
-  and S8 (YouTube player).
-- [x] (done 2026-07-13, 8c944dd — FeedEndCelebration: 7%/90ms progress ticks + haptics, 100-piece confetti, All Messages / Enter the Community CTA at +1s, Back to Top at +2s; appended after the day's messages; verified on-device) **T6 · P2 · missing — End-of-feed celebration.** iOS `TodayTabEndFeedView`:
-  animated progress ring → fills to 100% → `ConfettiPop(num:100, radius:300)` +
-  `successHeavy` haptic → "All Messages"/"Enter the Community" CTAs + "Back to
-  Top" (`iOS/.../TodayFeedViews.swift:931-1069`). Android feed ends at the
-  community item (`A/.../TodayTab.kt:197`); `ConfettiOverlay`
-  (`A/views/components/Confetti.kt:33`) exists to reuse.
-- [x] (done 2026-07-13, 8c944dd — `{subreddit, postId}` extracted with the iOS regex; entity decoding ported; verified on-device: proxy call reaches the function (no more 400) and a cache-seeded thread renders natively. NOTE: locally Reddit 403s the function's own fetch and `library.reddit_threads` is empty — seed threads locally (see `BE/scripts/seed_reddit_threads.mjs`) or it falls back to the web view; prod has the cache + OAuth secrets) **T7 · P1 · bug — Reddit proxy payload mismatch (fixes reddit everywhere).**
-  Android sends `{"url": ...}` to `reddit_proxy`; the edge function requires
-  `{subreddit, postId}` and 400s (`BE/supabase/functions/reddit_proxy/index.ts:136-141`)
-  → Android silently falls back to direct reddit.com scraping (403-blocked from
-  emulator/DC IPs) and never uses the `library.reddit_threads` cache (table
-  verified in prod). **Fix:** extract subreddit/postId from the URL and mirror
-  iOS `fetchRedditThread` (`iOS/Data/Supabase/SupabaseEdgeFunctions.swift:54-60`,
-  `RedditScraper.swift:349`) in `A/data/supabase/SupabaseReddit.kt` +
-  `A/data/RedditScraper.kt:41-75`. Root cause of S5's nondeterminism. Requires
-  E1 locally.
+- [ ] **EXP4 · P3 · polish — Small assessment deltas found by the audit:**
+  (a) ~~post-assessment interview slide shown to everyone by fallback~~
+  **(done 2026-07-21 on Android, §17-Q22: interview branch hardcoded OUT of
+  `PostAssessmentViewModel.kt` — chain is now coach-referral(exp) →
+  testimonial(exp) → Comments. iOS needs NO change — verified against prod
+  data 2026-07-21: `life` submissions flipped 0% → ~85% Comments the exact
+  week the `post-assessment-testimonial` hide-row was created (2026-05-11),
+  which is only possible if the interview key was ALREADY resolving non-show —
+  i.e. the legacy Amplitude deployment still serves `post-assessment-interview`
+  off to iOS, including fresh installs. Android's hardcoded removal lands on
+  the same Comments outcome.)**
+  (b) ~~`Money-Spent` plain slider missing the typed custom amount~~ (done
+  2026-07-21 with O12 — see O12 note).
+  (c) ~~"(More breaks coming soon)" suffix always shown on new-break~~ (done
+  2026-07-21 — count logic now mirrors iOS `allCases`, suffix never shows).
+  (d) Android's Age question adds a Terms/Privacy footer iOS doesn't have;
+  referral-logo rendering is moot now that the in-assessment referral is gone.
+  (e) latent only-if-flags-change gaps (accepted): `new-onboarding`→hide has
+  no Android Slides2; remote `afterQuestionId` questions, guardian/adolescent
+  branch, and live normative-data fetch unported (baked-in
+  `NormativeData.defaultData`); bio-sex/symptoms/short-flow now hardcoded on
+  Android, so flipping those experiments only affects iOS.
 
-- [x] (done 2026-07-13, 89941d2 — also fixed the `RewardThroughBreakSmall`
-  bottom strip, same defect; verified on-device via a re-run check-in)
-  **T8 · P3 · bug — Reward timer/progress bars: corner radii distort on
-  short fills** (Thatcher, 2026-07-13, post-Wave-5). P3's fix landed for the
-  profile `DopamineTimer`, but the check-in reward views' bars
-  (`A/views/existinguser/today/checkin/CheckInRewardViews.kt` — the
-  `RewardTimeSinceLastSmoked` timer bars / `RewardBar` / `RewardBreakBar`)
-  still clip the fill independently. Apply the same pattern: clip the
-  container once; fill = left-aligned plain rect.
+### 1a-ii. Wave 9 — emulator smoke test (Thatcher, 2026-07-21)
 
-- [x] (done 2026-07-14, 3f171e9 — (a) the first pager page now carries
-  `TopicProgressCard` under the check-in card (iOS TodayFeedCardRouter), with
-  the iOS bottom CTA added: "Dive In" (no progress) / progress bar + "Continue"
-  / tappable "100% Completed 🥹", all scrolling to page 1; verified on-device.
-  (b) the pager (a clipping scroll container) had ZERO breathing room — cards
-  met its bounds exactly, so every soft shadow was cut at the left/right edge;
-  applied the repo's scrollShadowFix pattern (column keeps horizontalPadding −
-  scrollShadowFix, non-pager children pad the difference, pager pages get
-  scrollShadowFix contentPadding) so card width is unchanged but shadows get
-  20dp of room; verified. (c) `InlineYouTubePlayer` gained an `autoplay` param
-  driven by `page == settledPage` — mounts+plays on focus, unmounts (stops) on
-  focus loss, mirroring iOS `isFeedFocused`; wired in the Today feed AND the S6
-  message viewer. Not exercised on-device (no YT card in the test account's
-  current day). (d) audited every feed card: all already `fillMaxWidth` and
-  render full-width on-device — the "narrower" look was X10's dimming +
-  the clipped shadows; re-eyeball vs the iOS simulator once X10/T9b soak.)
-  **T9 · P2 · divergent — Today tab visual parity pass** (Thatcher,
-  2026-07-14, post-Wave-7). Match the iOS Today feed as closely as possible.
-  Known gaps: (a) **no daily-topic card on the first slide** — iOS's first
-  feed page carries the topic card (see iOS `TodayFeedViews.swift` /
-  `ProgramMessagesView` topicCard usage; the S6 message viewer already renders
-  one, the Today feed doesn't); (b) **card shadows get clipped** on the
-  non-focused pages (likely the pager/page container clipping the softShadow
-  bounds — check `TodayTab.kt` page padding vs `scrollShadowFix` on iOS);
-  (c) **YouTube videos don't autoplay when the card loads** — iOS autoplays on
-  page focus (check `InlineYouTubePlayer` / iOS `YouTubeViewer` autoplay
-  param); (d) **cards must take max width** — the YouTube card (and any others)
-  currently render narrower than the page. Related: X10 (opacity bug) may
-  account for the washed-out look — fix X10 first, then re-eyeball this item
-  against the iOS simulator side-by-side.
+*(Raw notes from Thatcher's on-device pass. STATUS 2026-07-21 evening: iOS
+specs extracted for all items (full agent reports in the session transcript);
+code landed + compiling for W2, W5, W6, W8, W10, W11, W12-gate, W13, W16,
+W20, W21 — all pending one on-device pass. Environment note: the local stack
+is swapped to Clear30 (`clear30-education` stack was stopped, volumes kept);
+emulator quick-boot snapshot was corrupted → cleared, cold boot works; local
+DB was found reset, so verification needs a fresh signup — no restorable
+account exists locally.)*
 
-- [x] (done 2026-07-14, c81c05b) **T10 · P1 · bug+divergent — Today feed:
-  day-scoped messages + full-height iOS layouts** (Thatcher, 2026-07-14,
-  post-Wave-8). Two bugs: (a) the feed flattened EVERY content bucket — ~50
-  messages on one day — and (b) tapping a calendar day didn't change the
-  content. Root cause: iOS derives the feed from
-  `program.getProgramMessages(for: date)` (the SELECTED day's bucket +
-  same-day school messages); Android flat-mapped all of `contentInfo`. Ported
-  the getter onto `Program`, keyed the feed on it, and dropped the
-  Android-only DayDetailSheet auto-open (iOS `loadDay` just swaps the feed —
-  the page-0 check-in card edits the selected day). Layouts matched to iOS
-  TodayFeedViews: every page extends full height — page 0 = check-in card top
-  + topic card stretched (badge top / title centered / CTA bottom); video =
-  BARE rounded video, no card chrome, with the draggable bottom
-  MediaProgressBar (new `FeedNativeVideoPlayer`, plays on page focus);
-  carousel = full-height "Frames" card with a paged image carousel + dots;
-  guides = horizontal paged carousel of per-guide cards → full-text sheet;
-  message/reddit/meditation/claire/perk/journal cards fill the page height.
-  VERIFIED on-device: day tap swaps the feed, page count sane, all four named
-  layouts render. NOT ported (follow-ups): carousel pinch-zoom overlay (iOS
-  ZoomableImageOverlay), iOS's unread-catch-up + journal feed cards, and the
-  richer iOS message/claire card internals (heading pills w/ badges, animated
-  emoji).
+- [x] (done 2026-07-21, uncommitted — full rebuild to the iOS calendar:
+  welcome copy, card with month/selected-day header, Mon-start weekday row @
+  0.25, paged month calendar (HorizontalPager, 55dp rows, StandardCalendarNode
+  fills: sober→clear30 gradient, smoked→gray, other days LowOpacity+disabled),
+  stretch chevron month-nav pair, full-width Smoked / Didn't-Smoke buttons on
+  selection (3dp-border unselected style), and a real slide-to-confirm control
+  (85% threshold, successHeavy haptic, 0.55s delay) replacing the Confirm
+  button. Defaults ported: all days sober, last date pre-selected, last month
+  page first. Submit now routes through logger.handleMultiCheckIn (iOS parity
+  incl. lastSmoked reset) instead of per-day logCheckIns w/ reward generation.)
+  **W1 · P2 — Multi check-in should use a CALENDAR like iOS.** Spec
+  (iOS `MultiCheckIn.swift`, whole file): paged month calendar in a card
+  (TabView pages, 55pt rows, StandardCalendarNode 30/40pt), weekday labels @
+  0.25, month chevron stretch-buttons, full-width Smoked / Didn't-Smoke pair
+  when a day is selected (gray vs clear30 gradient), bottom = full-width
+  SlideToConfirmCheckIn slider (NOT a button; fires at 85% drag + confetti +
+  0.55s). All dates default sober=true; last date auto-selected; last month
+  page first. Submit = existing `handleMultiCheckIn`.
+  `A/.../checkin/MultiCheckInSheet.kt`.
+- [x] (done 2026-07-21, uncommitted — LazyListState now INITIALIZED at the current card (no LaunchedEffect scroll → no first-frame jump); future cards reachable by scrolling up. NB iOS actually centers via scrollTo(anchor:.center) — top-anchor is Thatcher's requested divergence.) **W2 · P3 — Health timeline shouldn't scroll to the current card** on
+  open — current card should simply be at the top. `HealthTimelinePage`.
+- [x] (AUDIT PASSED 2026-07-21 — Android matches iOS on every point of the
+  spec: step-function percentage (currentStep.percentage, no interpolation);
+  unlockDate = startDate + setbackDays + daysWithoutWeed days + minuteOffset
+  min; setbackDays = numDaysSmoked(since: startDate) per category (forward
+  shift, never reset); personal-best promoted on RAW startDate comparison;
+  hasNew = lastVisited < currentStepDate w/ pre-visit copy driving the
+  animation; steps sorted ascending at merge; 24h staleness gate; reset/
+  adjust mutations identical. No changes needed.)
+  **W3 · P1 — Audit health-progress CALCULATION parity vs iOS.** Spec
+  (iOS ProgramHealthProgress.swift): percentage is a STEP function (current
+  step's hardcoded %, no interpolation); unlockDate = startDate + setbackDays
+  + step.daysWithoutWeed days + step.minuteOffset min; setbackDays =
+  numDaysSmoked since startDate (forward SHIFT, never reset); personal-best
+  promoted when current reaches best (compared on RAW startDate);
+  hasNew = lastVisited < currentStepDate; lastVisited stamped on nav-in with
+  the pre-visit copy driving the reward animation. Diff
+  `A/data/model/ProgramHealthProgress*` + `HealthDataHandler` line-by-line.
+- [x] (done 2026-07-21, uncommitted — the substantive gap vs the iOS row
+  table: Android inlined the notification/SMS toggles as big cards; now
+  compact push rows ('Notifications ›' / 'Text Messages ›', chevron trailing,
+  adolescent dim preserved) opening full-screen sub-pages with the same
+  toggles (iOS SettingsToggleView push). Rest already matched (Name/Emoji/
+  Custom Check In/Info/Account/links). Still deliberately cut: Show Tutorial
+  (§17-Q4), widgets showcase, influencer mode; the iOS
+  'To receive notifications, tap here' permission-denied swap not ported.)
+  **W4 · P2 — Settings page still doesn't match iOS** (post-P8
+  discrepancies — re-audit row-by-row vs `SettingsView.swift`).
+- [x] (done 2026-07-21, uncommitted — handleLastSmoked now ports iOS CheckInLogger.swift:140-164: anchor = smoked DAY @ current time-of-day, logged timestamp only used when past + different nearest-hour, hard-clamped ≤ now. Android had used the raw timestamp unconditionally → future anchor → negative timer.) **W5 · P1 · bug — Check-in reward WeedFreeTimer shows "-6 minutes"**
+  right after checking in, while the profile timer is correct — they must
+  match (likely lastSmoked anchor vs now skew in
+  `CheckInRewardViews.kt` timer math).
+- [x] (done 2026-07-21, uncommitted — headline SmallText+Heading2 now fillMaxWidth + TextAlign.Center, both branches.) **W6 · P3 — Check-in reward title + subtitle should both be centered**
+  (title currently isn't).
+- [x] (AUDIT PASSED 2026-07-21 — Android's variable generator matches the iOS
+  decision tree end-to-end: sober guard, PlainDate seed, day-0/1/2 rigging
+  (unstamped like iOS), didn't-smoke/smoked/general candidate lists with all
+  15 live types + their gates (hours<24h, milestone≤5h, streak≥2,
+  decrease>0, weekly≥3/≥2, custom≥2/≥3, personalBest≥25%<best),
+  boostForSmoked weighting, previous-day-type + excluded filter
+  (calendarFillAnimation is excluded on BOTH platforms), identical
+  weighted-random math, and variableRewardType stamping. Only gap:
+  overrideRewardType plumbing — iOS sets it nil in prod, so no effective
+  difference. No changes needed.)
+  **W7 · P2 — Audit check-in reward selection logic vs iOS.**
+- [x] (done 2026-07-21, uncommitted — reward + check-in columns get navigationBarsPadding; Continue pill gets a cardSpacing*2 bottom spacer; Skip pill's bottom spacer doubled.) **W8 · P3 — Move the check-in reward "Continue" button UP; same for
+  "Skip check in" in the check-in flow** (both sit too low).
+- [x] (done 2026-07-21, uncommitted — full rebuild of CustomCheckInSetup.kt:
+  list = iOS Screen A (fixed default weed pill, per-row edit + red delete w/
+  confirm, gradient '+ Custom check in'); editor = iOS 2-phase form ('I want
+  to...' OffWhiteInput + 6 template chips w/ autofill; slider preview whose
+  two 40dp corner buttons are now REAL emoji pickers (grid dialog), editable
+  side labels, the reused Groups HuePicker (sat .6/bri .9), hue-gradient
+  Save). iOS id scheme ported (name-dashed + 8-char uuid). Phase-3
+  try-it-out demo not ported — noted.)
+  **W9 · P2 — Custom check-in editor rebuild.** Spec (iOS
+  `CustomCheckInEdit.swift` + `CustomCheckInSetup.swift`): Screen A = card
+  list (default weed row disabled, per-row edit slider.horizontal.3 + red
+  minus delete w/ confirm, bottom '+ Custom check in'). Screen B = 3 phases:
+  (1) 'I want to...' OffWhiteInput + template chips (🏃‍♂️ Run etc.);
+  (2) slider preview — the TWO 40×40 buttons on it are EMOJI PICKERS
+  (notCompletedEmoji 🚫 left / completedEmoji ✅ right, each opens
+  EmojiPicker) + TinyTextInput labels below + ONE HuePicker rainbow slider
+  (hue 0..1, sat .6 bri .9, gradient hue→hue+0.07) + Save; (3) try-it-out
+  SlideToCheckIn demo + Done. Model: {id, name, incompleteOption,
+  completeOption, hue}.
+- [x] (done 2026-07-21, uncommitted — CheckInSheet gained onCompleted, fired only from the reward Continue path; TodayTab scrolls to page 1 in onCompleted only. Skip/close leave the feed alone, matching iOS CheckInViewModel.swift:131-146.) **W10 · P2 · bug — Skipping a check-in must NOT advance the Today feed**
+  (the post-check-in scroll-to-page-1 fires on skip too —
+  `TodayTab.kt` CheckInSheet onDismiss).
+- [x] (done 2026-07-21, uncommitted — progress-bar column now CenterHorizontally.) **W11 · P3 — Today-tab progress-bar title should be horizontally
+  centered.**
+- [x] (done 2026-07-21, uncommitted — feed gate `hasCommunity && selectedDay
+  == today` (iOS TodayFeedViewModel.swift:350 guards isToday), and the card
+  was rebuilt full-PAGE-height per iOS DayPostCommunity: horizontal pager of
+  one full Clear30Card per post ('Community Responses' gradient heading,
+  title, dim body, Spacer-pinned footer w/ tap hint + comment/view stats) +
+  trailing share-your-experience page; page counter below.)
+  **W12 · P2 — Community preview cards only when selected day == TODAY**;
+  verify against iOS; card is also too short.
+- [x] (done 2026-07-21, uncommitted — both description strings White@0.5 on the gradient card.) **W13 · P3 — Profile program card text** ("Your long term support
+  program") **should be white.**
+- [x] (done 2026-07-21, uncommitted — timed intro ported (heading @+1s, dim
+  body @+3s, auto-dismiss @+7s; pulsing-circle invention removed), library =
+  Heading3 title + sleep-timer dropdown (Off/5/10/15/30/45/60 min; expiry
+  bumps a new SleepTimerBus that every MeditationPlayerCore collects to
+  pause — iOS .clear30SleepTimerExpired analog) + HORIZONTAL pager of
+  MeditationFeedCard pages embedding the player, replacing the vertical row
+  list. Applies to cravings too (shared screen, timer sleep-only).)
+  **W14 · P2 — Sleep meditations page rebuild.** Spec (iOS
+  `CravingResources.swift:69-277`, kind .sleep): timed intro ('Take a deep
+  breath' @+1s, 'It's time to rest' @+3s, dismiss @+7s, slow spring) →
+  'Your Sleep Library' Heading3 + sleep-timer Menu (Off/5/10/15/30/45/60min,
+  fires pause via notification) → HORIZONTAL pager (height ≈50%) of
+  MeditationFeedView cards (FeedCardHeading 'Meditation' + embedded player,
+  no visited node).
+- [ ] **W15 · P1 · bug — Meditation player play button sometimes disappears**
+  after tapping play. *(Investigated 2026-07-21: NOT statically reproducible —
+  icon mapping ✓, pressScale ✓, no conditional hiding. LIKELY FIXED by the
+  W31/W33 shared-player rebuild (the per-card create/release lifecycle it
+  replaced was the prime suspect): the Wave-12 on-device pass played a sleep
+  meditation and the disc correctly flipped Play→Pause and back. Leave open
+  until Thatcher's own pass stops reproducing it, then close.)*
+- [x] (done 2026-07-21, uncommitted — search Box removed from the Support heading; NOTE iOS Support2 KEEPS search, this is an intentional divergence, log as §17-Q23.) **W16 · P3 — Remove the search button/feature from the Support tab**
+  (not in iOS).
+- [x] (DIAGNOSED 2026-07-21 — Thatcher's encoding hunch was right: all 8 of
+  `https://m.clear30.org/testimonials/1..8.mp4` are **HEVC/H.265 (`hvc1`)**,
+  55–71 MB, moov atom at END of file. iPhones hw-decode HEVC so iOS plays
+  them; the Android emulator (+ many real Android devices) has no HEVC
+  decoder → silent failure. The main content videos are fine —
+  `videos/testimonial_intro_2.mp4` verified `avc1` H.264 + faststart. **FIX IS
+  SERVER-SIDE (Thatcher): re-encode the 8 files** — `ffmpeg -i in.mp4 -c:v
+  libx264 -crf 22 -c:a aac -movflags +faststart out.mp4` — and re-upload. No
+  app change needed.) **W17 · P1 · bug — Some testimonial videos don't
+  load** — encoding/codec issue confirmed.
+- [~] (PARTIAL 2026-07-21, uncommitted — (a) **SORTING fixed at the shared
+  level**: buildLibraryTabs now buckets newest-first (sections AND items),
+  matching iOS .reversed() — applies to Messages/Reddit/YouTube/Meditations
+  at once; (b) **Messages library**: iOS MessageCard row ported (emoji+title
+  left, Day-N pill right — gradient+checkmark when the day's feed is complete,
+  outlined+arrow otherwise) + favorites-heart mode (header heart → Favorites
+  list, xmark exits). REMAINING: per-break filter SHEET (Android keeps the
+  pill tab row — functionally equivalent), MoreContentBanner, progress-ring
+  pill outline (binary fill/outline for now), the media libraries' 2-col
+  RedditCard/YouTubeCard/MeditationCard grids, and Reddit's 'Symptoms'
+  filter option.)
+  **W18 · P2 — Library lists rebuild.** Spec (iOS `AllMessagesView.swift`
+  + AllReddits/AllYouTubes/AllMeditations): shared skeleton = back +
+  Heading1 + filter button (line.3...circle.fill, only if >1 option) +
+  favorites heart (messages only); MoreContentBanner up top; sections =
+  program STAGES via ProgramMessageSectionCard, sections AND items
+  newest-first (.reversed()); filter = per-BREAK FilterListSheet (detent 0.4,
+  active row gradient-highlighted, + 'Better Life Program' entry; Reddit adds
+  a 'Symptoms' option → per-symptom alphabetical sections); media libraries
+  are 2-col grids (RedditCard/YouTubeCard/MeditationCard per Cards.swift);
+  messages = MessageCard w/ day pill + progress-ring outline + normative
+  feedback pseudo-card.
+- [x] (done 2026-07-21, uncommitted — PostCard now branches: TEXT posts render
+  the same content FLAT (no card) with a SmallText 3-line title and a 1dp
+  text@0.1 divider below; VIDEO posts keep the Clear30Card. Content order
+  (author line, tag pills, dim body, stats+reaction footer) already matched
+  iOS.) **W19 · P2 — Community feed flat rows.** Spec (iOS `FeedCardText.swift`
+  + CommunityFeed.swift:449-521): TEXT posts = flat rows (no card): author
+  line 'emoji name · reltime' (TinyText .75/.25) → title SmallText medium
+  lineLimit 3 → inline tag pills (gradient@0.25 bg) → body SmallText .75
+  lineLimit 3 → footer (bubble.fill + chart.bar.fill counts @0.25 left,
+  reaction pills right, '+' chip if <3 emojis); separated by 1pt
+  text@0.1 divider with cardSpacing*1.5 above+below. VIDEO posts KEEP the
+  card (FeedCardMedia). No pinned chrome. 'Other suggested posts' separator
+  row.
+- [x] (done 2026-07-21, uncommitted — Done is now a full-width gradient-button Row with SmallText "Done" + checkmark sfSymbol, ports iOS TextIconButton in AllTagView.swift:60-62.) **W20 · P3 — Community tag-selection "Done" button is wrong** (unknown
+  origin — likely a Material default); match iOS.
+- [x] (done 2026-07-21, uncommitted — ROOT CAUSE: AllTabs wrapped tab content in Crossfade(280ms) which rendered BOTH tabs stacked mid-transition (the overlapping cards) and composited fading alpha over blur shadows (the corruption). Now a plain when-switch. Also removed the Android-only scrollStackItem deck tilt/overlap from the feed pager and disabled the card glow (glow=null) per "basic and good".) **W21 · P1 — Today feed rendering breaks when switching tabs: shadows
+  get corrupted and cards OVERLAP.** Decision: do NOT chase the iOS glow —
+  keep shadows basic and correct. Do this FIRST (likely explains other
+  visual complaints).
 
-- [x] (done 2026-07-14, d62f296) **T11 · P2 · divergent — Meditation, YouTube
-  + Claire feed cards matched to iOS** (Thatcher, 2026-07-14, follow-up on
-  T10). All three were Android inventions on gradient-background cards; iOS
-  puts each on a PLAIN card with a gradient `FeedCardHeading` (now a shared
-  port, along with `VisitedNode`). Meditation = heading + visited node with
-  the inline player centered (gradient play disc + full-width gradient
-  scrubber; the white-on-gradient styling was removed from
-  MeditationPlayerCore — the full-screen sheet keeps its 250dp bar cap).
-  YouTube = heading + share icon (system share sheet), rounded player
-  centered in the stretch space, video title below (iOS YouTubeViewer inline
-  layout — Android uses `res.title` instead of iOS's fetched metadata title).
-  Claire = heading, title in a claire-outlined capsule, chat preview (user
-  prompt as a right-aligned gradient bubble; Claire as a left-aligned bubble
-  with the pulsing/cycling `AnimatedEmoji` port, animating on page focus),
-  and a full-width gradient "Reveal ✨" CTA pinned at the bottom that opens
-  Claire seeded with the prompt. All three VERIFIED on-device.
+### 1a-iii. Wave 10 — Thatcher's follow-up list (2026-07-21)
 
-## 6. Support tab & content viewers
+*(All coded + compiling 2026-07-21, uncommitted; pending one on-device pass.)*
 
-- [x] (done 2026-07-13, 8c944dd — full-screen `MeditationPage` sheet from library/cravings/sleep/hub-rail + `MeditationPageInline` in feed cards; ad-hoc mini-player deleted; starts paused like iOS; seekable scrubber) **S1 · P2 · divergent — Meditations: one standardized sheet.** Shared
-  `MeditationPlayer` exists but is presented ad-hoc (bottom mini-player in
-  library + cravings, inline swap in message detail, no-op route from hub rail —
-  `A/.../library/MeditationsScreen.kt:101-222`, `cravings/CravingHub.kt:158-160`,
-  `today/feed/MessageDetail.kt:191-214`, `SupportTab.kt:244`). iOS = one
-  full-screen `MeditationPage` sheet everywhere (`iOS/.../MeditationPage.swift`).
-  Keep cravings' separate `craving_resources` data source (matches iOS).
-- [x] (done 2026-07-13, 8c944dd — shared `ChatComposer`/`ChatBubble`/`ChatTypingBubble` extracted from AiChatScreen; Gerad keeps long-press delete) **S2 · P2 · divergent — Dr Fred + Gerad (peer-support) chat composers.**
-  Both use bare `OutlinedTextField` + arrow IconButton
-  (`A/.../drfred/DrFredChat.kt:229-237`, `peersupport/PeerSupportChat.kt:216-224`)
-  instead of the Claire/`AiChatScreen` composer (off-white input + gradient send
-  disc, `A/views/components/views/AiChatScreen.kt:109-137`). They're human-backed
-  `comms.*` threads — share the composer + bubble styling, not the whole screen.
-- [x] (done 2026-07-13, 8c944dd) **S3 · P3 · bug — Reddit viewer close button is top-LEFT**
-  (`A/views/components/RedditDialog.kt:86-98`); move the `xmark` to the trailing
-  side of the top bar.
-- [x] (done 2026-07-13, 8c944dd — SupportTab routes through a real back stack; verified symptom→Claire→back and prompts→Claire→back on-device) **S4 · P1 · bug — Symptom → Claire → back skips the symptom page.** Support
-  tab uses one local `route` state, no back stack
-  (`A/views/existinguser/support/SupportTab.kt:88,146,165-171`). Fix with a real
-  back stack (preferred; TODO.md §6's Navigation Compose item) or by
-  remembering/restoring the prior route.
-- [x] (done 2026-07-13, 8c944dd — symptoms route through RedditDialog; the WebView fallback remains only for actual fetch failures) **S5 · P2 · bug — Reddit viewer inconsistency.** Symptom "Real stories"
-  opens raw `WebViewDialog` (`A/.../SymptomDetailScreen.kt:109-135`) while all
-  other paths use `RedditDialog` (orange-bar native viewer); and `RedditDialog`
-  silently falls back to WebView when the scrape fails
-  (`A/views/components/RedditDialog.kt:63-66`) — currently always, per T7.
-  **Fix:** T7 + route symptoms through `RedditDialog`.
-- [x] (done 2026-07-13, 8c944dd — MessageDetail is a full-screen VerticalPager: topic card w/ break badge, one page per content part (reusing the Today feed cards), back+heart header ↔ topic+progress header, ContentInfo progress write-back, feed-end celebration; verified on-device incl. favorite heart + progress header) **S6 · P2 · missing — Message viewer as paged feed.** iOS
-  `ProgramMessagesView` = full-screen pager, one section per content part
-  (topicCard/video/message/carousel/pageInfo/meditation/instagram/reddit/youtube/
-  memberPerk/clairePrompt/journal/feedEnd) with progress header + feedEnd
-  celebration (`iOS/.../ProgramMessagesView.swift:13-31,92-161,276-291,463-563`).
-  Android `MessageDetail.kt:126-236` = flat scroll with collapsed link rows.
-  Pagination note: the Today tab already uses `VerticalPager`, so paging is not
-  hard — do it.
-- [x] (done 2026-07-13, 8c944dd — favoriting is the heart inside the opened viewer, like iOS) **S7 · P3 · bug — Remove per-row star in the messages list**
-  (`A/.../library/MessagesLibraryScreen.kt:140-146`; iOS list has no star —
-  favoriting is a heart inside the opened message,
-  `iOS/.../ProgramMessagesView.swift:319-348`).
-- [x] (done 2026-07-13, 8c944dd — IFrame Player API + JS bridge (no new dependency): onError codes 2/5/100/101/150, main-frame failures, and a 12s load timeout all trigger the Watch-on-YouTube fallback; `InlineYouTubePlayer` reuses it in feed cards) **S8 · P1 · bug — YouTube player white screen.** Raw WebView embed can't
-  detect YouTube's in-player embed errors (only main-frame HTTP errors handled —
-  `A/views/components/VideoPlayer.kt:147-181,163-169`) → blank player, "Watch on
-  YouTube" fallback never triggers. iOS uses YouTubePlayerKit with a real error
-  state (`iOS/.../YouTubeViewer.swift:150-158,206-216`). **Fix:** adopt the
-  `android-youtube-player` IFrame library (or JS bridge for
-  `onError`/`onStateChange`) with the watch-on-YouTube fallback.
-- [x] (done 2026-07-13, 8c944dd — `AllPromptsScreen`: break tabs (Android's library pattern in place of iOS's filter sheet), stage sections latest-first, 2-col PromptCard grid, tap pre-fills Claire; verified on-device) **S9 · P2 · missing — Claire prompts "View all" → all-prompts list.**
-  Currently routes to empty Claire (`A/.../SupportTab.kt:243`); no list route
-  exists in `SupportRoute` (`:64-84`). iOS `AllPromptsView.swift`:
-  break-filtered, stage-sectioned 2-col grid of prompt cards, each seeding
-  Claire (`:59-96,200-231`).
-- [x] (done 2026-07-13, 8c944dd — rows, label, and routes removed; JournalPromptsScreen/BetterHelp files kept as dead code) **S10 · P3 — Remove "Journal Prompts" + "Is Therapy For Me?"** from the
-  Extras section (`A/.../SupportTab.kt:252-255` + routes/handlers
-  `:75,:77,:157,:159`; the Extras label goes too since the section empties).
-  Per-message journal prompts in `MessageDetail.kt:227-230` stay.
-- [x] (done 2026-07-13, 8c944dd — unfed = orange (reddit gradient) + hungry-monster art, fed = journals yellow + full art; card render gated on the experiment load so nothing flashes) **S11 · P3 · decided — Feedback monster colors.** **Decision (§17-Q10): the
-  default/unfed monster is ORANGE (sad, nobody fed it); fed state stays
-  yellow/journals.** Currently `FeedbackMonsterCard` hardcodes yellow for both
-  states (`A/.../SupportTab.kt:451-470`); also fix the async-null experiment
-  flash (`:94-101,285-286`). (Config-card colors already match iOS.)
-- [x] (done 2026-07-13 — full port under `A/views/existinguser/support/slipped/`: staggered intro, goal-based copy pools, random hero + "All options" swap sheet, and ALL SIX activities (§17-Q11): plan/talk/why/affirmations/testimonials/community. Verified on-device: intro stagger, options sheet, affirmations, plan save (+ solidified cards). Talk/why/testimonial/community activities not individually exercised; testimonials are tap-to-play (iOS autoplays)) **S12 · P2 · missing — Slip-up sheet.** Android substitutes a canned Claire
-  prompt (`A/.../SupportTab.kt:198-204`); iOS: `SlippedSheet` /
-  `SlippedActivities` / `SlippedContent` under
-  `iOS/Views/Existing User/Support/Slipped/` (also writes userWhy —
-  `SlippedActivities.swift:517`). Pairs with X6.
+- [x] (done — `AssessmentSpectrum` dropped the Material3 `Slider` +
+  solid-green `clear30SliderColors` for a custom `SpectrumSlider`: full-width
+  clear30-gradient capsule track w/ green glow, per-step notches
+  (black@0.15, iOS-source alpha), the same white 27dp thumb as
+  `GradientSlider`, tap/drag + snap-on-release + mediumImpact per step.)
+  **W22 · P2 — Help/harm slider must look like the other assessment
+  sliders.** Spec: iOS `AssessmentSpectrum.swift` (SpectrumBackground capsule
+  gradient + notches + white RoundedRectangle thumb).
+- [x] (done — `triggersAffirmationSlide` now takes the VM and builds
+  `affirmationCards` from the chosen triggers (emoji = option's first char,
+  title = rest, subtitle = that trigger's affirmation body, iOS
+  AssessmentSlides3.swift triggersAffirmationSlide), and `customViewFor` maps
+  `triggersAffirmation → AffirmationCardsView` like goalsAffirmation — the
+  Android port had dropped the custom-view wiring, leaving the slide bare.)
+  **W23 · P1 — Onboarding "Clear30 was made for you." slide shows nothing.**
+- [x] (done — ROOT CAUSE of the ~5× repeat: the remote-question re-append
+  path (`addNextSlides`, slidesToAdd.isEmpty branch) re-queued the pending
+  list — which already contained the previously-injected remote question —
+  then prepended the remote questions again; each back/forward round-trip
+  added one more copy. Now the re-appended pending slides are filtered
+  against the remote questions' strippedPrompts (the affirmation was already
+  filtered).) **W24 · P1 — "What do you plan to use Clear30 for" asked ~5
+  times after navigating back/forward in onboarding.**
+- [x] (done — new `BreakStartCountdown` in DopamineTimer.kt (iOS
+  `StartTimer` + Profile.day0StartNow): on Day 0 of an upcoming break
+  (iOS displayMode condition: `currentBreakNotStartSoon`, !inCoreProgram,
+  currentBreakDay <= 0) the Profile weed-free streak card is replaced by a
+  countdown to Day 1 (start of startDate+1) w/ "<name> countdown" header,
+  "Your break starts today/tomorrow/on <date>" label, and a "Start Break
+  Now" pill → iOS "Start now?" yes/no alert → `day0StartNow` (appScope) +
+  `day_0_start_now` log event (added to Logger). Countdown-zero re-derives
+  and swaps back. NOT ported: iOS's full `programBreakStartSoonLayout` page
+  swap (hides progress/program sections on Day 0) — Android keeps the rest
+  of the profile; also iOS's other day-0 special cases (check-in reward
+  rigging, pop-in copy, health-notification suppression, community-tag hide)
+  are separate items if wanted.) **W25 · P1 — Day-0 weed-free timer should
+  count down to Day 1 with a Start-now button (iOS StartTimer).**
+- [x] (done — the break-info dialog (ⓘ on the program card) now offers "End
+  Break" during a break (iOS sheetInfoView) → "End <name>?" / "This will end
+  your break and put you in The Life Program." confirm → endBreak under
+  LoadingCoordinator on appScope, errors to AlertHandler, bumps ProfileTab
+  refresh via new onChanged.) **W26 · P2 — Break details (ⓘ on program tab)
+  needs an End Break option like iOS.**
+- [x] (done — "Write entry" button row got cardSpacing/2 top padding on top
+  of the column's spacedBy(cardSpacing/2) → full cardSpacing gap under the
+  title.) **W27 · P3 — Journal-prompt feed card: spacing between title and
+  button.**
+- [x] (done — `FeedItem.Community` now added BEFORE `FeedItem.FeedEnd`,
+  matching iOS insertCommunityPosts (TodayFeedViewModel.swift:404-417 inserts
+  community before feedEnd).) **W28 · P2 — Community posts should come before
+  the end card in the Today feed.**
+- [x] (done — `TopicProgressCard` grew a `stretch` param (iOS
+  ProgramMessageTopicCard `stretch:`); the feed-end celebration passes
+  stretch=false so the topic card hugs its content (title gets cardSpacing/2
+  vertical padding instead of weight(1f)) while the page still centers
+  card + CTAs + Back-to-Top — animation/CTA reveal behavior unchanged and
+  already matched iOS TodayTabEndFeedView.) **W29 · P3 — Today feed end card
+  shouldn't take max height (iOS stretch:false compact card).**
+- [x] (done — SharePill + shareProgress + onShare plumbing removed from the
+  month header; ChevronBtn restyled to the UpDownButton treatment (full
+  opacityGray, pressScale w/ haptic, full-strength tint) + cardSpacing/2 gap
+  between the pair + content descriptions.) **W30 · P3 — Expanded month
+  calendar: remove Share button; restyle month-nav chevrons to match app
+  buttons.**
 
-- [x] (done 2026-07-14, 3f171e9 — iOS verified first: `SymptomCarouselView`
-  (SymptomCardsView.swift:215) presents through FeedView (horizontal paging,
-  height 220, page dots), NOT a free-scroll row. Rebuilt as a full-width
-  HorizontalPager: one card per snapping page, neighbors at 0.9 scale / 0.5
-  opacity, dot indicator, light haptic on page change — same treatment as the
-  assessment testimonials rail. Card itself unchanged (glass emoji circle +
-  "N tips" pill). VERIFIED on-device: Insomnia leads, 12 dots.)
-  **S13 · P3 · divergent — Symptom cards should be a carousel on the
-  Support tab** (Thatcher, 2026-07-14, post-Wave-7). The "Symptom support"
-  section currently renders as a horizontally-scrolled card row; wanted: a
-  paged carousel. Verify the exact iOS presentation before building
-  (`iOS/.../Support2.swift` symptom section — likely the shared
-  `AssessmentCarousel`/pager treatment) and mirror it.
+### 1a-iv. Wave 11 — Thatcher's second follow-up list (2026-07-21)
 
-## 7. Profile
+*(All coded + compiling 2026-07-21, uncommitted; pending an on-device pass.
+Numbering continues from Wave 10.)*
 
-- [x] (done 2026-07-13, c6b3055 — verified: saved why lands in local `users.your_why`) **P1 · P1 · bug — "Your why" never synced to DB.** Save handler is
-  local-only (`A/views/existinguser/profile/ProfileTab.kt:280-284`);
-  `SupabaseController.updateYourWhy` exists with zero callers
-  (`A/data/supabase/SupabaseFunctions.kt:66-67`). iOS: `ProfileCards.swift:102`.
-  One-line wire-up.
-- [x] (done 2026-07-13, c6b3055 — `ProfileSnakeCalendar.kt` port (snake grid, iOS day-mapping tables, connector masks, today-glow, staggered pop-in); branch on `currentBreak != null`, section label flips to "Your Break". Verified rendering on-device (day-0 break); connector highlight rules vs iOS with a mid-break account still worth an eyeball) **P2 · P2 · missing — Snake calendar for in-break users.** Android always
-  renders the Roman calendar (`A/.../ProfileCalendar.kt`, used unconditionally at
-  `ProfileTab.kt:119`); iOS branches: in-break → `ProfileSnakeCalendar(height:275)`
-  (`iOS/.../Profile.swift:144`), Life → Roman (`:193`). Port
-  `ProfileSnakeCalendar.swift` and branch on `program.currentBreak != null`.
-- [x] (done 2026-07-13, c6b3055 — container clipped once, fill = plain rect; verified visually on narrow fills) **P3 · P3 · bug — Timer bar corner radii distort on short fills.** Fill Box
-  clipped independently with the full 14dp shape
-  (`A/views/existinguser/profile/DopamineTimer.kt:250,278-280`) → radii shrink
-  when the fill is narrow. iOS masks the whole composited bar once
-  (`iOS/.../DopamineTimer.swift:422-425`). **Fix:** clip the container once;
-  fill = left-aligned plain rect.
-- [x] (done 2026-07-13, c6b3055 — verified on-device: exactly one badge, on the soonest gauge) **P4 · P3 · bug — "in X hours" badge on every health card.** Badge renders
-  per gauge (`A/.../health/HealthGaugeCards.kt:153`); iOS shows it only for the
-  single soonest-updating category (`iOS/.../Profile.swift:263-265`;
-  `nextIncreaseCategory` = min by nextStepDate,
-  `ProgramHealthProgress.swift:193-195`). Compute the earliest `nextIncrease` in
-  `HealthCardsRow` and pass a `showTimeLeft` flag.
-- [x] (done 2026-07-13, c6b3055 — cards tappable at any %, open a new `HealthTimelinePage` overlay (combined milestone timeline; Android has no per-category detail screen yet). Verified on-device) **P5 · P3 · missing — Health cards not clickable.** No click handler at all
-  (`HealthGaugeCards.kt:132-163`); iOS cards are always tappable — even at 0% —
-  navigating to the health timeline detail (`iOS/.../HealthCard.swift:26`,
-  `Profile.swift:380-388`). Route to `HealthTimelineSection`/detail regardless
-  of percentage.
-- [x] (done 2026-07-13, c6b3055 — full-screen `TextEntryEditor` (title field, auto-focus, commit-on-close, delete confirm, share-to-community via `createCommunityPost` w/ program tag); video entries get a naming dialog with unlocked-prompt suggestions. Verified on-device: create→back commits and lists the entry; video naming + share flow untested (camera / needs auth session)) **P6 · P2 · missing — Journal UX.** Text entry = cramped AlertDialog
-  (`A/.../journal/JournalSection.kt:202-218`); video title hardcoded
-  "Video journal" (`:98`). iOS: full-screen `TextEntry` editor with title field +
-  share-to-community (`iOS/.../TextEntry.swift:61,70,73,113`); video entries
-  named by the selected prompt (`NewVideoEntryViewModel.swift:321`). Minimum:
-  full-screen text editor + nameable video entries (prompt picker optional).
+- [x] (done — could NOT reproduce statically: the pause icon mapping
+  (`sfSymbol("pause")` → Icons.Rounded.Pause, extended icons included) and
+  the disc layout are correct. The player lifecycle was rebuilt anyway for
+  W33 (shared app-wide player instead of a per-composable ExoPlayer released
+  on dispose), which replaces the suspect lifecycle entirely — re-test
+  on-device; if it still vanishes, grab a screen record.) **W31 · P2 —
+  Cravings-hub meditation player: play/pause icon disappears when playing.**
+- [x] (done — sleep pager: the corner "dots" were the VisitedNode checkbox on
+  each meditation card (now hidden via `showVisited = false` in the hub);
+  `FeedPagerDots` added centered under the pager (iOS FeedView pageDots).)
+  **W32 · P3 — Sleep meditations: remove card-corner dots, add page dots
+  under the pager.**
+- [x] (done — real background audio: new `MeditationAudioController`
+  (app-wide shared ExoPlayer) + `MeditationPlaybackService`
+  (media3 `MediaSessionService`, foreground `mediaPlayback`, lock-screen
+  controls; media3-session dep + FOREGROUND_SERVICE perms + manifest service
+  added). `MeditationPlayerCore` now uses the shared player (listener-only on
+  dispose, no release). Sleep timer moved off the composable `LaunchedEffect`
+  onto the controller (appScope) so it fires with the app backgrounded and
+  pauses the shared player; swiping the app away stops audio
+  (onTaskRemoved).) **W33 · P1 — Sleep timer must actually work: app closed,
+  audio keeps playing, stops when the timer ends.**
+- [x] (done — `MessageDetail`'s pager aligned to the Today feed's W21 fix:
+  `scrollStackItem` deck tilt/overlap removed, glow forced null, header
+  Crossfade → plain switch.) **W34 · P1 — Support-tab message viewer:
+  corrupted shadows + overlapping cards (same W21 treatment as Today).**
+- [x] (done — the favorite heart (top-right of the message viewer, page 0)
+  removed along with its `FavoriteHeart` composable; the Messages-list
+  favorites toggle + favorites list kept (existing favorites still
+  reachable).) **W35 · P3 — Remove the heart in the top right of messages.**
+- [x] (done — `VideosFeedCard` (iOS `VideosFeedView`): horizontal paged
+  carousel of bare native videos (`FeedNativeVideoPlayer`, settled-page-only
+  playback) + page dots; `instagramVideos` wired into both feed builders
+  (Today feed + viewer) after meditation / before reddits, matching iOS
+  order. The model field already existed.) **W36 · P2 — Instagram-videos
+  carousel missing from feeds.**
+- [x] (done — VERIFIED: both platforms already source Reddit through the
+  `reddit_proxy` edge function, which serves from the backend
+  `library.reddit_threads` cache — iOS does NOT read the table directly
+  either. Card comment updated to say so; no data-path change needed.)
+  **W37 · P3 — Reddit card should pull from the library.reddit_threads
+  cache like iOS.**
+- [x] (done — Claire now renders as an OVERLAY above the route it was opened
+  from (SupportTab keeps the base route composed under it, overlay
+  registers the winning BackHandler): back from Claire returns to the exact
+  viewer page, list state intact. Route `when` un-returned to allow the
+  overlay; behavior otherwise unchanged.) **W38 · P2 — Claire prompt from a
+  message: back should return to the message page, not the list.**
+- [x] (done — journal prompt card: title block pinned at the top,
+  stretch Spacer, "Write entry" at the bottom (chevrons sit just above the
+  button).) **W39 · P3 — Journal feed card: title top, Write-entry bottom.**
+- [x] (done — smoked check-in no longer forces the amount picker
+  (`awaitingAmount` never set): logs immediately with `amount = null` (the
+  logger already accepts it; editable later from the day card). iOS only
+  shows the amount list on a deliberate hold anyway.) **W40 · P2 — Smoked
+  check-in: skip the amount picker.**
+- [x] (done — `DayNode`: smoked = `Gray` (was red — iOS has NO red calendar
+  state, MultiCheckInDayNode uses .gray), no-check-in = `LowOpacity` so the
+  two stay distinguishable, matching iOS exactly.) **W41 · P2 — Today
+  calendar: smoked should be gray, not red.**
+- [x] (done — topic-card badge: iOS padding (h = cardSpacing,
+  v = cardSpacing*0.75, was ½/⅓) and left-aligned text (was centered),
+  per ProgramMessageTopicCard.) **W42 · P3 — Topic-card "Clear30 Day 0" tag:
+  more padding + left-aligned text.**
+- [x] (done — see W37: the fetch already comes from the cache via
+  reddit_proxy with `res.title` as the no-data fallback; "Tap to see more"
+  moved from the stats row to pinned bottom-center (like the guides card),
+  card restructured from ExpandingFeedCard to a full-height Clear30Card so
+  the pin works.) **W43 · P3 — Reddit feed card: "Tap to see more" at the
+  bottom; cache-first data with title fallback.**
+- [x] (done — root cause is content-side/emulator, not a wiring bug: the
+  embed uses the IFrame API with a genuine youtube.com baseURL; failures are
+  (a) uploader-disabled embedding (error 101/150) or (b) EMULATOR codec
+  failures (error 5) which hit every video. Hardened anyway: explicit
+  `origin` playerVar, load timeout 12s→20s (slow cold loads no longer
+  misreported), timeout now logged. Check logcat tag `YouTubeEmbed` for the
+  error code if it recurs on a real device.) **W44 · P2 — YouTube "This
+  video can't play in-app" — why, and fix what's fixable.**
+- [x] (done — `TodayTabUiState` holder (process-lifetime) saves the pager
+  page + selected day; `rememberPagerState(initialPage = saved)` restores on
+  tab return, day-change still resets to page 0.) **W45 · P2 — Switching
+  tabs shouldn't reset the Today feed to the top.**
+- [x] (done — community carousel "1/6" counter replaced with the shared
+  `FeedPagerDots` (made internal), matching iOS FeedView pageDots.)
+  **W46 · P3 — Community carousel: page dots instead of "1 / 6".**
+- [x] (done — `GroupTextIconButton` now stretches (fillMaxWidth + centered
+  content, mirroring iOS TextIconButton's twin Spacers) — fixes the lone
+  "Invite to Group" button.) **W47 · P3 — Groups: invite button should
+  stretch full-width.**
+- [x] (MOSTLY DONE 2026-07-21 evening — autonomous on-emulator pass with
+  DB-seeded data (Goldie added to thatcher's group via
+  `groups.group_members`). VERIFIED working: members tab with 2 members +
+  per-member day states ("Didn't smoke!"/"Smoked." from seeded day_info) +
+  July check-in stats; full-width Invite button (solo) ↔ "Add to Inner
+  Circle" (multi) swap; chat tab (activity rows + sending a message —
+  DB row confirmed in groups.group_messages); settings tab (name field, hue
+  picker, member list); REMOVE MEMBER via the minus icon (DB row deleted,
+  then re-seeded); Leave button style + its confirm wiring (not confirmed
+  through — would leave the group). NOT yet exercised: join-via-code from a
+  second device, the notes/activity middle tab (a mis-tap opened a system
+  page — retest by hand), member-badge taps + ping RPC (G3 debt), group
+  calendar interactions. Goldie remains seeded for hands-on testing.)
+  **W48 · P2 — Test ALL the groups features end-to-end.**
+- [x] (done — leave button restyled to the iOS GroupSettings look: full-width
+  neutral card button with red content (`GroupTextIconButton`,
+  foreground = red1, figure.walk.departure), replacing the left-aligned red
+  `DefaultButton` pill; member-remove icon got pressScale. The odd one-off
+  styles on that page are gone.) **W49 · P3 — Groups settings: fix Leave
+  button style; remove the odd button styles.**
+- [x] (done — full iOS `programBreakStartSoonLayout`: on Day 0 the profile
+  now shows ONLY the green "Your Break Starts X" card (X = iOS
+  relativeToToday: Today/Tomorrow/"In N days"), the clear30-GREEN countdown
+  card (was meditation blue; TimerBar accent param added) with Start Break
+  Now, and the Journal/Previous-Breaks buttons — why card, streak timer,
+  health, achievements, program card, calendar, stats and break options all
+  hidden on Day 0.) **W50 · P1 — Day-0 progress tab must match iOS
+  (green countdown, replace why card, hide everything else).**
+- [x] (done — the messages LIST now groups same-day messages (iOS
+  AllMessagesView): one card per day, the 2nd message (the assessment
+  question/response one, already ordered after the core message per
+  d179e6a) shows as a pill badge on the card and the viewer takes the whole
+  group — `MessageDetail` now accepts `List<ProgramMessage>` (single-message
+  convenience overload kept) and appends each message's content after the
+  main one (iOS generateFeedItems). Catch-up + daily-topics open the full
+  day group too.) **W51 · P2 — Support-tab messages: same-day sub-message
+  treatment like iOS.**
+- [x] (done — Restart break / Change start date (+ Start now / End) are now
+  plain neutral StretchedButtons — no green gradient — matching iOS
+  ProfileBreakOptions' default TextIconButtons.) **W52 · P3 — Progress tab:
+  restart/change-start-date as regular white buttons.**
+- [x] (VERIFIED, no change — achievements IS fully set up on Android: real
+  mini-display UI (`AchievementsSection` → list/reveal/detail), engine
+  (`AchievementEngine`), and Supabase reads/writes against the
+  `achievements` schema. Like iOS it only RENDERS once ≥1 achievement is
+  earned, and the tables are RLS-gated to authenticated users — so a fresh
+  local account shows nothing until something is earned. Nothing to add to
+  the to-do list.) **W53 · P3 — Is achievements set up?**
+- [x] (done — money-saved card is now tappable (pressScale) → "Edit Money
+  Saved" numeric dialog; saves `desired − autoCalculated` to
+  `currentBreak.moneySavedAdjustment` exactly like iOS handleEditMoneySaved
+  (model fields already existed — the tap/dialog was never wired).)
+  **W54 · P2 — Editing money saved didn't work.**
 
-- [x] (done 2026-07-13, 89941d2 — required restructuring the Android health
-  model 1:1 to iOS `ProgramHealthProgress` (per-category `HealthCategory` +
-  `HealthStep` lists with backend percentage/colors/`intro_content`/
-  `fda_disclaimer`, personal-best + lastVisited state); persisted key bumped
-  to `healthProgressV2` so old flattened dev data refetches instead of
-  breaking the Program decode. Gauges are now the iOS `HealthCard` (270° ring,
-  best ghost ring, `hasNew` gradient state + "↑N% ›" badge, per-category tap);
-  `HealthTimelinePage` is the full iOS `HealthTimeline` (liquid-fill ring,
-  highlighted card + confetti, Day-N badges, citations, placeholder skeleton,
-  intro cards, FDA footer; ring's triple glow shadow skipped — noted in code).
-  Timeline-handler call sites upgraded to the faithful iOS health calls
-  (`resetHealthProgress`/`adjustHealthProgressStartDate`/
-  `updateHealthProgressStartDates`); health notifications now fire at the real
-  per-step `nextStepDate`. VERIFIED e2e on-device: break −7d → catch-up
-  check-ins → hasNew badges → ring animation → highlighted list → badge clears
-  after visit. NOTE: local `library.health_categories` has Heart's
-  `long_name='Brain'` — seed-data bug, not app) **P7 · P2 · missing — Health
-  timeline detail cards** (Thatcher, 2026-07-13, post-Wave-5). The
-  `HealthTimelinePage` overlay added with P5 is a bare milestone list — "the
-  health timeline doesn't have the actual cards for anything." Copy the iOS
-  health timeline UI exactly (per-milestone cards; see iOS
-  `HealthTimelineSection`/`HealthCard` and the detail views under
-  `iOS/Views/Existing User/Profile/`).
+- [x] (done — TWO root causes found, both fixed. (1) **Wrong param keys**: the
+  engine's threshold lookup tried `min_days/min_total/day/value/target/count`
+  but the live `achievements.definitions` rows use `{days}` (cumulative),
+  `{type: money_saved, amount}` and `{type: program_day, day, program}`
+  (milestone) — so EVERY evaluation returned not-earned and
+  `user_achievements` stayed at 0 rows (verified in the local DB: 53 defs,
+  0 earned). `isEarned` rewritten 1:1 against iOS AchievementManager's
+  checkers. (2) **Empty-cache dead end**: `syncNewlyEarned` no-oped forever
+  if the defs cache was empty at check-in time (app-load refresh can race
+  auth). New `evaluateNow` self-primes the cache, check-ins use it, and
+  opening the Profile achievements section now retroactively evaluates —
+  so already-qualified achievements appear immediately. Also:
+  `refreshAchievementsCache` no longer wipes locally-earned-but-unsynced
+  rows, and the section displays local + server earns merged. RLS verified
+  fine.) **W55 · P1 — Achievements never show (follow-up to W53).**
+- [x] (done — new shared `TextIconButton` in Buttons.kt (iOS Buttons.swift
+  TextIconButton): full-width CardStyle button — white card bg + soft
+  shadow, optional gradient/foreground/trailing icon/subtext.
+  ProfileBreakOptions now uses it with the iOS icons (Restart ↺, Change
+  date 📅, End ✕, Start-now ⏲) and cardSpacing gaps — the flat
+  StretchedButtons had no card bg/shadow.) **W56 · P2 — Break-option
+  buttons had no background/shadow (follow-up to W52).**
 
-- [x] (done 2026-07-14, 3f171e9 — full row-by-row audit vs iOS SettingsView.swift, then
-  rebuilt to the iOS structure: Options (Name, Emoji, notification toggles
-  inline [simpler than iOS's pushed SettingsToggleView pages, per "or make it
-  more simple"], Text-messages toggles, Custom Check In) → Info (Rate us!,
-  Manage Subscription — both now use `context.packageName` instead of the
-  wrong hardcoded `org.clear30`) → Account (red centered Sign Out + Delete
-  Account and Data with the iOS alert copy, dim userID) → centered footer
-  links (Privacy Policy / Terms and Conditions / Clear30.org, iOS URLs).
-  REMOVED Android-only inventions: SymptomsSection, ProgramStartDatePicker
-  (B5), ShareCalendarRow — files deleted. Deliberately not ported: "Show
-  Tutorial" (tutorials cut §17-Q4), "Clear30 widgets" showcase (only
-  StatsWidget exists), 10-tap influencer mode (§15). VERIFIED on-device.)
-  **P8 · P2 · divergent — Settings page overhaul** (Thatcher, 2026-07-14,
-  post-Wave-7, §17-Q18). "The whole entire settings page is out of whack. Keep
-  it how we have it in the iOS app or make it more simple — there's some extra
-  stuff in this one we don't need." Audit
-  `A/views/existinguser/profile/settings/` (`ProfileSettingsOverlay` /
-  `SettingsSection.kt`) against the iOS settings
-  (`iOS/Views/Existing User/Profile/Settings/` — verify path) and mirror it
-  1:1, deleting Android-only rows. Known removals: the
-  `ProgramStartDatePicker` row (B5 — desyncs the timeline, no iOS
-  counterpart). Same playbook as G3: list every row on both platforms first,
-  then cut/rebuild.
+### 1a-v. Wave 12 — autonomous audit + on-device pass (2026-07-21 evening)
 
-- [x] (done 2026-07-14, 3f171e9 — threaded ProfileTab's `refresh` counter as a
-  genuinely-read `revision` param (T4 pattern) into ProgramCard (remember key),
-  ProfileSnakeCalendar, ProfileBreakOptions, HealthCardsRow AND each
-  HealthGaugeCard (the per-card `hp` is also mutated in place). Stat cards take
-  primitives recomputed in the parent (which reads `refresh`), and
-  DopamineTimer self-heals via its 1s tick, so neither needed threading.
-  VERIFIED on-device: Change start date → 7 days ago updated the Day badge
-  (1→8), snake calendar, and health gauges (0%→28/39/43% + hasNew) in place;
-  End break flipped the section to Your Program/Life + Roman calendar in
-  place. No app restart, no tab switch.) **P9 · P1 · bug — Profile tab doesn't
-  reload after break mutations**
-  (Thatcher, 2026-07-14, post-Wave-7). After Restart break / Change start
-  date / End break, the profile UI (break card day badge, snake calendar,
-  stats) keeps showing stale state — "right now I have to close the app."
-  Reproduced during Wave 7 verification: after "Change start date → 7 days
-  ago", the break card still read "Day 1" until a tab switch. `program` is
-  mutated in place and Compose strong skipping keeps stale composables — the
-  `refresh` counter in `ProfileTab.kt` must be genuinely READ by every leaf
-  that renders break-derived values (same fix pattern as T4's
-  revision-counter threading, see the Wave 5 notes on T4; unused params are
-  excluded from the skip comparison). Audit `ProfileBreakOptions`' onChanged
-  path end-to-end: ProgramCard day badge, ProfileSnakeCalendar,
-  days/money-saved stat cards, DopamineTimer, and the health gauges.
+*(Agent session while Thatcher was away: adversarial 3-agent review of ALL
+uncommitted Wave 10/11 work, on-emulator smoke test of every tab (no
+crashes), achievements verified end-to-end, groups exercised per W48.
+Everything below compiles + installed on the emulator.)*
 
-- [x] (done 2026-07-13, c6b3055 — `opened_pinned_<id>` cache tracking + Newest-mode hiding + program-tag feed seeding (feed verified opening scoped to the Clear30 tag; CreatePostScreen forced tag switched to `communityProgramTagName` to match). Pinned hide/return flow not exercised on-device — no pinned row seeded locally; check `get_filtered_posts` returns pinned rows without an explicit `exclude_pinned` arg) **C1 · P2 · missing — Pinned-post behavior.** `is_pinned` parsed but never
-  read (`A/data/model/Post.kt:22`; `CommunityTab.kt:259-272` renders all posts
-  flat). Port iOS: `opened_pinned_<id>` visited tracking cached on UserInfo,
-  hide opened pinned posts in Newest mode, and auto-seed the feed's tag filter
-  from the current program's tag
-  (`iOS/.../CommunityFeedViewModel.swift:186,406-416`;
-  `CommunityFeed.swift:225,264-265,340-352`).
-- [x] (done 2026-07-13, c6b3055 — verified on-device: no prompt card) **C2 · P3 · decided — Remove the prompt card at the top of the feed**
-  (hardcoded random local string — `A/views/existinguser/community/CommunityTab.kt:240-243,290-320`).
-  Part of §17-Q4's "remove tutorial popups, same with community and such."
-- [x] (done 2026-07-13, c6b3055 — activity/notifications inbox (paged `get_activity_feed`, unread dots, tap = mark-read + open post — verified incl. `is_read` flip in local DB), `EditPostScreen` (verified: edit → "Post updated!" → row updated in `community.posts`), owner Edit/Delete + report un-stubbed w/ bucket cleanup via new `removePublicFile`; SocialUserView skipped per item (TODO(port) marker). Delete + report flows not exercised on-device) **C3 · P2 · missing — Community depth:** activity/notifications inbox
-  (currently a stub — `A/.../CommunityHeader.kt:161`), edit post, owner actions
-  + flagging un-stub (`CommunityTab.kt:520-562`). Per-user profile view (iOS
-  `SocialUserView`) is nice-to-have.
+- [x] (done — achievements verified END-TO-END on device: 7 achievements
+  (first_day, three_days, day_one_done, first_weekend_warrior, coffee_break,
+  lunch_special, coffee_fund) awarded for the day-3 test account, synced to
+  `achievements.user_achievements`, and rendering in the Profile
+  mini-display. Required one BACKEND fix: the local DB was missing sequence
+  grants that prod has out-of-band — inserts failed with "permission denied
+  for sequence user_achievements_id_seq". New migration
+  `20260722013010_grant_achievements_sequence_usage.sql` (in the iOS repo's
+  Backend) captures the prod grants; applied locally + recorded. Engine
+  hardening added while diagnosing: unsynced rows now RETRY on every
+  evaluation (were stranded forever after one failed push), duplicate-key
+  responses count as synced, insert failures are logged, evaluation also
+  runs once per app load (the Day-0 layout hides the profile section that
+  used to be the only other trigger), and `refreshAchievementsCache` no
+  longer wipes the earned cache when the server read fails/empty.)
+  **W57 · P1 — Achievements end-to-end verification + backend grant fix.**
+- [x] (done — review-pass fixes, most severe first:
+  · P1 meditation: `prepare()` ran at COMPOSITION on the shared player, so
+    merely composing a card (sleep-pager pre-compose, feed page) hijacked /
+    stopped whatever was playing and could falsely mark tracks visited; now
+    composition only obtains the player, the media item is set exclusively
+    on the play tap, and all listener/scrubber/visited state is gated on
+    the card OWNING the loaded track (MeditationPage.kt).
+  · P2 TodayTab: `feedItems` remember was missing the `selectedDay` key —
+    two message-less days produce equal `messages`, leaking today-only
+    Community/CatchUp pages onto other days.
+  · P2 TodayTab: scroll restore raced the async community fetch — the
+    restored index could land on FeedEnd and falsely write progress=1.0;
+    community posts now persist in the same process-lifetime holder, which
+    also drops state saved on a previous calendar day (overnight process).
+  · P2 check-in sheet: the commit `fired` flag never reset after tap-to-undo
+    → the sheet deadlocked (no later commit could fire); reset when a
+    result is removed.
+  · P2 custom check-in editor: `autofill()` ran during composition, so a
+    cleared label refilled itself under the cursor; now fills on activity
+    focus-exit (+ debounced fallback), iOS behavior.
+  · P2 CheckInLogger.handleLastSmoked: used the raw logged timestamp (whose
+    DAY is the logging day) instead of iOS's smoked-day-at-timestamp-time
+    (`withTimeFrom`) — a backdated smoked catch-up collapsed days of clear
+    time to hours on the next recompute.
+  · P2 Claire overlay: consumed no input in its dead zones (gutters/header)
+    so taps fell through to the hidden screen beneath; now consumes. Also:
+    deep-linking Claire while Claire is open replaces instead of stacking,
+    and a new prompt re-keys the chat.
+  · P2 messages library: system back skipped the rev bump (stale Favorites
+    after unfavoriting in the viewer); tab selection no longer resets to
+    default on every viewer close (name-keyed).
+  · P3 batch: journal feed card ordered before catch-up (iOS index
+    min(1,·)); latent assessment bug where an affirmation-only completion
+    truncated the whole pending queue (now splices like iOS
+    insertAffirmationSlide); journal-entry card body capped at 12 lines so
+    "Tap to see more" can't clip; pinch-zoom pan now scales with zoom;
+    MultiCheckInSheet scrolls on short phones; TextIconButton icon 12dp +
+    Dimens-based subtext spacing (iOS sizes); OptionPill `dimmed` actually
+    dims; appScope launches in break actions wrapped (an exception crashed
+    the app + stuck `busy`); MessageDetail kdoc updated for the removed
+    heart (W35 is a deliberate divergence).
+  Known-accepted leftovers from the review (not bugs today): remote-question
+  dedup matches on strippedPrompt (only matters if the backend ever shadows
+  a built-in id); slider haptic can double-fire within one frame;
+  feed-end "N unread messages" counts the DAY's unvisited messages while
+  iOS counts non-started days program-wide.)
+  **W58 · P1/P2 — Adversarial review fixes across Waves 10/11.**
 
-## 9. Groups
+- [x] (done 2026-07-21 late — **W33 sleep timer VERIFIED ON-DEVICE**: played a
+  sleep meditation (Body Scan), armed the 5-min timer, pressed HOME — media3
+  session stayed `PLAYING` in the background (foreground service held it
+  through Android 15's background-audio hardening) and playback stopped
+  right at timer expiry (~5 min later, session released). Also re-verified
+  W31: the play disc correctly flips Play→Pause while playing in the
+  rebuilt player.) **W59 · P1 — Sleep-timer background flow on-device.**
+- [x] (done — **D5 markdown rendering closed against real content** (surveyed
+  the live DB): message bodies use **bold** in 411/435 rows + a few
+  *italics*, zero links/headers/lists → the inline renderer gained italics;
+  GUIDES use FULL markdown (31/32 have links + # headers, 26 bullets) which
+  rendered as raw syntax → new `markdownBlocks`/`SmallTextMarkdownBlocks`
+  (bold headers, • bullets, tappable underlined links via LinkAnnotation)
+  now used by the guide card + guide sheet. ALSO: the main lesson body
+  rendered with PLAIN SmallText — raw `**` in nearly every lesson — while
+  iOS uses markdown-interpreting `SmallTextWithLinks`; MessageContentCard
+  now renders inline markdown + links.) **W60 · P2 — Markdown parity for
+  lesson/guide content (closes backlog D5).**
 
-- [x] (done 2026-07-13, c6b3055 — verified on-device after creating a group: dim group name over section Heading1, small top-right "+" (fires the share Intent directly — iOS's intermediate share sheet intentionally skipped), no card/subtitle/InviteChip) **G1 · P2 · divergent — Header overhaul.** Android wraps the header in a
-  full gradient card (3 text lines incl. "X members · Y days clear together") +
-  full-width InviteChip (`A/views/existinguser/groups/GroupsTab.kt:335-354`);
-  iOS is plain text — dim group name over `Heading1` section title — with a
-  small top-right "+" circle button opening a share sheet, no member-count line
-  (`iOS/.../GroupAll.swift:54-102,137`). Drop the card, drop the subtitle line,
-  compact invite. Section picker/tabs already match.
-- [ ] ~~**G2 · P2 · missing — Groups depth:** create/join/leave flows
-  (`add_member`/`remove_member`), group calendar, notes, member detail, pings.~~
-  *(2026-07-13, largely superseded by G3: create/leave/remove + notes + pings
-  landed; the iOS audit showed there IS no group calendar or member-detail on
-  iOS — those were Android inventions, now removed.)* **CLOSED — the two
-  remainders (chat scroll-to-top pagination, iOS's intermediate invite share
-  sheet) not needed (Thatcher 2026-07-14, §17-Q19).**
-- [x] (done 2026-07-13, 89941d2 — audit corrections vs this item's summary:
-  iOS Notes is a READ-ONLY inbox tab (not notes-on-member-cards; note SENDING
-  hangs off the member-card badges via the GroupSendNote popup), and the hue
-  color picker DOES exist on iOS Settings — Android's Material slider was
-  replaced with the iOS HuePicker card + swatch + 1s-debounced persist.
-  Removed inventions: GroupCalendar, "Recent activity" section, leaderboard
-  podium/ranks, MemberDetailScreen + tap-to-detail, join-with-a-code, chat
-  back button/header. Rebuilt to iOS: member cards w/ 🔥streak + state badges
-  (tap → note/ping, inert on self), Inner Circle / Other members split,
-  inline chat w/ date separators, interleaved group-activity rows (tap →
-  note), name labels + emoji avatars, shared gradient composer; read-only
-  NoteCard inbox; shared PillPicker tabs. VERIFIED on-device: creation
-  screen, members/chat/notes/settings, sent message bubble + joined-activity
-  row. Not exercised: multi-member badge taps/ping RPC, hue round-trip.
-  Known stand-ins kept: 5s poll (no Realtime), system share intent)
-  **G3 · P2 · divergent — Copy the iOS Groups UI exactly** (Thatcher,
-  2026-07-13, post-Wave-5). Android has invented sections/behaviors that
-  don't exist on iOS — mirror iOS 1:1: remove the extra "Recent activity"
-  section; fix the Chat section (no back button top-left, iOS-style message
-  composer); the color picker isn't real; Notes should hang off the member
-  cards on the main page (not a separate tab). Audit every Groups section
-  against `iOS/.../GroupAll.swift` + siblings before/while doing G2.
+### 1a-vi. Wave 13 — deep iOS↔Android edge-case audit (2026-07-21 late)
 
-## 10. Notifications & FCM
+*(Four line-by-line audit agents: program-timeline math, Life program,
+onboarding end-to-end, and every day-0/start-soon UI surface. Slide flow,
+break math, badges, notifications, reward rigging etc. verified identical in
+the reports' long "verified identical" lists — the transcripts have the full
+detail. Everything below compiles; not yet exercised on-device.)*
 
-- [x] **N1 · P2 · env+feature — FCM end-to-end test.** Needs
-  `google-services.json` + the two plugins uncommented. Token/channel/routing
-  plumbing already ported (`A/messaging/Clear30MessagingService.kt`).
-  (done 2026-07-13 — `google-services.json` in place (release + debug clients
-  registered in project `clear30-24f18`; keep BOTH — debug builds fail without
-  a matching client), plugins enabled, device obtains a token, and a console
-  test push was delivered and displayed on the emulator. Fixed two real token
-  gaps found on the way: nothing fetched the token at launch (`onNewToken`
-  only fires on creation) — now fetched in `Clear30Application.onCreate`; and
-  nothing ever wrote `UserInfo.fcmToken` (so `create_user` pushed a null token
-  and rotations never synced) — ported iOS `ContentView.updateFCM` into
-  `AppRootViewModel.observeFcmToken`. Note for N2: the FCM service-account key
-  exists only as a prod Supabase secret (`FIREBASE_SERVICE_ACCOUNT_JSON_B64_ENC`),
-  not in either repo — local `notification_send` runs need it added to
-  `BE/supabase/functions/.env`.)
-- [x] (HEALTH HALF done 2026-07-13; POP-IN DEFERRED entirely per Thatcher §17-Q13 — no PopInGenerator, no silent-push consumption, no post-check-in schedulePopInRequest. Health: `HealthDataHandler.ensureHealthData` finally populates `program.healthProgress` from `library.health_categories/health_steps` (was NEVER populated — gauges ran on a synthetic ramp; also feeds P7), `scheduleHealthNotifications` (WorkManager full-replace per category, unlock day @10:00 local, `_CLIENTNAME_` substitution) called from check-ins/multi-check-in/timeline `finish()`/tab load. Verified on-device: real Brain/Lungs/Heart milestones + "in N days" badge. NOTE: iOS's own health pushes never fire (`HealthStep.notificationTitle/Body` are `let …= nil` — decode bug); Android decodes properly, so Android SENDS them. Local seeds added: `BE/supabase/seeds/40_health_steps_notification_copy.sql`) **N2 · P2 · missing — Health + pop-in notification scheduling.**
-  `A/data/NotificationHandler.kt` has no `scheduleHealth`/`schedulePopIn` (only
-  a pop-in *cancel* tag at `:189`); silent-push payload is stored
-  (`AppState.setNotification`) but never consumed. iOS:
-  `NotificationHandlerHealth.swift`, pop-in scheduling, `NotificationHandlerSilent`.
-- [x] (done 2026-07-14, 3f171e9 — iOS timing re-derived from source per §17-Q20, and
-  the source wins: `smokeTimeBasedDate` fires on the message's unlock DAY at a
-  random minute in the hour BEFORE the assessment smoke time ("4:20 PM" from
-  the break's Smoke-Time answer); with no smoke time, `randomDate` = unlockOn
-  ± up to 1h. (Not "~23h off smoke time" — the −1h..0 window before the
-  smoke-time-of-day is the mechanism.) Full port: smoke time parsed once
-  (iOS `parseTimeString` incl. 12 AM/PM edge cases), copy falls back
-  `notificationTitle→title` / `notificationBody→subtitle` with `_CLIENTNAME_`
-  substitution, same-day de-dupe (assessment-response messages win their day),
-  school messages excluded, 50-cap. `scheduleContent` now takes `program`.
-  Not exercised on-device — WorkManager fire-time verification needs a
-  day-scale wait; logic is a line-for-line port.) **N3 · P3 · divergent —
-  Content notification details:** fires at `unlockOn`
-  (10:00) vs iOS smoke-time (`iOS/.../NotificationHandlerContent.swift:64-72`);
-  skips messages lacking notification copy instead of falling back to
-  title/subtitle (`A/data/NotificationHandler.kt:95-96`); no same-day de-dupe or
-  50-cap (iOS `:44-59`). **Before implementing, re-derive the exact iOS fire
-  time from `NotificationHandlerContent.swift` — Thatcher (2026-07-14) recalls
-  it's anchored ~23 hours off the smoke time, not a fixed clock time; whatever
-  the source says wins.**
+**Fixed this wave:**
 
-## 11. School / pilot features (all wanted)
+- [x] **W61 · P1 — per-break stats window wrong** (`dayInfoIn`): iOS counts
+  offsets 1..30 from startDate ONLY — day 0 excluded, endDateOverride
+  ignored. Android used [start, end): the seeded day-0 sober flag inflated
+  every post-assessment sober/checked-in count by one, and ended-early
+  breaks under-counted. `getDeltaSmokingFrequency` now uses the same window
+  (it also counted post-break days).
+- [x] **W62 · P2 — timeline mutators** now route lastSmoked through
+  `CheckInLogger.resetLastSmoked` (sober SPANS were silently lost — the
+  span-based check-in reward never fired after restart/day-0-start/forward
+  moves), reschedule CONTENT notifications + refresh the widget in
+  `finish()` (stale pushes for moved/deleted lessons), drop the
+  Android-only health-setback recompute in adjustBreakTime, surface the
+  forward-move fetch failure, and prefix endBreak's error copy like iOS.
+- [x] **W63 · P2 — onboarding retry could stack duplicate breaks**: `start()`
+  now REPLACES program.breaks (iOS AssessmentSubmissionHandler:137) so a
+  failed-submit retry is idempotent. Also: post-verify failures now retry
+  the restore/submit directly instead of stranding the user on a consumed
+  OTP; fresh signups log `signed_up` + set signUpReturning=false.
+- [x] **W64 · P2 — start-soon/Life copy + content fixes**:
+  `programDescription`/`detailSheetInfo` no longer Elvis-collapse (the
+  break card showed the LIFE info sheet during the start-soon bridge; ⓘ now
+  hides when the break has no sheet, like iOS); scheduleStartSoon's day-0
+  override was INVERTED (now replaces the bridge's first-day bucket, drops
+  when absent — iOS exact); mergeStartSoon keeps the new bucket's stage
+  unconditionally; the empty-content repair path anchors at the MAIN
+  break's start (was scheduling the curriculum from the prep break's day).
+- [x] **W65 · P2 — library tabs**: half-open [start, end) break windows (the
+  main break's Day-0 lesson double-listed in the Preparation tab, first
+  Life topic leaked into the Clear30 tab) + newest-break-first tab order
+  (iOS .reversed()).
+- [x] **W66 · P2 — profile program card**: "Day N" badge hidden past day 30
+  (dayValid) + the iOS "Jul 22nd to Aug 20th" date-range badge; Life
+  post-assessment card now REPLACES the program card in the section (was
+  double-shown at page top); switchCore moved to appScope (a tab switch
+  mid-switch left backend flipped / local not).
+- [x] **W67 · P2 — Today community carousel scoped like iOS**: journal-prompt
+  title search (min 2 comments, 2 months) with the "Day N" + program-tag
+  fallback (both RPC helpers ported; the existing get_posts_by_titles
+  helper also decoded the wrong response shape — every prompt search
+  silently returned empty). Post-assessment popup card gated on
+  daysSinceAppOpen > 0 (iOS PopUps).
+- [x] **W68 · P3 — assessment payload/flow alignment**: dream-outcome now
+  auto-writes the Start-Date response (= tomorrow) like iOS so submitted
+  rows carry the same keys; the WBYH affirmation slides' id raw is now
+  `goals_affirmation` (was Android-invented `plan_path` — analytics + remote
+  question matching now line up; view dispatch discriminates on
+  affirmationCards); system back steps back a slide (was exiting the app);
+  abandoned-onboarding reminders re-anchor on permission grant + after a
+  successful submit (iOS's three scheduling points); referral-code group
+  join is finally consumed (AllTabs fallback — was set and never read);
+  "breakdown" deep link route opens the pending post-assessment.
 
-- [x] (done 2026-07-13 — feed slice: `SupabaseSchool.kt` (schema-scoped RPC wrappers), `SchoolDataAbstracted.kt` `getMessages` (startDate + day + 10h anchor), AllTabs regeneration, TodayTab feed merge (core-first-within-day), `ReferralCodeHandler.handleEmail` after email OTP (freeCode/schoolId/schoolData/mid-pilot flag), `?school=` deep link, ReferralSlide `checkReferralCodeJson` round-trip. Verified: the "Free 🤩" domain unlock fired on-device for conduct-test.edu; feed cards pending the fresh-signup run. Local seeds: `BE/supabase/seeds/41_test_school_messages.sql` (umich content on `test-conduct-u`; flushes `library.cache`). NOT ported (follow-up **F1b**): the Support-tab school section / `SchoolInfo` library UI (activities + resources) — data decodes but nothing renders it) **F1 · P2 · missing — School mode.** No `get_school_data` call anywhere; no
-  email → `schools.school_leads` lookup. Needed at sign-up (referral code →
-  school_id) AND sign-in (email recovery), then regenerate school messages into
-  the feed anchored to `program.startDate`
-  (`iOS/Data/Other/SchoolDataAbstracted.swift:32`; merge points
-  `iOS/Data/Program/ProgramContent.swift:96,109`). Note: iOS's own sign-in
-  email-recovery may be a gap — Android should implement it regardless.
-  Android `A/data/model/SchoolData.kt` model exists.
-- [x] (done 2026-07-13, 89941d2 — "Your School" gradient card is the first
-  library item on Support; new `SchoolInfoScreen`
-  (`A/views/existinguser/support/library/school/`): Resources always +
-  Messages/Activities tabs when non-empty, Today / This week / Later buckets,
-  weekly repeats expanded to the next 3 occurrences, 2-col SchoolInfoCard
-  grids; `SchoolInfoDetail` shared by activities/resources — links open
-  EXTERNALLY (dial/mailto/browser, host-shortened labels), no WebView, like
-  iOS. `SchoolDataAbstracted` gained
-  `getTodayActivities`/`getFutureActivities`/`withDate`; local seed
-  `BE/supabase/seeds/42_test_school_activities_resources.sql` (iOS repo
-  1e035597) exercises all three tabs on `test-conduct-u`. VERIFIED on-device
-  via the `?school=` deep link: hub card, tabs, bucketing + weekly expansion
-  (Jul 17/24/31), activity detail incl. sub_links/facilitator. Message-pill
-  progress trim + `calendar.badge.clock` glyph approximated — noted in code)
-  **F1b · P2 · missing — School Support-tab section** (split from F1,
-  2026-07-13). iOS school users get a Support-tab school card opening
-  `SchoolInfo` (`iOS/Views/Existing User/Support/Library/School/SchoolInfo.swift`):
-  school badge/colors, today's + upcoming activities
-  (`getTodayActivities`/`getFutureActivities`, incl. weekly repeats), and the
-  sectioned resource library. Android decodes `SchoolData.activities/resources`
-  but renders nothing. Seed umich's `school_activities`/`school_resources` onto
-  `test-conduct-u` locally when building this.
+**Still open from the audit (not yet implemented):**
 
-- [x] (done 2026-07-13 — `A/views/existinguser/midpilot/` 8-slide port (wellbeing GradientSliders, helpfulness spectrum, exclusive "not interested" option via new `exclusiveOptionIndices` on `AssessmentMultipleChoice`), submits option STRINGS to `schools.submit_mid_pilot_assessment`; `get_assessment_status` rehydrates the flag on sign-in; triggered from TodayTab at schoolId+≥10 checked-in days, non-dismissable, on-load only (iOS also re-checks post-check-in — noted divergence). On-device pass pending the fresh-signup run) **F2 · P2 · missing — Mid-pilot assessment.** iOS
-  `Views/Existing User/MidPilotAssessment/` (3 files incl. wellbeing sliders);
-  no Android counterpart.
-- [x] (done 2026-07-13 — VERIFIED E2E on-device: auto-open at break day ≥30, intro celebration (snake calendar + confetti), goal-question-per-break-reason, experiment-gated coach-referral slide, LO-Use-State → moderation branch, loading → `life` assessment row + break `post_assessment_completed/response_id` pushed + `coreModeration` set + Life content resumed; `comms.coach_referral_events` rows (shown/skipped) written. Popup cards on Today+Profile route into the same flow. The 3D-coin achievement slide intentionally SKIPPED (§17-Q12); the testimonial after-flow (`VideoTestimonialView`) not ported — slide renders, follow-up sheet skipped) **F3 · P2 · missing — Post-assessment flow.** iOS
-  `Views/Existing User/PostAssessment/` (7 files: Intro, Achievement,
-  Testimonial, CoachReferral, ViewModel); Android has the experiment keys
-  (`A/data/model/ExperimentController.kt:48-50`) but nothing renders them.
-  Includes submitting the `"life"` assessment (see O2) and pushing the break's
-  `post_assessment_*` fields.
+- [ ] **W69 · P2 — forced check-in flows** (iOS CheckInViewModel:52-93): on
+  load iOS forces an unlogged YESTERDAY's check-in (gated program day ≥ 1)
+  and auto-presents the check-in on first load of an unlogged day. Android
+  only auto-opens the multi sheet at ≥2 missed days. Port with the day-0
+  gate + a once-per-day guard (TodayTabUiState).
+- [ ] **W70 · P3 — community day tags**: iOS auto-attaches the "Day N" tag to
+  new posts and offers it in the filter (hidden during start-soon); Android
+  strips day tags from the filter and never attaches them on create.
+  SlippedActivities already ports `getDayTag` correctly — reuse it in
+  CommunityTab + CreatePostScreen.
+- [ ] **W71 · P3 — slipped-nudge notification** (iOS NotificationHandlerSlipped
+  via CheckInLogger): scheduled after a smoked check-in, cancelled on sober.
+  No Android port.
+- [ ] **W72 · P3 — remote pop-ups** (`program.popUps`): model field exists but
+  is never refreshed or rendered (iOS refreshPopUps + day-matched popup in
+  the Today feed).
+- [ ] **W73 · P3 — misc small deltas**: check-in sheet logs `now()` even when
+  a past day is selected (iOS logs the selected day); Android's post-verify
+  loading screen is a bare spinner vs iOS AccountSetupView; `where_you_going`
+  has an extra title; RC paywall subscriber attributes missing the
+  assessment-response traits (PaywallController TODO).
+- **Decision needed (Q23?): custom weekly-spend ≥$100 dream-outcome math** —
+  iOS truncates to the first 2 digits ("100" → $10 → +$40/mo, a quirk);
+  Android uses the full amount (+$400/mo, arguably correct). Pick one.
 
-## 12. Local dev environment
+- [x] (done 2026-07-21 late — **D2 old-Android-app restore implemented** as
+  `OldAppMigrationHandler`, wired after a successful onboarding submit.
+  Findings that shaped it: prod has 3,235 old `android` rows, and **1,654
+  carry real `day_info` check-in history in the SAME positional wire format
+  this app reads** (verified against prod; content_info/breaks/last_smoked
+  were never synced — the old RN app kept those AsyncStorage-only). The
+  migration (a) merges the server day_info into the freshly-onboarded
+  program (fresh days win on collision) restoring streaks/calendar/sober
+  counts + re-evaluating achievements, and (b) reads the old app's
+  AsyncStorage SQLite (`databases/RKStorage` · `catalystLocalStorage`, still
+  on disk since the new app ships as an update to the same applicationId):
+  `last_smoked` (most-recent-wins vs the onboarding estimate) and
+  `journal_entries` (appended). Program/break state is NOT migrated — the
+  old app's local program can't map to a server-backed break, so users
+  still onboard fresh (§17-Q7 routing unchanged). Once-only via a cached
+  flag; best-effort throughout. NEEDS an on-device pass: fresh signup with
+  a seeded old-style row + a fabricated RKStorage file — fold into the §1b
+  fresh-signup item.) **W74 · P2 — Old-app data restore (closes the
+  recoverable half of backlog D2).**
 
-- [x] **E1 · env — Run edge functions locally** (`supabase functions serve` from
-  `BE/`) — required for Claire/AI chat and `reddit_proxy` (T7). Claire failing
-  on the emulator is almost certainly this, not app code.
-  *(2026-07-13: partially done — serve is running in the background with
-  `--no-verify-jwt` (the local runtime rejects even the local anon key when
-  verification is on; likely a JWT-secret mismatch in the local stack) and is
-  now also needed for onboarding's normative feedback (O4). Remaining: wire
-  `supabase functions serve --no-verify-jwt` into `android/run.sh` so it
-  survives new sessions.)*
-  (done 2026-07-13 — `run.sh` step 1 now starts
-  `supabase functions serve --no-verify-jwt` in the background when no serve
-  process is running, logging to `/tmp/clear30-functions-serve.log`; both the
-  already-running and cold-start branches exercised, and a function call
-  through the local gateway verified reaching the app's auth middleware)
-- [x] **E2 · env — Silence Slack on local.** Slack pings come from edge functions
-  (`slack_send_message`, `user_handle_new`, etc. under `BE/supabase/functions/`)
-  — neuter via local function env (unset the Slack webhook secret), not a seed
-  file. (verified 2026-07-13: already silent — webhook URLs live per-channel in
-  `comms.slack_channels`, which is EMPTY locally, and `slack_send_message` also
-  guards against cross-environment calls; nothing to neuter)
-- [x] **E3 · env — Seed sleep meditations** into the local DB. Prod tables
-  verified: `library.sleep_resources` (and `library.craving_resources`). Pull
-  rows from prod via the Supabase MCP → new numbered seed file (pattern:
-  `BE/supabase/seeds/01…37_*.sql`).
-  (done 2026-07-13 — `BE/supabase/seeds/38_sleep_resources.sql`, 4 rows;
-  applied to the running local DB and md5-verified identical to prod;
-  read back through local PostgREST with `Accept-Profile: library`)
-- [x] **E4 · env — Seed feature wishlist** the same way.
-  (done 2026-07-13 — `BE/supabase/seeds/39_feature_ideas.sql`, 51
-  `comms.feature_ideas` rows with `user_id` remapped to the seeded Test user
-  `'1'` (prod author IDs would violate the FK to `public.users`; the UI never
-  shows the author) + `setval` so new local submissions don't collide;
-  content md5-verified identical to prod incl. trailing-whitespace fidelity;
-  `feature_idea_votes` intentionally not seeded — it's per-user data)
+- [x] (done 2026-07-21, uncommitted) **W22 · P3 — Achievements list tweaks**
+  (Thatcher, 2026-07-21): the name chip on earned+opened cards is now the
+  RARITY gradient at 0.25 opacity (was neutral gray), and non-earned
+  LEGENDARY achievements are hidden from the list (section disappears when
+  empty; no "X of Y" count for Legendary so the total can't leak).
 
-## 13. Prod readiness (external — Thatcher only)
+### 1b. Verification debt (landed, but not fully exercised on-device)
 
-*(Decided 2026-07-13: the new app ships as an UPDATE to the old RN app's Play
-listing — `applicationId` changed to `org.clear30.Clear30v1` (debug:
-`org.clear30.Clear30v1.debug`). Use these package names in every console
-below. Verify the old app's signing key still exists (or the listing is on
-Play App Signing) — without it the update route is impossible.)*
+- [ ] X1 — iOS-simulator cross-check: sign up on Android, sign in on iOS,
+  restore must succeed.
+- [ ] T3 — slip-side reward rendering; T4 — slip timestamp rows + detail editor.
+- [ ] T9c — YouTube autoplay on page focus (no YT card in test account's day).
+- [ ] N3 — actual WorkManager fire times (day-scale wait; logic is a
+  line-for-line port).
+- [ ] C1 — pinned hide/return flow. *(Backend half VERIFIED 2026-07-21: the
+  `sort_by` overload Android calls — exclude_pinned defaults false — returns
+  pinned rows first; confirmed against the local DB with 3 seeded pinned
+  rows. Remaining: the client hide → return UI flow.)*
+- [ ] C3 — post delete + report flows.
+- [ ] G3 — multi-member badge taps / ping RPC, hue-picker round-trip.
+- [ ] P2 — snake-calendar connector highlight rules with a mid-break account.
+- [ ] P6 — video-entry naming + share-to-community (needs camera + auth).
+- [ ] S12 — talk/why/testimonial/community slip activities individually
+  (testimonials are tap-to-play; iOS autoplays).
+- [ ] O11 / F1 / F2 / EXP2 / O12 — fresh-signup on-device pass (start-date
+  step, school feed cards, mid-pilot assessment, the hardcoded short
+  onboarding flow: slide order incl. moderation path → Trigger → Commitment,
+  and the O12 additions: Planned-Usage appears after the triggers affirmation,
+  Money-Spent "Custom amount" entry, and 0-based slider indices in the
+  submitted `program_assessment_responses` row).
+- [ ] T12 — Today-feed pass: pinch-zoom on a carousel image (zoom + pan +
+  spring-back + dismiss), catch-up card with a ≥3-missed-days account (rows
+  open the day, dismiss persists across restart), journal entry card round
+  trip (create on empty day, edit from feed), message-card badge on an
+  assessment-personalized and a school message.
+
+### 1c. Prod readiness (external — Thatcher only)
+
+*(Decided 2026-07-13: ships as an UPDATE to the old RN app's Play listing —
+`applicationId` = `org.clear30.Clear30v1` (debug: `.debug`). Verify the old
+app's signing key still exists or the listing is on Play App Signing.)*
 
 - [ ] RevenueCat: create the Play Store app in the dashboard → `goog_` key into
   `local.properties`.
 - [ ] Firebase: add Android apps `org.clear30.Clear30v1` +
-  `org.clear30.Clear30v1.debug` to project `clear30-24f18` →
-  `google-services.json` + uncomment plugins (unblocks N1).
+  `org.clear30.Clear30v1.debug` to project `clear30-24f18` → real
+  `google-services.json`.
 - [ ] Play Console: signing keystore (must be the OLD app's key), update the
-  existing `org.clear30.Clear30v1` listing, internal-testing track.
-- [ ] Launcher icons + SVG vector import (polish).
+  existing listing, internal-testing track.
+- [ ] Launcher icons + SVG vector import (25 brand SVGs in
+  `android/svg-import/`; polish).
+- [ ] **Re-encode the 8 testimonial videos to H.264** (W17 diagnosis): all of
+  `https://m.clear30.org/testimonials/1..8.mp4` are HEVC/H.265 with
+  moov-at-end — iPhones hw-decode them but many Android devices can't, so
+  they silently fail on Android. Per file:
+  `ffmpeg -i in.mp4 -c:v libx264 -crf 22 -c:a aac -movflags +faststart out.mp4`
+  then re-upload to the same URLs (no app change needed on either platform;
+  H.264 also plays fine on iOS). The other site videos are already fine —
+  `videos/testimonial_intro_2.mp4` verified H.264+faststart.
 
-## 14. TODO.md corrections (audit 2026-07-13)
+### 1d. Deferred / backlog
 
-Claimed TODO but actually **done**: experiments refresh + exposure logging;
-FCM payload routing + per-type channels; CheckInLogger backend sync (pushes
-day_info/last_smoked per check-in); video journals (system-camera, not CameraX);
-URLManager / ShortcutHandler / PopupManager / TutorialController / AlertHandler /
-LoadingCoordinator / Confetti all exist as real implementations.
-Still accurate: assessment script stubs (O12), Helium not initialized,
-SMS/Twilio fully missing, only StatsWidget ported, community depth stubs (C3).
+- **D2 — Old-Android-app user migration**: the recoverable data (server
+  day_info history, device last_smoked + journals) is now migrated — see W74.
+  Remaining by design: the old app's device-local program/break state is not
+  reconstructed (users onboard fresh, per §17-Q7).
+- **D3 — Widgets beyond StatsWidget** (Snake/Roman calendar, Health, Timer).
+- **D4 — Navigation Compose migration** (full back-stack/sheets/toasts rework).
+- ~~D5 — Markdown rendering~~ **CLOSED by W60** (inline + block renderers
+  matched to the real content's syntax).
+- ~~D6 — AchievementEngine criteria parity~~ **CLOSED by W55/W57** (criteria
+  rewritten 1:1 against iOS AchievementManager + live definitions; only
+  COUNT-type activity counters remain unimplemented on both platforms' data).
+- **Pop-in notifications** — deferred entirely per §17-Q13 (no PopInGenerator,
+  no silent-push consumption, no post-check-in schedulePopInRequest).
 
-## 15. Explicitly out of scope (per Thatcher, 2026-07-13)
+---
+
+## 2. Completed work (Waves 1–8 + follow-ups)
+
+All original items X1–X10, A1/A3, O1–O11, B1–B6, T2–T11, S1–S13, P1–P9, C1–C3,
+G1/G3, N1–N3, F1/F1b/F2/F3, E1–E4 are **done and ticked**; full notes in git
+history (`d62f296` and earlier).
+
+| Wave | Items | Landed |
+|------|-------|--------|
+| 1 — P0 data integrity | X1, X2+B4, X5, B1, B2, X3, X4 | 2026-07-13, 3a63877 |
+| 2 — onboarding correctness | O1, O2, O3, O4+X7, O6, O7, O8, O10 | 2026-07-13, 3a63877 + 6d33fe8 |
+| 3 — environment | E1–E4, N1 | 2026-07-13 |
+| 4 — content & viewers | T5–T7, S1–S11 | 2026-07-13, 8c944dd |
+| 5 — check-in/profile/community/groups | T2–T4, P1–P6, C1–C3, G1 | 2026-07-13, c6b3055 |
+| 6 — pilot features | F1–F3, O11, B3, X6, S12, N2 (health half) | 2026-07-13, 72b9af9 |
+| 7 — post-Wave-5 feedback | T8, P7, G3, F1b | 2026-07-13, 89941d2 |
+| 8 — post-Wave-7 feedback | X10, P9, B6, B5+P8, T9, O5, S13, A1 (verified no-code), N3, X9, A3, O9-styling | 2026-07-14, 3f171e9 |
+| follow-ups | T10 (day-scoped feed + full-height layouts) · T11 (meditation/YouTube/Claire cards) | 2026-07-14, c81c05b · d62f296 |
+
+Closed / won't fix: X8 (loggingID device-ID, §17-Q15) · A4 (appstack, §17-Q16)
+· A5 (§17-Q16) · G2 (remainders, §17-Q19) · O9's reviews fetch (§17-Q16).
+
+Backend artifacts landed in the iOS repo: seeds 38–42 (sleep resources,
+feature ideas, health-step notification copy, test-school messages/activities),
+`BE/scripts/seed_reddit_threads.mjs`; commits 3d986e12, 1e035597.
+
+---
+
+## 3. Implementation gotchas (keep in mind for future work)
+
+- **Compose staleness with in-place-mutated models:** `program` etc. are
+  mutated in place (SwiftData parity), so strong skipping keeps stale leaves.
+  Thread a `revision`/`refresh` counter that is *genuinely read* by every leaf
+  rendering derived values (unused params are excluded from the skip
+  comparison). Applied in T4 (check-in card / day pills) and P9 (ProfileTab).
+- **Break mutations must run on `Clear30Application.appScope`**, not
+  `rememberCoroutineScope` — `endBreak` nulls `currentBreak` in place before
+  its network work finishes, so the composable leaves composition and cancels
+  its own scope mid-flight (B6 hardening).
+- **Material DatePicker returns UTC-midnight millis** — convert via local TZ or
+  night-time picks store the previous day (found in B3).
+- **Local edge functions need `supabase functions serve --no-verify-jwt`**
+  (local runtime rejects even the local anon key) — `android/run.sh` starts it
+  automatically, logging to `/tmp/clear30-functions-serve.log` (E1). Required
+  for Claire, `reddit_proxy`, normative feedback.
+- **Reddit locally:** reddit.com 403s the local function's own fetch and
+  `library.reddit_threads` is empty — seed threads
+  (`BE/scripts/seed_reddit_threads.mjs`) or the viewer falls back to WebView.
+  Prod has the cache + OAuth secrets.
+- **Health model:** persisted under key `healthProgressV2` (v1 was a flattened
+  dev-only shape). Local seed-data bug: `library.health_categories` has Heart's
+  `long_name='Brain'` — data, not app. iOS's own health pushes never fire
+  (decode bug on their side); Android decodes properly and SENDS them.
+- **FCM:** token is fetched in `Clear30Application.onCreate` (`onNewToken`
+  only fires on creation) and synced via `AppRootViewModel.observeFcmToken`.
+  Local `notification_send` runs need the service-account key added to
+  `BE/supabase/functions/.env` (prod-only secret
+  `FIREBASE_SERVICE_ACCOUNT_JSON_B64_ENC`).
+- **sfSymbol fallbacks:** unmapped names silently fall back to a circle glyph —
+  when adding icons, verify the mapping exists (`arrow.down`,
+  `calendar.badge.checkmark` were missing until Wave 8).
+- **Scroll containers clip soft shadows:** use the `scrollShadowFix` pattern
+  (column keeps `horizontalPadding − scrollShadowFix`, children pad the
+  difference) — see T9b in TodayTab.
+
+## 4. Verified non-issues (don't "fix" these)
+
+- User-ID model matches iOS cross-platform (`auth_id → users.id`); no client
+  IDs minted.
+- Core scheduling math in `schedule()`/`scheduleStartSoon()` is byte-faithful;
+  restore pipeline matches iOS; `endDate`/`endDateOverride` ±1 semantics
+  round-trip identically.
+- No data from this new app has ever reached prod (verified 2026-07-13); the
+  3,116 prod `android` rows are the OLD Android app's users.
+- Prod `create_user` handles `platform` correctly — X1 was client-side only.
+- The smoked-check-in crash was SOLVED (D1, 2026-07-13): `StackOverflowError`
+  from `CheckInMethod.getAmountString(index)` overload recursion; fixed +
+  verified in c6b3055.
+- Email OTP verify: Android's single `OtpType.Email.EMAIL` covers signup +
+  magiclink — iOS's `signup`→`email` retry is unnecessary (A1, verified
+  on-device 2026-07-14).
+
+## 5. Decision log (Thatcher)
+
+**2026-07-13:**
+- **Q1 (O1):** Most recent What-brings-you-here choice wins.
+- **Q2 (O3):** Only "Moderation" routes to Life; do NOT ask mod-vs-weed-free
+  afterward. *Intentional Android divergence; iOS unchanged.*
+- **Q3 (O7):** Pain-point target = iOS `AssessmentPainPoint.swift`
+  (consumption-method + monthly-spend variant).
+- **Q4 (O10, C2):** Tab tutorial popups removed on all tabs; community prompt
+  card removed.
+- **Q5 (B2):** endBreak lands users in weed-free (mirror iOS).
+- **Q7 (X4):** Old-Android-app migration deferred (D2); iOS-style detection
+  (row + non-empty content_info) is correct interim.
+- **Q8 (A2):** Phone/email OTP is enough — no Google Sign-In.
+- **Q9 (O11):** Start-date step in scope, after the notification-permission
+  popup.
+- **Q10 (S11):** Unfed feedback monster = orange; fed = yellow.
+- **Q11 (S12):** All six slip activities ported.
+- **Q12 (F3):** SKIP the 3D-coin achievement slide entirely.
+- **Q13 (N2):** Pop-in notifications deferred entirely; health half only.
+
+**2026-07-14 (post-Wave-7 review):**
+- **Q14 (A1):** Verify email-OTP fallback before writing code → verified
+  unnecessary.
+- **Q15 (X8):** loggingID stable-device-ID — won't fix.
+- **Q16 (A4, A5, O9):** Appstack, adolescent-mode-on-restore, real-reviews
+  fetch all dropped; O9 styling stayed as polish (done).
+- **Q17 (O12):** Assessment script depth deferred.
+- **Q18 (B5, P8):** Settings start-date picker removed; settings page mirrors
+  iOS (or simpler).
+- **Q19 (G2):** Chat pagination + intermediate invite share sheet not needed.
+- **Q20 (N3):** Content-notification fire time re-derived from iOS source
+  (−1h..0 window before the assessment smoke time, on the unlock day).
+
+**2026-07-21:**
+- **Q21 (EXP1):** Experiments are now driven by the DB `experiments` schema
+  (overrides the old Amplitude experiment usage); verify assessment parity
+  against the prod experiment states + iOS client fallbacks.
+- **Q22 (EXP2/EXP3/EXP4a):** Mirror iOS, no divergence — and for these
+  differences, don't listen for the experiments, hardcode the prod variant:
+  short onboarding flow coded in (no `assessment-short-flow` read), moderation
+  users share the main path, post-assessment interview branch removed.
+
+## 6. Out of scope (per Thatcher, 2026-07-13)
 
 Experiments setup work · ShortcutHandler depth · Welcome-back popup ·
 Three-day encouragement · Claire voice mode · Counselor/B2B/NYS modes ·
 Supplements · Video testimonials · Influencer mode · School leaderboard ·
-Google Sign-In (phone/email OTP is enough) · SMS/Twilio.
-
-## 16. Verified non-issues (don't "fix" these)
-
-- User-ID model matches iOS cross-platform (`auth_id → users.id`); no client
-  IDs minted.
-- Core scheduling math in `schedule()`/`scheduleStartSoon()` is byte-faithful
-  (10:00 anchor, `day − removePrefix`, +N-sec ordering, start-soon `+2` walk,
-  −5s nudge) — the problem is only which path calls it (X3).
-- Restore pipeline (derived startDate, `date@10:00+index` ordering,
-  `_CLIENTNAME_`, past-progress=1.0, unknown-break-type drop) matches iOS.
-- `endDate`/`endDateOverride` ±1 semantics round-trip identically.
-- No data from this new app has ever reached prod (verified 2026-07-13); the
-  3,116 prod `android` rows are the OLD Android app's users.
-- The smoked-check-in crash could NOT be reproduced statically — flow is
-  defensively written; see §18-D1 before attempting a fix.
-- Prod `create_user` handles `platform` correctly — X1 is client-side only.
-
-## 17. Decision log (Thatcher, 2026-07-13)
-
-- **Q1 (O1):** Repro unknown; requirement = the most recent
-  What-brings-you-here choice wins. Fix via flag reset in all branches.
-- **Q2 (O3):** Only "Moderation" on What-brings-you-here routes to Life; do NOT
-  ask moderation-vs-weed-free afterward (auto-set moderation stands).
-  Android-only divergence; iOS unchanged for now.
-- **Q3 (O7):** Pain-point target = iOS `AssessmentPainPoint.swift`
-  (consumption-method + monthly-spend variant; the experiment shipping it is
-  off, so this is what iOS users see).
-- **Q4 (O10, C2):** Remove the tab tutorial popups on all tabs; also remove the
-  community prompt card.
-- **Q5 (B2):** endBreak lands users in weed-free (mirror iOS).
-- **Q6 (T1):** Smoked-crash investigation deferred (§18-D1).
-- **Q7 (X4):** Old-Android-app migration deferred (§18-D2); for now iOS-style
-  detection (row + non-empty content_info) is correct — old-app users fall
-  through to fresh onboarding keeping their users row/ID.
-- **Q8 (A2):** Phone/email OTP is enough — no Google Sign-In.
-- **Q9 (O11):** Start-date step is in scope; placement after the
-  notification-permission popup.
-- **Q10 (S11):** Default/unfed feedback monster = orange (sad/unfed); fed =
-  yellow.
-- **Q11 (S12):** Port ALL SIX slip activities (plan/talk/why/affirmations/
-  testimonials/community), not a subset.
-- **Q12 (F3):** SKIP the 3D-coin achievement slide entirely — no 2D substitute.
-- **Q13 (N2):** Pop-in notifications DEFERRED entirely (no PopInGenerator port,
-  no silent-push consumption, no post-check-in schedulePopInRequest); Wave 6
-  ships only the health half.
-
-**(Thatcher, 2026-07-14 — post-Wave-7 review)**
-
-- **Q14 (A1):** Email OTP verify fallback likely unnecessary given how Supabase
-  works — verify with a real returning-email sign-in before writing code.
-- **Q15 (X8):** loggingID stable-device-ID fix — won't fix.
-- **Q16 (A4, A5, O9):** Appstack attribution, adolescent-mode-on-restore, and
-  fetching real reviews all dropped; O9's styling half (in-app review prompt,
-  edge fade, laurels, star color) stays as polish.
-- **Q17 (O12):** Assessment script depth deferred for now.
-- **Q18 (B5, P8):** Remove the settings start-date picker outright; overhaul
-  the whole settings page to mirror iOS (or simpler) — cut Android-only extras.
-- **Q19 (G2):** Closed — chat pagination + intermediate invite share sheet not
-  needed.
-- **Q20 (N3):** Re-derive the iOS content-notification fire time from source
-  (Thatcher recalls ~23h off smoke time, not 10:00) before porting.
-- **New items:** X10 (unintended card-content opacity, suspect shared
-  CardStyle), T9 (Today tab visual parity: first-slide topic card, clipped
-  shadows, YouTube autoplay, max-width cards), S13 (symptom carousel), P9
-  (profile reload after break mutations).
-
-## 18. Deferred / backlog
-
-- ~~**D1 — Smoked-check-in crash investigation.**~~ **SOLVED 2026-07-13** —
-  reproduced on-device after Wave 5: `StackOverflowError` in
-  `CheckInMethod.getAmountString(index)` (`A/data/model/ProgramCheckIns.kt:115`,
-  introduced with T4) — the `Int` argument resolved to the same non-nullable
-  overload instead of the `Int?` one → infinite recursion the moment a smoked
-  amount rendered. Fixed by calling the `Int?` overload via the named `amount`
-  param; full smoked flow (slider → amount picker → slip rewards → day-card
-  timestamp row) verified crash-free on-device. Neither documented suspect was
-  the cause, but both hardenings landed anyway with c6b3055 (step-isolated
-  persist try/catch; generator hoisted out of composition).
-- **D2 — Old-Android-app user migration (~3.1k users, empty program state).**
-  Goal: the old app's users seamlessly land on the new app — ideally migrate
-  the OLD app's local data and push it to the backend so the new app restores
-  it. Requires investigating the old app's local storage format. Until then,
-  X4's detection routes them to fresh onboarding (acceptable interim).
-- **D3 — Widgets beyond StatsWidget** (Snake/Roman calendar, Health, Timer).
-- **D4 — Navigation Compose migration** (full back-stack/sheets/toasts rework;
-  S4 may land a scoped fix first).
-- **D5 — Markdown rendering** in text components
-  (`A/views/components/defaults/Text.kt:29`).
-- **D6 — AchievementEngine criteria** partially guessed vs iOS
-  (`A/data/AchievementEngine.kt:24`) — needs a criteria-parity pass.
+Google Sign-In · SMS/Twilio · Helium/Stripe/Shopify payment fallback chain
+(RevenueCat-only for now).

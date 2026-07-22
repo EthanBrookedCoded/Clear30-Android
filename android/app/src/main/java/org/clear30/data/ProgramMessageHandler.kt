@@ -211,15 +211,18 @@ object ProgramMessageHandler {
                 byDate.add(plainDate, msg.toProgramMessage(unlockOn), stage)
             }
         }
-        // Day-0 override: a `day == 0` start-soon topic occupies Day 0 itself, but
-        // only if the main program hasn't already claimed that bucket.
+        // Day-0 override (iOS ProgramMessageHandler.swift:533-537): a `day == 0`
+        // start-soon topic REPLACES whatever the backward walk put on the
+        // bridge's first day — and ONLY when that bucket exists (a missing
+        // bucket makes iOS's optional-chained assignment a no-op, dropping the
+        // day-0 topic). The previous inverted logic added it only when the
+        // bucket was missing and never replaced.
         val day0Plain = PlainDate.from(startDate)
-        if (day0Plain !in byDate) {
+        byDate[day0Plain]?.let { existing ->
             startSoon.firstOrNull { it.day == 0 }?.let { raw ->
                 val msg = raw.withClientName(clientName)
                 val unlockOn = startDate.justDay.adding(seconds = UNLOCK_HOUR_SECONDS)
-                val stage = msg.stage?.let { stagesById[it]?.toStage() }
-                byDate[day0Plain] = ContentInfo(messages = listOf(msg.toProgramMessage(unlockOn)), stage = stage)
+                byDate[day0Plain] = existing.copy(messages = listOf(msg.toProgramMessage(unlockOn)))
             }
         }
         return byDate

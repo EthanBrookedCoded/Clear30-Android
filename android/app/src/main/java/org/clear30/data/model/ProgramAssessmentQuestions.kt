@@ -433,7 +433,8 @@ object AssessmentQuestions {
         strippedPrompt = AssessmentQuestionID.NEW_BREAK_TYPE.raw,
         prompt1 = "Want to start a new break?",
         prompt2 = "Choose a break below." +
-            if (ProgramBreakType.entries.count { !it.isStartSoon } == 1) "\n(More breaks coming soon)" else "",
+            // iOS counts ALL cases (incl. start-soon), so the suffix never shows.
+            if (ProgramBreakType.entries.size == 1) "\n(More breaks coming soon)" else "",
         options = ProgramBreakType.entries.filterNot { it.isStartSoon }.sortedBy { it.raw }.map { it.id },
         displayedOptions = ProgramBreakType.entries.filterNot { it.isStartSoon }.sortedBy { it.raw }.map { it.typeName },
         min = 1, max = 1,

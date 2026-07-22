@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -436,7 +437,10 @@ internal fun PostCard(
     val author = remember(post.userId, directory) {
         org.clear30.data.UserDirectory.lookup(post.userId)
     }
-    Clear30Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+    // W19: TEXT posts render as FLAT rows terminated by a hairline divider (iOS
+    // FeedCardText/FeedContainer — cards were removed for text posts); VIDEO
+    // posts keep the card (iOS FeedCardMedia).
+    val content: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
             // Author row: "emoji name · relative-time"  + overflow menu.
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -460,8 +464,11 @@ internal fun PostCard(
             if (post.isVideo) {
                 // iOS FeedCardMedia renders video at 1:1.5 (portrait).
                 org.clear30.views.components.VideoThumbnail(post.thumbnailUrl, Modifier.fillMaxWidth().aspectRatio(1f / 1.5f))
+                Heading3(post.title)
+            } else {
+                // iOS FeedCardText: SmallText-weight title, 3-line cap.
+                SmallText(post.title, maxLines = 3)
             }
-            Heading3(post.title)
 
             // Tag pills — colored by the tag (program=green, day=blue, else its hex).
             val tags = post.postTags.orEmpty().mapNotNull { it.tag }
@@ -481,6 +488,18 @@ internal fun PostCard(
                 Spacer(Modifier.weight(1f))
                 ReactionPills(post)
             }
+        }
+    }
+    if (post.isVideo) {
+        Clear30Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) { content() }
+    } else {
+        Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+            content()
+            Spacer(Modifier.height(Dimens.cardSpacing))
+            Box(
+                Modifier.fillMaxWidth().height(1.dp)
+                    .background(Clear30Colors.text.copy(alpha = 0.1f)),
+            )
         }
     }
 }

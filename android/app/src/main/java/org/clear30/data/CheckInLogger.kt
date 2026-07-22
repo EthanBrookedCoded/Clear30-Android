@@ -15,6 +15,8 @@ import org.clear30.data.model.UserInfo
 import org.clear30.data.model.weedCheckIn
 import org.clear30.util.adding
 import org.clear30.util.daysTo
+import org.clear30.util.withCurrentTime
+import org.clear30.util.withTimeFrom
 import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.addGroupCheckInActivity
 import org.clear30.data.supabase.updateDayInfo
@@ -108,12 +110,36 @@ class CheckInLogger(
      * untouched (it was seeded from onboarding's lastSmokedDate).
      */
     private fun handleLastSmoked() {
-        val latestSmoked = program.dayInfo.values
-            .flatMap { it.loggedCheckIns }
-            .filter { it.completion == false && it.timestamp != null }
-            .maxByOrNull { it.timestamp!! }
-            ?.timestamp
-        if (latestSmoked != null) program.lastSmoked = latestSmoked
+        // iOS CheckInLogger.swift:140-164: anchor = the most recent SMOKED day at
+        // the CURRENT time-of-day (never in the future); the logged timestamp is
+        // preferred only when it's genuinely earlier (past + different hour).
+        // Using the raw timestamp unconditionally let a rounded-ahead timestamp
+        // land in the future → the reward timer showed negative elapsed (W5).
+        val latest = program.dayInfo.entries
+            .flatMap { (day, info) ->
+                info.loggedCheckIns.filter { it.completion == false }.map { day to it }
+            }
+            .maxByOrNull { it.first.dateObject }
+            ?: return
+        val (day, checkIn) = latest
+        val nowInstant = now()
+        var smokeDate = day.dateObject.withCurrentTime()
+        val ts = checkIn.timestamp
+        if (ts != null) {
+            // iOS uses the smoked DAY at the timestamp's TIME-OF-DAY
+            // (`smokeDate.withTimeFrom(checkInTimestamp)`) — the raw ts carries
+            // the LOGGING day, so a backdated catch-up (multi check-in) would
+            // otherwise collapse days of clear time to hours on the next
+            // recompute.
+            val tsOnSmokedDay = day.dateObject.withTimeFrom(ts)
+            if (tsOnSmokedDay < nowInstant &&
+                (tsOnSmokedDay.epochSeconds + 1800) / 3600 != (nowInstant.epochSeconds + 1800) / 3600
+            ) {
+                smokeDate = tsOnSmokedDay
+            }
+        }
+        if (smokeDate > nowInstant) smokeDate = nowInstant
+        program.lastSmoked = smokeDate
     }
 
     /**
@@ -236,8 +262,7 @@ class CheckInLogger(
             //    any newly-earned achievements to user_achievements. Skips the
             //    network call (and the local append) when nothing was earned.
             try {
-                val achievementData = Clear30Store.loadAchievementData()
-                AchievementEngine.syncNewlyEarned(achievementData, userInfo, program)
+                AchievementEngine.evaluateNow(userInfo, program)
             } catch (t: Throwable) {
                 android.util.Log.e("CheckInLogger", "Achievement sync failed after check-in", t)
             }

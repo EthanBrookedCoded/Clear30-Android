@@ -91,6 +91,8 @@ fun SettingsSection(userInfo: UserInfo, program: Program, onSignOut: () -> Unit,
     var version by remember { mutableIntStateOf(0) }
     @Suppress("UNUSED_EXPRESSION") version
     var showCustomCheckIn by remember { mutableStateOf(false) }
+    var showNotifications by remember { mutableStateOf(false) }
+    var showTextMessages by remember { mutableStateOf(false) }
 
     val settings = userInfo.notificationSettings ?: ToggleSettings.notificationDefaults(userInfo.isPaid)
         .also { userInfo.notificationSettings = it }
@@ -120,73 +122,17 @@ fun SettingsSection(userInfo: UserInfo, program: Program, onSignOut: () -> Unit,
         SettingsSectionHeader("Options")
         NameCard(userInfo)
         SettingsCard("Emoji") { UserEmojiPickerButton(userInfo) }
-        // Notifications — iOS pushes a SettingsToggleView page; the same toggles
-        // render inline here (simpler, per §17-Q18).
-        Clear30Card(modifier = Modifier.fillMaxWidth()) {
-            Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-                ToggleRow("All notifications", settings.all) { on ->
-                    settings.all = on; persist()
-                }
-                if (settings.all) {
-                    ToggleSettingsOption.entries
-                        .filter { it.type == ToggleSettingsOptionType.NOTIFICATIONS }
-                        .forEach { option ->
-                            ToggleRow(option.displayName, settings.options[option] ?: false) { on ->
-                                settings.options[option] = on
-                                persist()
-                                // Pop-in notifications are server-scheduled; tell the
-                                // backend to start (or stop) sending them.
-                                if (option == ToggleSettingsOption.POP_IN) {
-                                    scope.launch {
-                                        if (on) {
-                                            // Next morning at 9am local — same default the iOS app used.
-                                            val nextNine = nextNineAm()
-                                            SupabaseController.schedulePopInRequest(nextNine)
-                                        } else {
-                                            SupabaseController.clearPopInRequest()
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                }
-            }
+        // W4: compact push rows like iOS SettingsView — the toggles live on
+        // sub-pages, not inline cards.
+        SettingsCard("Notifications", onClick = { showNotifications = true }) {
+            SettingsTrailingIcon("chevron.right")
         }
-
         // Text messages — iOS disables the row for adolescent mode (opacity 0.5 +
         // `.disabled`) — SMS accountability isn't offered to minors.
         val smsDisabled = userInfo.mode == AppMode.ADOLESCENT
-        Clear30Card(modifier = Modifier.fillMaxWidth().alpha(if (smsDisabled) 0.5f else 1f)) {
-            Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-                ToggleRow("Accountability texts", sms.all, enabled = !smsDisabled) { on ->
-                    sms.all = on
-                    // No backend NotificationHandler reschedule — SMS is
-                    // server-side and the next outbound batch reads the
-                    // updated `users.sms_settings` row directly.
-                    scope.launch {
-                        Clear30Store.save(userInfo)
-                        SupabaseController.updateSMSSettings(sms)
-                    }
-                    Logger.logEvent(
-                        userInfo.loggingID,
-                        if (on) LogEventType.signedUpForSms else LogEventType.unsubscribedFromSms,
-                    )
-                    version++
-                }
-                if (sms.all) {
-                    ToggleSettingsOption.entries
-                        .filter { it.type == ToggleSettingsOptionType.SMS }
-                        .forEach { option ->
-                            ToggleRow(option.displayName, sms.options[option] ?: false, enabled = !smsDisabled) { on ->
-                                sms.options[option] = on
-                                scope.launch {
-                                    Clear30Store.save(userInfo)
-                                    SupabaseController.updateSMSSettings(sms)
-                                }
-                                version++
-                            }
-                        }
-                }
+        Box(Modifier.alpha(if (smsDisabled) 0.5f else 1f)) {
+            SettingsCard("Text Messages", onClick = { if (!smsDisabled) showTextMessages = true }) {
+                SettingsTrailingIcon("chevron.right")
             }
         }
 
@@ -200,6 +146,81 @@ fun SettingsSection(userInfo: UserInfo, program: Program, onSignOut: () -> Unit,
         AccountSection(userInfo, onSignOut)
 
         LinksFooter()
+    }
+
+    // Notifications sub-page (iOS SettingsToggleView push).
+    if (showNotifications) {
+        SettingsSubPage("Notifications", onBack = { showNotifications = false }) {
+            Clear30Card(modifier = Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+                    ToggleRow("All notifications", settings.all) { on ->
+                        settings.all = on; persist()
+                    }
+                    if (settings.all) {
+                        ToggleSettingsOption.entries
+                            .filter { it.type == ToggleSettingsOptionType.NOTIFICATIONS }
+                            .forEach { option ->
+                                ToggleRow(option.displayName, settings.options[option] ?: false) { on ->
+                                    settings.options[option] = on
+                                    persist()
+                                    // Pop-in notifications are server-scheduled; tell the
+                                    // backend to start (or stop) sending them.
+                                    if (option == ToggleSettingsOption.POP_IN) {
+                                        scope.launch {
+                                            if (on) {
+                                                // Next morning at 9am local — same default the iOS app used.
+                                                val nextNine = nextNineAm()
+                                                SupabaseController.schedulePopInRequest(nextNine)
+                                            } else {
+                                                SupabaseController.clearPopInRequest()
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                    }
+                }
+            }
+        }
+    }
+
+    // Text-messages sub-page.
+    if (showTextMessages) {
+        SettingsSubPage("Text Messages", onBack = { showTextMessages = false }) {
+            Clear30Card(modifier = Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+                    ToggleRow("Accountability texts", sms.all) { on ->
+                        sms.all = on
+                        // No backend NotificationHandler reschedule — SMS is
+                        // server-side and the next outbound batch reads the
+                        // updated `users.sms_settings` row directly.
+                        scope.launch {
+                            Clear30Store.save(userInfo)
+                            SupabaseController.updateSMSSettings(sms)
+                        }
+                        Logger.logEvent(
+                            userInfo.loggingID,
+                            if (on) LogEventType.signedUpForSms else LogEventType.unsubscribedFromSms,
+                        )
+                        version++
+                    }
+                    if (sms.all) {
+                        ToggleSettingsOption.entries
+                            .filter { it.type == ToggleSettingsOptionType.SMS }
+                            .forEach { option ->
+                                ToggleRow(option.displayName, sms.options[option] ?: false) { on ->
+                                    sms.options[option] = on
+                                    scope.launch {
+                                        Clear30Store.save(userInfo)
+                                        SupabaseController.updateSMSSettings(sms)
+                                    }
+                                    version++
+                                }
+                            }
+                    }
+                }
+            }
+        }
     }
 
     // Custom check-in management (today/CustomCheckInSetup) as a full page.
@@ -452,4 +473,26 @@ private fun nextNineAm(): kotlinx.datetime.Instant {
             now.date.plus(kotlinx.datetime.DatePeriod(days = 1))
         )
     return target.toInstant(tz)
+}
+
+/** Full-screen settings sub-page (iOS SettingsToggleView push): back header + content. */
+@Composable
+private fun SettingsSubPage(title: String, onBack: () -> Unit, content: @Composable () -> Unit) {
+    Dialog(
+        onDismissRequest = onBack,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(Modifier.fillMaxSize().background(Clear30Colors.background).statusBarsPadding()) {
+            Column(
+                Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
+                verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
+                    org.clear30.views.components.IconButton("chevron.backward", onClick = onBack)
+                    org.clear30.views.components.Heading1(title)
+                }
+                content()
+            }
+        }
+    }
 }

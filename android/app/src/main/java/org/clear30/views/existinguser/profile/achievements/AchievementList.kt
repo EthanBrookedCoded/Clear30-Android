@@ -41,9 +41,12 @@ fun AchievementList(
 ) {
     val scroll = rememberScrollState()
 
-    // Show every rarity section — including Legendary — so the gold/orange
-    // Legendary group is always visible (its cards stay locked until earned).
-    val visible = defs.sortedBy { it.computedRarity.displayOrder }
+    // Legendary achievements only appear once EARNED (Thatcher 2026-07-21) —
+    // locked legendary placeholders would leak the surprise. A legendary
+    // section with nothing earned disappears entirely.
+    val visible = defs
+        .filter { !it.computedRarity.isLegendary || it.key in earned }
+        .sortedBy { it.computedRarity.displayOrder }
 
     val groups = visible.groupBy { it.computedRarity.id }
         .entries.sortedBy { it.value.first().computedRarity.displayOrder }
@@ -103,7 +106,10 @@ private fun RaritySection(
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             AchievementBadge(rarity = rarity, gradientBackground = true)
             Spacer(Modifier.weight(1f))
-            SmallText("$earnedOfRarity of $totalOfRarity", color = Clear30Colors.text.copy(alpha = 0.25f))
+            // No "X of Y" for Legendary — the total would leak how many exist.
+            if (!rarity.isLegendary) {
+                SmallText("$earnedOfRarity of $totalOfRarity", color = Clear30Colors.text.copy(alpha = 0.25f))
+            }
         }
 
         // Earned first, then by display order — same ordering as iOS.

@@ -1,5 +1,6 @@
 package org.clear30.views.newuser
 
+import kotlinx.coroutines.launch
 import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -39,14 +40,31 @@ import org.clear30.views.theme.Dimens
  *
  * Android also fires the POST_NOTIFICATIONS runtime request (API 33+) on tap, then
  * advances regardless of grant.
- *
- * TODO(port): NotificationHandler.scheduleAbandonedOnboarding on grant.
+
  */
 @Composable
 fun OnboardingNotificationRequest(onComplete: () -> Unit) {
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
-    ) { _ -> onComplete() }
+    ) { granted ->
+        // iOS re-anchors the abandoned-onboarding reminders the moment the
+        // permission lands (OnboardingNotificationRequest.swift:27) — before
+        // this, none could ever be delivered.
+        if (granted) {
+            org.clear30.Clear30Application.appScope.launch {
+                runCatching {
+                    val userInfo = org.clear30.data.Clear30Store.loadUserInfo()
+                    if (userInfo.completedOnboarding != true) {
+                        org.clear30.data.NotificationHandler.scheduleAbandonedOnboarding(
+                            userInfo,
+                            org.clear30.data.Clear30Store.loadProgram(),
+                        )
+                    }
+                }
+            }
+        }
+        onComplete()
+    }
 
     val request: () -> Unit = {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

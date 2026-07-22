@@ -1,6 +1,5 @@
 package org.clear30.views.existinguser.today
 
-import android.content.Intent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
@@ -45,14 +44,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DatePeriod
@@ -63,6 +61,7 @@ import kotlinx.datetime.plus
 import coil.compose.AsyncImage
 import org.clear30.data.CheckInLogger
 import org.clear30.data.Clear30Store
+import androidx.compose.ui.graphics.Brush
 import org.clear30.data.model.CalendarViewMode
 import org.clear30.data.model.PlainDate
 import org.clear30.data.model.Post
@@ -72,10 +71,14 @@ import org.clear30.data.model.UserInfo
 import org.clear30.data.model.sorted
 import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.getCommunityFeed
+import org.clear30.data.supabase.getCommunityFeedByDayName
+import org.clear30.data.supabase.getCommunityPostsByTitles
+import org.clear30.util.adding
+import org.clear30.util.daysTo
 import org.clear30.util.now
+import org.clear30.views.existinguser.community.communityProgramTagName
 import org.clear30.views.components.CalendarNodeFillStyle
 import org.clear30.views.components.Clear30Card
-import org.clear30.views.components.cardStyle
 import org.clear30.views.components.pressScale
 import org.clear30.views.components.scrollStackItem
 import org.clear30.views.components.Heading1
@@ -136,11 +139,25 @@ fun TodayTab(
     var webUrl by remember { mutableStateOf<String?>(null) }
     var redditUrl by remember { mutableStateOf<String?>(null) }
     var journalPrompt by remember { mutableStateOf<String?>(null) }
-    var communityPosts by remember { mutableStateOf<List<Post>>(emptyList()) }
+    // Catch-up card → full-screen viewer for a missed day's first message; the
+    // journal feed cards open the full-screen text editor (create / edit).
+    var catchUpMessages by remember { mutableStateOf<List<ProgramMessage>?>(null) }
+    var creatingJournalSeed by remember { mutableStateOf<String?>(null) }
+    var editingJournalEntry by remember { mutableStateOf<org.clear30.data.model.JournalEntry?>(null) }
+    // Drop feed state saved on a previous calendar day, so a process that
+    // lives overnight doesn't silently restore yesterday's selected day/page.
+    remember { TodayTabUiState.resetIfStale(PlainDate.from(now())) }
+    // Seeded from the process-lifetime holder so returning to the tab doesn't
+    // momentarily drop the Community page — which would shift the restored
+    // pager index onto FeedEnd and falsely complete the day.
+    var communityPosts by remember { mutableStateOf(TodayTabUiState.savedCommunityPosts) }
     var viewMode by remember { mutableStateOf<CalendarViewMode>(program.latestCalendarViewMode ?: CalendarViewMode.Weed) }
 
     val today = PlainDate.from(now())
-    var selectedDay by remember { mutableStateOf(today) }
+    // Restore the last-viewed day across tab switches — the plain `when` tab
+    // host (W21) disposes this composable when leaving the tab, so without the
+    // holder the feed would snap back to today/page 0 every time.
+    var selectedDay by remember { mutableStateOf(TodayTabUiState.savedDay ?: today) }
     var showWeekView by remember { mutableStateOf(true) }
     var monthAnchor by remember { mutableStateOf(firstOfMonth(today)) }
 
@@ -166,7 +183,10 @@ fun TodayTab(
         // (repair path), schedule it from the current break's start — so a
         // freshly-started break unlocks its lessons day-by-day from day 1 —
         // otherwise from the program start.
-        val contentStart = program.currentBreak?.startDate ?: program.startDate
+        // Anchor at the MAIN break's start, not the start-soon bridge's — the
+        // repair path would otherwise schedule the Clear30 curriculum from the
+        // Preparation break's first day.
+        val contentStart = (program.currentBreakNotStartSoon ?: program.currentBreak)?.startDate ?: program.startDate
         if (org.clear30.data.ProgramMessageHandler.ensureContent(program, contentStart, userInfo.name)) refresh++
         // Fall back to the built-in daily lessons whenever the backend returned no
         // content (local dev / pre-assessment) so the Today feed is never empty.
@@ -202,9 +222,38 @@ fun TodayTab(
         }
     }
 
-    // Recent community posts for the in-feed carousel (iOS TodayFeedCommunity).
+    // Community posts for the in-feed carousel — iOS loadCommunityPosts
+    // (TodayFeedViewModel.swift:350-403): journal-prompt-title search first,
+    // then the "Day N" + program-tag fallback; TEXT posts with bodies only.
     LaunchedEffect(Unit) {
-        communityPosts = SupabaseController.getCommunityFeed(start = 0, end = 5, sortBy = "recent").getOrNull().orEmpty()
+        val todayMessages = program.getProgramMessages(today).sorted
+        val prompts = org.clear30.data.model.JournalEntries.getPrompts(todayMessages)
+        val byPrompts = if (prompts.isNotEmpty()) {
+            SupabaseController.getCommunityPostsByTitles(
+                titles = prompts,
+                minComments = 2,
+                minDate = now().adding(days = -60).toString(),
+                sortBy = "views",
+                limitCount = 10,
+            ).getOrNull().orEmpty().filter { !it.isVideo && it.body.isNotEmpty() }
+        } else {
+            emptyList()
+        }
+        val fetched = byPrompts.ifEmpty {
+            val currentProgramDay = program.currentBreak?.currentBreakDay ?: program.coreProgramDay
+            SupabaseController.getCommunityFeedByDayName(
+                dayName = "Day $currentProgramDay",
+                programName = program.communityProgramTagName,
+                excludePinned = true,
+                minComments = 1,
+                minDate = now().adding(days = -30).toString(),
+                sortBy = "views",
+            ).getOrNull().orEmpty().filter { !it.isVideo && it.body.isNotEmpty() }
+        }
+        if (fetched.isNotEmpty() || communityPosts.isEmpty()) {
+            communityPosts = fetched
+            TodayTabUiState.savedCommunityPosts = fetched
+        }
     }
 
     // The SELECTED day's feed content only (iOS TodayFeedViewModel:
@@ -218,15 +267,36 @@ fun TodayTab(
     // its own swipe page (and so part of the progress bar), in this exact order —
     // video, message, carousel, guides, meditation, each reddit, each youtube, each
     // claire prompt, each member perk, then the journal prompts.
-    val feedItems = remember(messages, hasCommunity) {
+    // selectedDay is a REQUIRED key: the builder reads it for the today-only
+    // Community/CatchUp gates and the journal entries — two message-less days
+    // produce equal (empty) `messages`, so without it the previous day's
+    // today-only pages would leak onto the newly-selected day.
+    val feedItems = remember(messages, hasCommunity, refresh, selectedDay) {
         buildList {
             add(FeedItem.CheckIn)
+            // Top journal card (iOS buildFeedItems inserts at index min(1, count) —
+            // right after the day card, BEFORE the catch-up nudge): the day's
+            // free-form entries (title not tied to a lesson prompt).
+            if (messages.isNotEmpty()) {
+                val prompts = org.clear30.data.model.JournalEntries.getPrompts(messages)
+                val freeEntries = journalEntries.entries(selectedDay.dateObject)
+                    .filter { it.isVideo != true && it.title !in prompts }
+                if (freeEntries.isNotEmpty()) add(FeedItem.JournalEntriesPage(freeEntries))
+            }
+            // Catch-up nudge (iOS buildFeedItems:171-177): today only, active
+            // break, not dismissed, ≥3 missed (never-started) days.
+            val currentBreak = program.currentBreak
+            if (selectedDay == today && currentBreak != null && !userInfo.getCachedBool(HIDE_CATCH_UP_KEY)) {
+                val missedGroups = program.getNonStartedMessages(currentBreak)
+                if (missedGroups.size >= 3) add(FeedItem.CatchUp(missedGroups))
+            }
             messages.forEach { m ->
                 if (!m.videoURL.isNullOrBlank()) add(FeedItem.Video(m))
                 add(FeedItem.Message(m))
                 m.carouselImages?.takeIf { it.isNotEmpty() }?.let { add(FeedItem.Carousel(it)) }
                 if (m.programPageInfo.isNotEmpty()) add(FeedItem.Guides(m))
                 m.meditation?.let { add(FeedItem.Meditation(it)) }
+                m.instagramVideos?.takeIf { it.isNotEmpty() }?.let { add(FeedItem.InstagramVideos(it)) }
                 m.reddits.forEach { add(FeedItem.Reddit(it)) }
                 m.youTubes.forEach { add(FeedItem.YouTube(it)) }
                 m.clairePrompts.forEach { add(FeedItem.Claire(it)) }
@@ -234,18 +304,36 @@ fun TodayTab(
                 m.journalPrompts?.takeIf { it.isNotEmpty() }?.let { add(FeedItem.Journal(it)) }
             }
             // iOS TodayFeedViewModel appends a feedEnd celebration after the day's
-            // messages; the community carousel follows as bonus browsing.
+            // messages, with community inserted BEFORE it (insertCommunityPosts,
+            // TodayFeedViewModel.swift:404-417); the community carousel is
+            // TODAY-ONLY (W12 — iOS loadCommunityPosts guards `isToday`).
+            if (hasCommunity && selectedDay == today) add(FeedItem.Community)
             if (messages.isNotEmpty()) add(FeedItem.FeedEnd)
-            if (hasCommunity) add(FeedItem.Community)
         }
     }
     val totalFeedItems = feedItems.size
     val topicOfTheDay = messages.firstOrNull()?.let { "${it.topicEmoji ?: ""} ${it.topicTitle}".trim() }
 
     // Vertical card pager — each feed item is a full page you swipe through (iOS
-    // FeedView, `.scrollTargetBehavior(.paging)`). Reset to the top on day change.
-    val pagerState = rememberPagerState(pageCount = { totalFeedItems })
-    LaunchedEffect(selectedDay) { pagerState.scrollToPage(0) }
+    // FeedView, `.scrollTargetBehavior(.paging)`). Reset to the top on day change;
+    // returning to the tab restores the saved page instead of resetting.
+    val pagerState = rememberPagerState(
+        initialPage = TodayTabUiState.savedPage.coerceIn(0, (totalFeedItems - 1).coerceAtLeast(0)),
+        pageCount = { totalFeedItems },
+    )
+    LaunchedEffect(selectedDay) {
+        if (TodayTabUiState.savedDay != selectedDay) {
+            TodayTabUiState.savedDay = selectedDay
+            TodayTabUiState.savedOn = today
+            pagerState.scrollToPage(0)
+        }
+    }
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage }.collect {
+            TodayTabUiState.savedPage = it
+            TodayTabUiState.savedOn = today
+        }
+    }
 
     // Page index drives the top progress bar (iOS `updateFeedProgress`: index > 0).
     val currentIndex by remember { derivedStateOf { pagerState.currentPage } }
@@ -260,9 +348,12 @@ fun TodayTab(
     Column(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding - shadowPad)) {
         @Suppress("UNUSED_EXPRESSION") refresh
 
-        // Pending post-assessment card (iOS PopUps.swift:31-33) — tap opens the flow.
+        // Pending post-assessment card (iOS PopUps.swift:19-33) — tap opens the
+        // flow. Gated on daysSinceAppOpen > 0 like iOS: first-day users never
+        // see the popup slot.
         val postAssessmentText = program.postAssessmentCardText
-        if (postAssessmentText != null && onOpenPostAssessment != null) {
+        val daysSinceAppOpen = userInfo.firstAppOpen.daysTo(now())
+        if (postAssessmentText != null && onOpenPostAssessment != null && daysSinceAppOpen > 0) {
             org.clear30.views.existinguser.postassessment.PostAssessmentPopupCard(
                 text = postAssessmentText,
                 modifier = Modifier.padding(horizontal = shadowPad).padding(bottom = Dimens.cardSpacing / 2),
@@ -294,7 +385,6 @@ fun TodayTab(
             onSelectDay = { date -> selectedDay = date },
             onMonthStep = { months -> monthAnchor = monthAnchor.adding(months = months) },
             onScrollToTop = { scope.launch { pagerState.animateScrollToPage(0) } },
-            onShare = { shareProgress(it, program) },
             )
         }
 
@@ -353,13 +443,14 @@ fun TodayTab(
                     // crisp; the card you swipe away scales down, fades, and lingers
                     // behind the incoming one like a deck. A higher baseScale keeps the
                     // receding card reading as a full card peeking behind.
-                    val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
-                    // iOS `isFeedFocused`: while a card is the settled feed page it gets
-                    // the CardStyle glow halo in its content gradient (TodayFeedViews.swift
-                    // passes glowGradient per card type; the video card has no glow).
-                    val glow = if (page == pagerState.settledPage) Clear30Gradients.clear30 else null
+                    // W21: plain full-height pages — the deck tilt/overlap
+                    // transform (scrollStackItem) made adjacent cards bleed into
+                    // each other; iOS FeedView pages plainly too. Glow disabled
+                    // per Thatcher ("basic and good") — its blurred stroke was
+                    // part of the shadow corruption.
+                    val glow: Brush? = null
                     Box(
-                        Modifier.fillMaxSize().scrollStackItem(pageOffset, baseScale = 0.92f),
+                        Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center,
                     ) {
                         when (val item = feedItems.getOrNull(page)) {
@@ -390,7 +481,35 @@ fun TodayTab(
                                         },
                                     )
                                 }
+                                // Message-less day (iOS TodayFeedCardRouter:218-227):
+                                // a "New Journal" card fills the stretch space instead.
+                                if (messages.isEmpty()) {
+                                    Box(Modifier.fillMaxWidth().weight(1f)) {
+                                        JournalPromptsFeedCard(prompts = emptyList()) {
+                                            creatingJournalSeed = ""
+                                        }
+                                    }
+                                }
                             }
+                            is FeedItem.CatchUp -> CatchUpFeedCard(
+                                groups = item.groups,
+                                program = program,
+                                glow = glow,
+                                onOpenDay = { group -> catchUpMessages = group.takeIf { it.isNotEmpty() } },
+                                onAllMessages = {
+                                    org.clear30.AppState.requestSubRoute(org.clear30.data.DeepLinkRoute.Messages)
+                                    org.clear30.AppState.requestTab("SUPPORT")
+                                },
+                                onDismissForever = {
+                                    userInfo.setCacheBool(HIDE_CATCH_UP_KEY, true)
+                                    scope.launch { Clear30Store.save(userInfo) }
+                                },
+                            )
+                            is FeedItem.JournalEntriesPage -> JournalEntriesFeedCard(
+                                entries = item.entries,
+                                glow = glow?.let { Clear30Gradients.journals },
+                                onOpen = { editingJournalEntry = it },
+                            )
                             is FeedItem.Video -> VideoFeedCard(
                                 item.msg, userInfo,
                                 focused = page == pagerState.settledPage,
@@ -399,6 +518,7 @@ fun TodayTab(
                             is FeedItem.Carousel -> CarouselFeedCard(item.images, glow = glow)
                             is FeedItem.Guides -> GuidesFeedCard(item.msg, glow = glow)
                             is FeedItem.Meditation -> MeditationFeedCard(item.med, program, glow = glow?.let { Clear30Gradients.meditation })
+                            is FeedItem.InstagramVideos -> VideosFeedCard(item.videos, focused = page == pagerState.settledPage)
                             is FeedItem.Reddit -> RedditFeedCard(item.res, userInfo, glow = glow?.let { Clear30Gradients.reddit }, onOpen = { redditUrl = it })
                             is FeedItem.YouTube -> YouTubeFeedCard(
                                 item.res, userInfo,
@@ -463,8 +583,11 @@ fun TodayTab(
             onDismiss = {
                 showCheckInSheet = false
                 refresh++
-                // After checking in, drop the feed onto the first lesson (page 1 —
-                // page 0 is the check-in card) so today's content is front-and-center.
+            },
+            // Only a COMPLETED check-in advances the feed to the first lesson —
+            // skipping/closing leaves it where it is (W10; iOS
+            // CheckInViewModel.swift:131-146).
+            onCompleted = {
                 scope.launch { if (totalFeedItems > 1) pagerState.animateScrollToPage(1) }
             },
         )
@@ -506,6 +629,71 @@ fun TodayTab(
                     mapOf(org.clear30.data.LogEventExtraDataType.TYPE to "text"),
                 )
                 journalPrompt = null
+            },
+        )
+    }
+
+    // Catch-up card → full-screen viewer of the missed day's lesson group (iOS
+    // navigates to programMessages for the whole group).
+    catchUpMessages?.let { group ->
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { catchUpMessages = null },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            androidx.compose.material3.Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = Clear30Colors.background,
+            ) {
+                MessageDetail(
+                    program = program,
+                    messages = group,
+                    userInfo = userInfo,
+                    journalEntries = journalEntries,
+                    onBack = {
+                        catchUpMessages = null
+                        refresh++
+                    },
+                )
+            }
+        }
+    }
+
+    // Journal feed cards → the full-screen text editor (iOS newTextEntry /
+    // journalEntry destinations). Commit rules mirror JournalSection: new
+    // entries need both fields; edits write back in place.
+    creatingJournalSeed?.let { seed ->
+        org.clear30.views.existinguser.profile.TextEntryEditor(
+            initialTitle = seed,
+            initialContent = "",
+            alreadyShared = false,
+            onClose = { title, body ->
+                if (title.isNotBlank() && body.isNotBlank()) {
+                    journalEntries.entries.add(
+                        org.clear30.data.model.JournalEntry(title = title, content = body, date = selectedDay.dateObject),
+                    )
+                    scope.launch { Clear30Store.save(journalEntries) }
+                    org.clear30.data.Logger.logEvent(
+                        userInfo.loggingID,
+                        org.clear30.data.LogEventType.createdJournalEntry,
+                        mapOf(org.clear30.data.LogEventExtraDataType.TYPE to "text"),
+                    )
+                }
+                creatingJournalSeed = null
+                refresh++
+            },
+        )
+    }
+    editingJournalEntry?.let { entry ->
+        org.clear30.views.existinguser.profile.TextEntryEditor(
+            initialTitle = entry.title,
+            initialContent = entry.content,
+            alreadyShared = entry.communityPostId != null,
+            onClose = { title, body ->
+                entry.title = title
+                entry.content = body
+                scope.launch { Clear30Store.save(journalEntries) }
+                editingJournalEntry = null
+                refresh++
             },
         )
     }
@@ -571,9 +759,7 @@ private fun TodayTopSection(
     onSelectDay: (PlainDate) -> Unit,
     onMonthStep: (Int) -> Unit,
     onScrollToTop: () -> Unit,
-    onShare: (android.content.Context) -> Unit,
 ) {
-    val context = LocalContext.current
     // animateContentSize gives the week↔month expand/collapse its smooth height
     // change. iOS `toggleCalendar` animates with defaultAnimation.speed(1.5)
     // (Home.swift:210), and defaultAnimation is `.default.speed(1.5)`
@@ -598,10 +784,9 @@ private fun TodayTopSection(
                     label = "monthLabel",
                 ) { anchor -> Heading1(monthHeading(anchor, today)) }
                 Spacer(Modifier.weight(1f))
-                ChevronBtn("chevron.left") { onMonthStep(-1) }
-                ChevronBtn("chevron.right") { onMonthStep(1) }
+                ChevronBtn("chevron.left", "Previous month") { onMonthStep(-1) }
                 Spacer(Modifier.size(Dimens.cardSpacing / 2))
-                SharePill { onShare(context) }
+                ChevronBtn("chevron.right", "Next month") { onMonthStep(1) }
             }
             WeekdayRow()
             Spacer(Modifier.size(Dimens.cardSpacing / 2))
@@ -622,6 +807,8 @@ private fun TodayTopSection(
                         Column(
                             Modifier.fillMaxWidth().clickable(onClick = onScrollToTop),
                             verticalArrangement = Arrangement.Center,
+                            // W11: topic title centered over the progress bar.
+                            horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             if (!topicOfTheDay.isNullOrBlank()) {
                                 SmallText(topicOfTheDay, maxLines = 1)
@@ -750,10 +937,13 @@ private fun nodeCompletion(program: Program, date: PlainDate, mode: CalendarView
 private fun DayNode(program: Program, date: PlainDate, today: PlainDate, selectedDay: PlainDate, viewMode: CalendarViewMode, revision: Int, modifier: Modifier, onSelect: (PlainDate) -> Unit) {
     val isCustom = viewMode is CalendarViewMode.Custom
     val activeGradient = if (viewMode is CalendarViewMode.Custom) viewMode.customCheckIn.gradient else Clear30Gradients.clear30
+    // iOS MultiCheckInDayNode.fillStyle: sober = gradient, smoked (checked in,
+    // not sober) = GRAY (iOS has no red calendar state), no check-in = the
+    // dimmer lowOpacity so gray smoked days stay distinguishable.
     val fill = when (nodeCompletion(program, date, viewMode, revision)) {
         true -> CalendarNodeFillStyle.Gradient(activeGradient)
-        false -> if (isCustom) CalendarNodeFillStyle.GrayFlat else CalendarNodeFillStyle.Gradient(Clear30Gradients.red)
-        null -> CalendarNodeFillStyle.Gray
+        false -> if (isCustom) CalendarNodeFillStyle.GrayFlat else CalendarNodeFillStyle.Gray
+        null -> CalendarNodeFillStyle.LowOpacity
     }
     val stageBrush = program.stageMap[date]?.gradient
     Box(modifier, contentAlignment = Alignment.Center) {
@@ -802,13 +992,18 @@ private fun UpDownButton(isDown: Boolean, onClick: () -> Unit) {
     }
 }
 
+/** Month nav chevron — the same gray-pill treatment as UpDownButton, with press-scale. */
 @Composable
-private fun ChevronBtn(symbol: String, onClick: () -> Unit) {
+private fun ChevronBtn(symbol: String, description: String, onClick: () -> Unit) {
     Box(
-        Modifier.size(28.dp).clip(RoundedCornerShape(7.dp)).background(Clear30Colors.opacityGray.copy(alpha = 0.5f)).clickable(onClick = onClick),
+        Modifier
+            .pressScale(onClick = onClick)
+            .size(28.dp)
+            .clip(RoundedCornerShape(7.dp))
+            .background(Clear30Colors.opacityGray),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(sfSymbol(symbol), contentDescription = null, tint = Clear30Colors.text.copy(alpha = 0.75f), modifier = Modifier.size(13.dp))
+        Icon(sfSymbol(symbol), contentDescription = description, tint = Clear30Colors.text, modifier = Modifier.size(11.dp))
     }
 }
 
@@ -826,39 +1021,20 @@ private fun FeedDivider(showToggle: Boolean, isDown: Boolean, onToggle: () -> Un
 }
 
 /**
- * SharePill — iOS `TinyTextButton(text: "Share", background: true,
- * icon: "square.and.arrow.up")` (Home.swift:66): TinyText + 10pt icon on a gray
- * CardStyle pill (corner 12, h10/v5 padding) with press-scale, the whole button
- * at TinyTextButton's 0.7 opacity (Buttons.swift:304 — an iOS-source alpha).
- */
-@Composable
-private fun SharePill(onClick: () -> Unit) {
-    Row(
-        Modifier
-            .alpha(0.7f)
-            .pressScale(onClick = onClick)
-            .cardStyle(color = Clear30Colors.opacityGray, cornerRadius = 12.dp, padding = false)
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 4),
-    ) {
-        TinyText("Share", color = Clear30Colors.text)
-        Icon(sfSymbol("square.and.arrow.up"), contentDescription = "Share", tint = Clear30Colors.text, modifier = Modifier.size(10.dp))
-    }
-}
-
-/**
  * One swipeable page in the Today feed. A lesson is fully flattened into its
  * containers (iOS `buildItems`) — each becomes its own page and counts toward the
  * progress bar. Rendering for each lives in feed/FeedContentCards.kt.
  */
 private sealed interface FeedItem {
     data object CheckIn : FeedItem
+    data class CatchUp(val groups: List<List<ProgramMessage>>) : FeedItem
+    data class JournalEntriesPage(val entries: List<org.clear30.data.model.JournalEntry>) : FeedItem
     data class Video(val msg: ProgramMessage) : FeedItem
     data class Message(val msg: ProgramMessage) : FeedItem
     data class Carousel(val images: List<String>) : FeedItem
     data class Guides(val msg: ProgramMessage) : FeedItem
     data class Meditation(val med: org.clear30.data.model.ProgramMeditation) : FeedItem
+    data class InstagramVideos(val videos: List<org.clear30.data.model.ProgramVideo>) : FeedItem
     data class Reddit(val res: org.clear30.data.model.ProgramResource) : FeedItem
     data class YouTube(val res: org.clear30.data.model.ProgramResource) : FeedItem
     data class Claire(val prompt: org.clear30.data.model.ProgramClairePrompt) : FeedItem
@@ -866,6 +1042,28 @@ private sealed interface FeedItem {
     data class Journal(val prompts: List<String>) : FeedItem
     data object FeedEnd : FeedItem
     data object Community : FeedItem
+}
+
+/**
+ * Feed position that survives tab switches (the tab host disposes TodayTab's
+ * composition when another tab shows). Process-lifetime only — a fresh launch
+ * starts at today / page 0 as before, and state saved on a previous calendar
+ * day is dropped on re-entry ([resetIfStale]).
+ */
+private object TodayTabUiState {
+    var savedPage: Int = 0
+    var savedDay: PlainDate? = null
+    var savedOn: PlainDate? = null
+    var savedCommunityPosts: List<Post> = emptyList()
+
+    fun resetIfStale(today: PlainDate) {
+        if (savedOn != null && savedOn != today) {
+            savedPage = 0
+            savedDay = null
+            savedCommunityPosts = emptyList()
+            savedOn = null
+        }
+    }
 }
 
 // ── Date helpers ─────────────────────────────────────────────────────────────
@@ -896,11 +1094,3 @@ private fun monthSlide(forward: Boolean): androidx.compose.animation.ContentTran
         (slideInHorizontally { -it } + fadeIn()) togetherWith (slideOutHorizontally { it } + fadeOut())
     }
 
-private fun shareProgress(context: android.content.Context, program: Program) {
-    val sober = program.dayInfo.values.count { it.sober == true }
-    val intent = Intent(Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(Intent.EXTRA_TEXT, "Clear30 progress: $sober days clear\n\nhttps://clear30.org")
-    }
-    context.startActivity(Intent.createChooser(intent, "Share progress").apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
-}

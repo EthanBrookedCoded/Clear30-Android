@@ -111,18 +111,29 @@ class Program(
         else (if (coreModeration) "Moderation" else "Weed free") to "Life"
     }
 
+    // iOS guard shape (ProgramBreak.swift:131-151): the Life fallback ONLY
+    // applies when there is NO current break. During a break whose own value is
+    // nil (the start-soon bridge, or a clear30 missing the Then-What answer)
+    // these return null and the UI hides the description / info button — the
+    // Elvis-collapse showed Life copy on the break card during start-soon.
     val programDescription: String?
-        get() = currentBreak?.breakDescription ?: "Your long term support program."
+        get() {
+            val b = currentBreak ?: return "Your long term support program."
+            return b.breakDescription
+        }
 
     val detailSheetInfo: ProgramDetailSheetInfo?
-        get() = currentBreak?.detailSheetInfo ?: ProgramDetailSheetInfo(
-            title = "The Life Program is your ongoing guide for living more intentionally - with or without weed.",
-            description = """
-                Whether you're quitting, moderating, or still figuring it out, you'll get daily insights and tools for as long as you need them.
+        get() {
+            val b = currentBreak ?: return ProgramDetailSheetInfo(
+                title = "The Life Program is your ongoing guide for living more intentionally - with or without weed.",
+                description = """
+                    Whether you're quitting, moderating, or still figuring it out, you'll get daily insights and tools for as long as you need them.
 
-                Whenever you're ready for a break, you can always start a new Clear30.
-            """.trimIndent(),
-        )
+                    Whenever you're ready for a break, you can always start a new Clear30.
+                """.trimIndent(),
+            )
+            return b.detailSheetInfo
+        }
 
     val coreProgramName: String get() = "Life ${if (coreModeration) "(Moderation)" else "(Abstinence)"}"
     fun getCoreProgramString(moderation: Boolean): String = if (moderation) "🍃 Moderation" else "😁 Weed free"
@@ -142,11 +153,17 @@ class Program(
     /** Days with ANY weed check-in, sober or not (iOS `numDaysCheckedIn`). */
     val numDaysCheckedIn: Int get() = dayInfo.values.count { it.sober != null }
 
-    /** Per-break day-info window: [startDate, endDate) (iOS `dayInfo(programBreak:)`). */
+    /**
+     * Per-break day-info window (iOS `dayInfo(programBreak:)`,
+     * ProgramCheckIns.swift:386-398): offsets 1..type.raw from startDate —
+     * i.e. days 1–30 ONLY. Day 0 is excluded (the seeded sober day on break
+     * day 0 must not count toward the break) and `endDateOverride` is IGNORED
+     * (an ended-early break still counts its full window), both exactly like
+     * iOS.
+     */
     private fun dayInfoIn(programBreak: ProgramBreak): List<ProgramDayInfo> {
         val start = PlainDate.from(programBreak.startDate)
-        val end = PlainDate.from(programBreak.endDate)
-        return dayInfo.filterKeys { it >= start && it < end }.values.toList()
+        return (1..programBreak.type.raw).mapNotNull { offset -> dayInfo[start.adding(days = offset)] }
     }
 
     fun numDaysSober(programBreak: ProgramBreak): Int =
@@ -166,9 +183,9 @@ class Program(
         val initialWeeklyFrequency = (initialWeeklyUsage / 7.0f) * 100.0f
         if (initialWeeklyFrequency <= 0f) return null
 
-        val start = PlainDate.from(programBreak.startDate)
-        val today = PlainDate.from(org.clear30.util.now())
-        val entries = dayInfo.filterKeys { it in start..today }.values
+        // iOS computes over the same day-1..30 break window as
+        // dayInfo(programBreak:) — day 0 and post-break days never count.
+        val entries = dayInfoIn(programBreak)
         val checkedIn = entries.count { it.sober != null }.toFloat()
         val soberDays = entries.count { it.sober == true }.toFloat()
 
@@ -243,6 +260,27 @@ class Program(
     fun getProgramMessages(date: PlainDate): List<ProgramMessage> =
         contentInfo[date]?.messages.orEmpty() +
             schoolMessages.filter { PlainDate.from(it.unlockOn) == date }
+
+    /** The break's slice of the timeline (iOS `getContentInfo(for:)` —
+     *  `[startDate, endDate)` on the day keys). */
+    fun getContentInfo(programBreak: ProgramBreak): Map<PlainDate, ContentInfo> {
+        val start = PlainDate.from(programBreak.startDate)
+        val end = PlainDate.from(programBreak.endDate)
+        return contentInfo.filterKeys { it >= start && it < end }
+    }
+
+    /**
+     * The break's past/today days whose feed was never started (`progress == 0`),
+     * oldest first, one message-group per day (iOS `getNonStartedMessages(for:)`).
+     * Feeds the Today-feed "Catch Up 📈" card.
+     */
+    fun getNonStartedMessages(programBreak: ProgramBreak): List<List<ProgramMessage>> {
+        val today = PlainDate.from(now())
+        return getContentInfo(programBreak)
+            .filter { it.key <= today && (it.value.progress ?: 0.0) == 0.0 }
+            .entries.sortedBy { it.key }
+            .map { it.value.messages }
+    }
 
     // MARK: - Core (Life) program (ProgramContent.swift)
     /**

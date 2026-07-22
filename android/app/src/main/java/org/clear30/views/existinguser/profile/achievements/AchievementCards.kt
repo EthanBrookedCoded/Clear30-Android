@@ -204,7 +204,14 @@ fun AchievementCard(def: AchievementDefinition, modifier: Modifier = Modifier, i
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 GradientIcon(def.sfSymbol, rarity.gradient, iconSize)
             }
-            Pill(background = SolidColor(Clear30Colors.opacityGray.copy(alpha = 0.5f)), modifier = Modifier.fillMaxWidth()) {
+            // Chip tinted with the RARITY color at 0.25 (Thatcher 2026-07-21) —
+            // not the neutral gray.
+            Pill(
+                background = Brush.linearGradient(
+                    listOf(rarity.color1.copy(alpha = 0.25f), rarity.color2.copy(alpha = 0.25f)),
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 TinyText(def.name, color = rarity.color1, maxLines = 1)
             }
         }

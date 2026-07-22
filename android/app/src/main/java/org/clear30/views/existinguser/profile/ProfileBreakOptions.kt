@@ -23,7 +23,7 @@ import org.clear30.data.model.PlainDate
 import org.clear30.data.model.Program
 import org.clear30.data.model.UserInfo
 import org.clear30.views.components.SmallText
-import org.clear30.views.components.StretchedButton
+import org.clear30.views.components.TextIconButton
 import org.clear30.views.theme.Clear30Colors
 import org.clear30.views.theme.Clear30Gradients
 import org.clear30.views.theme.Dimens
@@ -68,21 +68,31 @@ fun ProfileBreakOptions(program: Program, userInfo: UserInfo, revision: Int = 0,
     fun perform(block: suspend () -> Unit) {
         if (busy) return
         busy = true
-        scope.launch { block(); busy = false; onChanged() }
+        // appScope has no CoroutineExceptionHandler — an uncaught throw would
+        // crash the app AND leave `busy` stuck true.
+        scope.launch {
+            try {
+                runCatching { block() }
+                    .onFailure { android.util.Log.e("ProfileBreakOptions", "break action failed", it) }
+            } finally {
+                busy = false
+                onChanged()
+            }
+        }
     }
 
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+    // iOS ProfileBreakOptions: the standard white CARD buttons (background +
+    // soft shadow — TextIconButton with the default clear30Button fill).
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
         if (notStarted) {
-            StretchedButton("Start break now", gradient = Clear30Gradients.clear30, modifier = Modifier.fillMaxWidth()) {
+            TextIconButton("Start Break Now", icon = "timer") {
                 perform { ProgramTimelineHandler.day0StartNow(program) }
             }
-            StretchedButton("Change start date", modifier = Modifier.fillMaxWidth()) { showDatePicker = true }
+            TextIconButton("Change Break Start Date", icon = "calendar") { showDatePicker = true }
         } else {
-            StretchedButton("Restart break", gradient = Clear30Gradients.clear30, modifier = Modifier.fillMaxWidth()) {
-                showRestart = true
-            }
-            StretchedButton("Change start date", modifier = Modifier.fillMaxWidth()) { showDatePicker = true }
-            StretchedButton("End break", modifier = Modifier.fillMaxWidth()) { showEnd = true }
+            TextIconButton("Restart Break", icon = "arrow.counterclockwise") { showRestart = true }
+            TextIconButton("Change Break Start Date", icon = "calendar") { showDatePicker = true }
+            TextIconButton("End Break", icon = "xmark") { showEnd = true }
         }
     }
 

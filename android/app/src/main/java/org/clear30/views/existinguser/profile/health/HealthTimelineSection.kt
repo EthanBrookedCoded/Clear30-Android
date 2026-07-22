@@ -247,17 +247,20 @@ private fun HealthTimelineList(
     onReveal: () -> Unit,
     onConfetti: () -> Unit,
 ) {
-    val listState = rememberLazyListState()
     // Index of the current step's card: after the future cards (each card+link)
     // or after the single placeholder+link pair.
     val itemsBeforeCurrent =
         if (displayedNextSteps.isNotEmpty()) displayedNextSteps.size * 2
         else if (healthProgress.nextStepDate != null) 2 else 0
+    // W2 (Thatcher): the current card should simply BE at the top on open — no
+    // visible jump/scroll. Initializing the list state (instead of scrolling in
+    // a LaunchedEffect) renders it top-anchored from the first frame; the faded
+    // future cards are still reachable by scrolling up.
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = if (previousAndCurrentSteps.isNotEmpty()) itemsBeforeCurrent else 0,
+    )
 
     LaunchedEffect(Unit) {
-        // 2. Scroll the current step into view, then 3. animate it in (iOS animateList:
-        // the card springs in immediately, confetti + heavy haptic land 0.25s later).
-        if (previousAndCurrentSteps.isNotEmpty()) listState.scrollToItem(itemsBeforeCurrent)
         if (highlightCurrent && !showCurrentStep) {
             onReveal()
             delay(250)

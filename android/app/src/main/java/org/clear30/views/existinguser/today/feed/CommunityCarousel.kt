@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -25,6 +26,7 @@ import org.clear30.views.components.Clear30Card
 import org.clear30.views.components.DefaultButton
 import org.clear30.views.components.Heading3
 import org.clear30.views.components.SmallText
+import org.clear30.views.components.SmallTextHighlighted
 import org.clear30.views.components.TinyText
 import org.clear30.views.components.sfSymbol
 import org.clear30.views.theme.Clear30Colors
@@ -43,37 +45,82 @@ fun CommunityCarouselCard(
     onOpenCommunity: () -> Unit,
     onOpenPost: (Post) -> Unit,
 ) {
-    // Community-coloured backdrop shadow so the card's glow signals its type.
-    Clear30Card(
-        modifier = Modifier.fillMaxWidth(),
-        shadowColor = Clear30Colors.community1.copy(alpha = 0.5f),
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Heading3("Community")
-                Spacer(Modifier.weight(1f))
-                Row(
-                    Modifier.clip(RoundedCornerShape(99.dp))
-                        .clickable { onOpenCommunity() }
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    TinyText("See all", color = Clear30Colors.text.copy(alpha = 0.5f))
-                    Icon(sfSymbol("chevron.right"), null, tint = Clear30Colors.text.copy(alpha = 0.5f), modifier = Modifier.size(12.dp))
-                }
-            }
-
-            if (posts.isEmpty()) {
-                SmallText("Be the first to share today.", color = Clear30Colors.text.copy(alpha = 0.5f))
+    // iOS DayPostCommunity (TodayFeedCommunity.swift): a FULL-PAGE-height
+    // horizontal pager — one full card per post ("Community Responses" heading,
+    // title, dim body, footer pinned by a Spacer) plus a trailing
+    // share-your-experience page (W12).
+    val pageCount = posts.size + 1
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { pageCount })
+    Column(Modifier.fillMaxSize()) {
+        androidx.compose.foundation.pager.HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            pageSpacing = Dimens.cardSpacing,
+        ) { page ->
+            if (page < posts.size) {
+                DayPostCard(posts[page]) { onOpenPost(posts[page]) }
             } else {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-                    items(posts) { post -> CommunityPreview(post) { onOpenPost(post) } }
-                }
+                CreateDayPostCard(onOpenCommunity)
             }
+        }
+        if (pageCount > 1) {
+            // Page dots like the other carousels (iOS FeedView pageDots).
+            FeedPagerDots(
+                count = pageCount,
+                current = pagerState.currentPage,
+                modifier = Modifier
+                    .align(androidx.compose.ui.Alignment.CenterHorizontally)
+                    .padding(top = Dimens.cardSpacing / 2),
+            )
+        }
+    }
+}
 
+/** One full-height community post page (iOS `DayPostView`). */
+@Composable
+private fun DayPostCard(post: Post, onClick: () -> Unit) {
+    Clear30Card(modifier = Modifier.fillMaxSize().clickable { onClick() }) {
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+            SmallTextHighlighted(
+                formats = listOf(org.clear30.views.components.HighlightedTextFormat("Community Responses", highlighted = true)),
+                highlightBrush = Clear30Gradients.community,
+            )
+            Heading3(post.title)
+            if (post.body.isNotBlank()) {
+                SmallText(post.body, color = Clear30Colors.text.copy(alpha = 0.5f))
+            }
+            Spacer(Modifier.weight(1f))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                TinyText("Tap to see more", color = Clear30Colors.text.copy(alpha = 0.5f))
+                Spacer(Modifier.weight(1f))
+                Icon(sfSymbol("bubble.fill"), null, tint = Clear30Colors.text.copy(alpha = 0.25f), modifier = Modifier.size(12.dp))
+                Spacer(Modifier.size(Dimens.cardSpacing / 4))
+                TinyText("${post.totalCommentsCount}", color = Clear30Colors.text.copy(alpha = 0.25f))
+                Spacer(Modifier.size(Dimens.cardSpacing / 2))
+                Icon(sfSymbol("chart.bar.fill"), null, tint = Clear30Colors.text.copy(alpha = 0.25f), modifier = Modifier.size(12.dp))
+                Spacer(Modifier.size(Dimens.cardSpacing / 4))
+                TinyText("${post.viewCount}", color = Clear30Colors.text.copy(alpha = 0.25f))
+            }
+        }
+    }
+}
+
+/** Trailing share-your-experience page (iOS `CreateDayPostView`). */
+@Composable
+private fun CreateDayPostCard(onOpenCommunity: () -> Unit) {
+    Clear30Card(modifier = Modifier.fillMaxSize()) {
+        Column(
+            Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Heading3("Share your experience")
+            SmallText(
+                "Your story could help someone today.",
+                color = Clear30Colors.text.copy(alpha = 0.5f),
+            )
             DefaultButton(
-                "Share your experience",
+                "Enter the Community",
                 gradient = Clear30Gradients.community,
                 modifier = Modifier.fillMaxWidth(),
             ) { onOpenCommunity() }

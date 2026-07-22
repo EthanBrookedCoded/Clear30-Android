@@ -1,5 +1,6 @@
 package org.clear30.views.newuser.assessment
 
+import kotlinx.coroutines.launch
 import org.clear30.data.model.AffirmationCard
 import org.clear30.data.model.AssessmentInfoData
 import org.clear30.data.model.AssessmentInfoDataID
@@ -8,31 +9,52 @@ import org.clear30.data.model.AssessmentQuestions
 import org.clear30.data.model.BreakReasonType
 import org.clear30.data.model.ExperimentKey
 import org.clear30.data.model.NormativeData
+import org.clear30.data.model.PlainDate
 import org.clear30.data.model.ProgramAssessmentResponse
+import org.clear30.data.model.RemoteAssessmentQuestion
 import org.clear30.data.model.getSingleOption
+import org.clear30.data.supabase.SupabaseController
+import org.clear30.data.supabase.getNormativeData
+import org.clear30.data.supabase.getRemoteAssessmentQuestions
 
 /**
  * AssessmentSlides3 — the NEW-onboarding slide script, ported from
  * AssessmentSlides3.swift. Builds the slide sequence and the branching follow-ups.
  *
- * Pragmatic port for visual parity: the full **clear30** and **moderation/life**
- * paths are wired faithfully (question order, auto-affirmations, the credibility →
- * referral → fair-trial → commitment tail). Simplified vs iOS: guardian/adolescent
- * branches, remote A/B questions, and the bespoke custom views (pain-point chart,
- * dream-outcome, affirmation-cards) — those render via their [AssessmentInfoDataID]
- * presentation in AssessmentInfoSlide until the chart renderers land (L2b).
+ * Hardcodes iOS's SHORT flow (`assessment-short-flow` = show 100% in prod, coded
+ * in rather than experiment-read per §17-Q22): no consumption-method, biological
+ * sex, previous-break, symptoms, program-confirmation, credibility, referral, or
+ * fair-trial slides — `clear30Recommendation` routes straight to the trigger
+ * question for everyone, and moderation users diverge only at submission
+ * (choseClear30/LO-Use-State are auto-set on the What-brings-you-here answer,
+ * exactly like iOS). Remote questions (`programs.remote_assessment_questions`)
+ * and the live normative-data fetch are ported; only the guardian/adolescent
+ * branches remain unported (out of scope).
  */
 object AssessmentSlides3 {
 
     var name: String = ""
+    private var normativeData: List<NormativeData> = NormativeData.defaultData
+    private var remoteAssessmentQuestions: List<RemoteAssessmentQuestion> = emptyList()
 
     fun addInitialSlides(viewModel: AssessmentViewModel) {
         name = ""
+        normativeData = NormativeData.defaultData
+        remoteAssessmentQuestions = emptyList()
         viewModel.slidesWithCompletions.clear()
         viewModel.slidesWithCompletions.addAll(
             listOf(welcomeTypingSlide(), whatBringsYouHereQuestion()),
         )
-        // (iOS also fetches normative + remote questions + guardian here — backend, deferred)
+        // Best-effort background fetches, like iOS: live normative data + the
+        // backend-defined injected questions. Slides built before a response
+        // lands just use the defaults / no injection.
+        viewModel.scope.launch {
+            SupabaseController.getNormativeData()?.let { normativeData = it }
+        }
+        viewModel.scope.launch {
+            remoteAssessmentQuestions = SupabaseController.getRemoteAssessmentQuestions()
+        }
+        // (iOS also checks a guardian code here — adolescent mode, out of scope.)
     }
 
     fun addNextSlides(
@@ -78,18 +100,12 @@ object AssessmentSlides3 {
                     AssessmentQuestionID.HELP_HARM.raw -> slidesToAdd.add(ageQuestion())
 
                     AssessmentQuestionID.AGE.raw -> {
-                        if (viewModel.experimentController.showFeature(ExperimentKey.assessmentBiologicalSex, false)) {
-                            slidesToAdd.add(biologicalSexQuestion())
-                        }
                         slidesToAdd.add(whereYouAre())
                         slidesToAdd.add(painPoint(viewModel))
                     }
 
                     AssessmentQuestionID.TRIGGER.raw -> {
-                        slidesToAdd.add(triggersAffirmationSlide())
-                        slidesToAdd.add(assessmentCredibility())
-                        slidesToAdd.add(referral())
-                        slidesToAdd.add(fairTrialSlide())
+                        slidesToAdd.add(triggersAffirmationSlide(viewModel))
                         slidesToAdd.add(commitmentQuestion())
                     }
                 }
@@ -111,27 +127,70 @@ object AssessmentSlides3 {
                         slidesToAdd.add(dreamOutcome(viewModel))
                     }
                     AssessmentInfoDataID.clear30Recommendation ->
-                        slidesToAdd.add(if (viewModel.choseClear30) clear30ProgramConfirmation() else lifeProgramConfirmation())
-                    AssessmentInfoDataID.clear30Context -> {
-                        slidesToAdd.add(previousBreakQuestion())
-                        if (viewModel.experimentController.showFeature(ExperimentKey.onboardingSymptoms, false)) {
-                            slidesToAdd.add(symptomsQuestion())
-                        }
+                        // Short flow: everyone (incl. moderation/Life users, whose
+                        // LO_USE_STATE was auto-set at What-brings-you-here) goes
+                        // straight to the trigger question; Life routing happens
+                        // at submission only, like iOS.
                         slidesToAdd.add(triggersQuestion())
-                    }
-                    AssessmentInfoDataID.lifeContext -> {
-                        // §17-Q2: the ONLY route into Life is "Moderation" on
-                        // What-brings-you-here, which auto-sets LO_USE_STATE=1 —
-                        // don't re-ask moderation-vs-weed-free (deliberate
-                        // divergence from iOS, which still shows modAbsQuestion).
-                        slidesToAdd.add(assessmentCredibility())
-                        slidesToAdd.add(referral())
-                        slidesToAdd.add(fairTrialSlide())
-                        slidesToAdd.add(commitmentQuestion())
-                    }
                     else -> Unit
                 }
             }
+        }
+
+        // Remote assessment questions (iOS AssessmentSlides3.swift:297-342):
+        // backend-defined questions are injected right after the slide whose id
+        // matches after_question_id — question slides match on strippedPrompt,
+        // info slides on the id raw (e.g. "triggers_affirmation").
+        val afterId = when (val s = currentSlide.slide) {
+            is AssessmentSlide.Question -> s.question.strippedPrompt
+            is AssessmentSlide.Information -> s.data.id?.raw
+        }
+        val remoteSlides = remoteAssessmentQuestions
+            .filter { it.enabled && it.afterQuestionId == afterId }
+            .map { AssessmentSlideWithCompletion(AssessmentSlide.Question(it.toProgramAssessmentQuestion())) }
+        if (remoteSlides.isNotEmpty()) {
+            if (slidesToAdd.isEmpty()) {
+                // No branch slides of our own: re-append the already-queued
+                // pending slides after the remote questions (minus a duplicate
+                // of the affirmation we're inserting, and minus copies of the
+                // remote questions themselves — going back and forward re-runs
+                // this builder, and without that filter every round-trip
+                // prepends the remote questions on top of the copies already
+                // sitting in the pending list, duplicating them), since the
+                // append below replaces everything past the current slide.
+                val affirmationId = affirmationSlide?.data?.id
+                val remotePrompts = remoteSlides
+                    .mapNotNull { (it.slide as? AssessmentSlide.Question)?.question?.strippedPrompt }
+                    .toSet()
+                slidesToAdd.addAll(
+                    viewModel.slidesWithCompletions.drop(currentIndex + 1).filterNot { swc ->
+                        val info = (swc.slide as? AssessmentSlide.Information)?.data
+                        val prompt = (swc.slide as? AssessmentSlide.Question)?.question?.strippedPrompt
+                        (affirmationId != null && info?.id == affirmationId) || prompt in remotePrompts
+                    },
+                )
+            }
+            slidesToAdd.addAll(0, remoteSlides)
+        }
+
+        // Affirmation-ONLY completion (no branch slides, no remote questions):
+        // iOS `insertAffirmationSlide` SPLICES the affirmation in after the
+        // current slide without clearing the pending queue — the truncate-and-
+        // append below would instead wipe every queued follow-up slide.
+        val affirmation = affirmationSlide
+        if (slidesToAdd.isEmpty() && affirmation != null) {
+            val insert = AssessmentSlideWithCompletion(affirmation)
+            val next = viewModel.slidesWithCompletions.getOrNull(currentIndex + 1)
+            val nextInfo = (next?.slide as? AssessmentSlide.Information)?.data
+            val questionAffirmations =
+                (currentSlide.slide as? AssessmentSlide.Question)?.question?.affirmations.orEmpty()
+            if (nextInfo != null && nextInfo in questionAffirmations) {
+                // Re-answering replaced the choice — swap the stale affirmation.
+                viewModel.slidesWithCompletions[currentIndex + 1] = insert
+            } else {
+                viewModel.slidesWithCompletions.add(currentIndex + 1, insert)
+            }
+            return
         }
 
         // Affirmation comes right after the current slide, then the branch slides.
@@ -170,7 +229,6 @@ object AssessmentSlides3 {
 
     private fun addUseQuestions(into: MutableList<AssessmentSlideWithCompletion>, vm: AssessmentViewModel) {
         into.add(daysUsingQuestion())
-        into.add(consumptionMethodQuestion())
         if (vm.experimentController.showFeature(ExperimentKey.assessmentUsageDuration, false)) {
             into.add(usageDurationQuestion())
         }
@@ -232,10 +290,6 @@ object AssessmentSlides3 {
         AssessmentInfoData(id = AssessmentInfoDataID.socialProof, title = "", subtitle = "", body = "", primaryButtonText = "I'm Next"),
     )
 
-    private fun assessmentCredibility() = info(
-        AssessmentInfoData(id = AssessmentInfoDataID.credibility, title = "", subtitle = "", body = "", primaryButtonText = "Looks Solid"),
-    )
-
     private fun breakReasonQuestion() = question(AssessmentQuestions.breakReason)
 
     private fun thenWhatQuestion() = question(
@@ -277,17 +331,12 @@ object AssessmentSlides3 {
     }
 
     private fun daysUsingQuestion() = question(AssessmentQuestions.daysUsing.copy(prompt1 = "Now, let's understand your use a bit more."))
-    private fun consumptionMethodQuestion() = question(AssessmentQuestions.consumptionMethod.copy(prompt1 = "On the days you use,"))
     private fun usageDurationQuestion() = question(AssessmentQuestions.usageDuration)
     private fun moneySpentQuestion() = question(AssessmentQuestions.moneySpent)
     private fun helpHarmQuestion() = question(AssessmentQuestions.helpHarm)
     private fun ageQuestion() = question(AssessmentQuestions.age)
-    private fun biologicalSexQuestion() = question(AssessmentQuestions.biologicalSex)
-    private fun previousBreakQuestion() = question(AssessmentQuestions.previousBreak)
-    private fun symptomsQuestion() = question(AssessmentQuestions.symptoms)
     private fun triggersQuestion() = question(AssessmentQuestions.triggers)
     private fun commitmentQuestion() = question(AssessmentQuestions.commitment)
-    private fun referral() = question(AssessmentQuestions.referral)
 
     private fun whereYouAre() = info(
         AssessmentInfoData(
@@ -304,8 +353,8 @@ object AssessmentSlides3 {
         val daysIdx = vm.responses[AssessmentQuestionID.DAYS_USING.raw]?.responses?.firstOrNull()
         val percentile = daysIdx?.let { idx ->
             val key = NormativeData.weeklyUsageMapping[idx + 1] ?: "Daily (every day)"
-            (NormativeData.defaultData.firstOrNull { it.frequency == key }
-                ?: NormativeData.defaultData.lastOrNull())?.percentile_more_than
+            (normativeData.firstOrNull { it.frequency == key }
+                ?: normativeData.lastOrNull())?.percentile_more_than
         }
         return info(
             // iOS renders the pain-point chart on a WHITE background (the red
@@ -354,47 +403,48 @@ object AssessmentSlides3 {
                 dreamOutcomeSavings = monthly,
                 overrideBackgroundGradient = false,
             ),
+        ) { viewModel, _ ->
+            // iOS AssessmentSlides3.swift:887-895: completing the dream-outcome
+            // slide auto-writes a Start-Date response = tomorrow, so the
+            // submitted program_assessment_responses row carries the same
+            // "Start-Date" key prod iOS rows do (handleBreaks reads it too —
+            // tomorrow's start ⇒ Day 0 = today, no bridge, same as the
+            // fallback, so only the payload changes).
+            viewModel.responses[AssessmentQuestionID.START_DATE.raw] = ProgramAssessmentResponse(
+                AssessmentQuestions.clear30Start.copy(
+                    options = listOf(PlainDate.from(org.clear30.util.now()).adding(days = 1).dateString),
+                ),
+                listOf(0),
+            )
+        }
+    }
+
+    private fun triggersAffirmationSlide(vm: AssessmentViewModel): AssessmentSlideWithCompletion {
+        // One card per chosen trigger (iOS triggersAffirmationSlide): the
+        // trigger's emoji + label with its affirmation line underneath,
+        // rendered through AffirmationCardsView like the goals slide.
+        val resp = vm.responses[AssessmentQuestionID.TRIGGER.raw]
+        val options = resp?.question?.displayedOptions ?: resp?.question?.options ?: emptyList()
+        val affirmations = resp?.question?.affirmations ?: emptyList()
+        val cards = resp?.responses.orEmpty().mapNotNull { idx ->
+            val option = options.getOrNull(idx) ?: return@mapNotNull null
+            val affirmation = affirmations.getOrNull(idx) ?: return@mapNotNull null
+            AffirmationCard(
+                emoji = option.substringBefore(' '),
+                title = option.substringAfter(' ').trim(),
+                subtitle = affirmation.body,
+            )
+        }
+        return info(
+            AssessmentInfoData(
+                id = AssessmentInfoDataID.triggersAffirmation,
+                title = "Clear30 was made for you.",
+                subtitle = "",
+                body = "We've helped others __just like you__ overcome their triggers and __take back control__.",
+                primaryButtonText = "Finish Up",
+                affirmationCards = cards,
+            ),
         )
     }
 
-    private fun clear30ProgramConfirmation() = info(
-        AssessmentInfoData(
-            id = AssessmentInfoDataID.clear30Context,
-            title = "Now let's fit Clear30 to you.",
-            subtitle = "",
-            body = "Now we'll shape Clear30 around how you actually live, matching your pace, your rhythm, your day-to-day.",
-            primaryButtonText = "Make It Mine",
-        ),
-    )
-
-    private fun lifeProgramConfirmation() = info(
-        AssessmentInfoData(
-            id = AssessmentInfoDataID.lifeContext,
-            title = "Your Program:\nThe Better Life Program",
-            subtitle = "",
-            body = "We built this app to be more than a break.\n\nWith the Better Life Program, get daily content designed to help you grow as a person, track your use, and start a structured break at any point.",
-            systemImageName = "hand.thumbsup.fill",
-        ),
-    )
-
-    private fun triggersAffirmationSlide() = info(
-        AssessmentInfoData(
-            id = AssessmentInfoDataID.triggersAffirmation,
-            title = "Clear30 was made for you.",
-            subtitle = "",
-            body = "We've helped others __just like you__ overcome their triggers and __take back control__.",
-            primaryButtonText = "Finish Up",
-        ),
-    )
-
-    private fun fairTrialSlide() = info(
-        AssessmentInfoData(
-            id = null,
-            title = "Clear30 is Free for You to Try",
-            subtitle = "",
-            body = "After your trial, we depend on your support to keep delivering the best evidence-backed tools so you can stay committed to change.",
-            primaryButtonText = "That's fair",
-            imageName = "fair_trial_comparison",
-        ),
-    )
 }

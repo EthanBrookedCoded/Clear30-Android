@@ -29,19 +29,13 @@ import org.clear30.util.now
  */
 object AchievementEngine {
 
-    /** Pull the integer `target` from checkParams, trying the common iOS keys. */
-    private fun target(def: AchievementDefinition): Int? {
-        val keys = listOf("min_days", "min_total", "day", "value", "target", "count")
-        for (k in keys) {
-            val v = def.checkParams[k] as? JsonPrimitive ?: continue
-            v.intOrNull?.let { return it }
-        }
-        return null
-    }
-
-    /** Read a single int checkParam by exact key (REDUCTION uses percentage/period_days). */
+    /** Read a single int checkParam by exact key. */
     private fun intParam(def: AchievementDefinition, key: String): Int? =
         (def.checkParams[key] as? JsonPrimitive)?.intOrNull
+
+    /** Read a single string checkParam by exact key. */
+    private fun stringParam(def: AchievementDefinition, key: String): String? =
+        (def.checkParams[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
 
     /**
      * REDUCTION — ported from iOS `ReductionChecker`. Compares smoking-day frequency
@@ -92,18 +86,38 @@ object AchievementEngine {
     private fun totalSoberDays(program: Program): Int =
         program.dayInfo.values.count { it.sober == true }
 
-    private fun daysTracked(program: Program): Int = program.dayInfo.size
-
-    /** True if [def]'s criteria are currently satisfied by the user's state. */
-    fun isEarned(def: AchievementDefinition, program: Program, @Suppress("UNUSED_PARAMETER") userInfo: UserInfo): Boolean {
-        // REDUCTION reads its own params (percentage/period_days), so it bypasses the
-        // shared integer-`target` lookup the threshold check-types rely on.
-        if (def.checkType == AchievementCheckType.REDUCTION) return reductionEarned(def, program)
-        val t = target(def) ?: return false
-        return when (def.checkType) {
-            AchievementCheckType.STREAK -> currentSoberStreak(program) >= t
-            AchievementCheckType.CUMULATIVE -> totalSoberDays(program) >= t
-            AchievementCheckType.MILESTONE -> program.currentDay >= t
+    /**
+     * True if [def]'s criteria are currently satisfied by the user's state.
+     * Params mirror iOS AchievementManager's checkers (and the live
+     * `achievements.definitions` rows) EXACTLY:
+     *  - streak / cumulative: `{days: Int}`
+     *  - milestone: `{type: "money_saved", amount}` or
+     *    `{type: "program_day", day, program}` (program must match the current
+     *    break's type id, e.g. "clear30")
+     *  - reduction: `{percentage, period_days}`
+     */
+    fun isEarned(def: AchievementDefinition, program: Program, @Suppress("UNUSED_PARAMETER") userInfo: UserInfo): Boolean =
+        when (def.checkType) {
+            AchievementCheckType.STREAK ->
+                intParam(def, "days")?.let { currentSoberStreak(program) >= it } == true
+            AchievementCheckType.CUMULATIVE ->
+                intParam(def, "days")?.let { totalSoberDays(program) >= it } == true
+            AchievementCheckType.MILESTONE -> when (stringParam(def, "type")) {
+                "money_saved" -> {
+                    val amount = intParam(def, "amount")
+                    val currentBreak = program.currentBreak
+                    val saved = currentBreak?.let { program.getTotalMoneySavedOverBreak(it) }
+                    amount != null && saved != null && saved >= amount
+                }
+                "program_day" -> {
+                    val day = intParam(def, "day")
+                    val currentBreak = program.currentBreak
+                    day != null && currentBreak != null &&
+                        currentBreak.type.id == stringParam(def, "program") &&
+                        currentBreak.currentBreakDay >= day
+                }
+                else -> false
+            }
             // COUNT achievements are ACTIVITY counts (claire_conversation, meditation,
             // community_post, …), NOT day counts. The app doesn't track per-activity
             // totals yet, and evaluating them against `daysTracked` falsely earns a
@@ -113,6 +127,20 @@ object AchievementEngine {
             AchievementCheckType.COUNT -> false
             AchievementCheckType.REDUCTION -> reductionEarned(def, program)
         }
+
+    /**
+     * Load the cache, self-priming the definitions from the backend when the
+     * cache is empty (the app-load refresh can race auth restoration and come
+     * up empty — without this a check-in made before any successful refresh
+     * would silently award nothing, forever), then evaluate + persist.
+     */
+    suspend fun evaluateNow(userInfo: UserInfo, program: Program) {
+        var achievementData = Clear30Store.loadAchievementData()
+        if (achievementData.definitions.isEmpty()) {
+            org.clear30.data.supabase.refreshAchievementsCache(userInfo.userID)
+            achievementData = Clear30Store.loadAchievementData()
+        }
+        syncNewlyEarned(achievementData, userInfo, program)
     }
 
     /**
@@ -136,7 +164,8 @@ object AchievementEngine {
             .filter { isEarned(it, program, userInfo) }
             .toList()
 
-        if (newlyEarned.isEmpty()) return
+        val hasUnsyncedBacklog = achievementData.earnedAchievements.any { it.isSynced != true }
+        if (newlyEarned.isEmpty() && !hasUnsyncedBacklog) return
 
         val nowIso = now().toString()
         newlyEarned.forEach { def ->
@@ -168,21 +197,25 @@ object AchievementEngine {
         }
         Clear30Store.save(achievementData)
 
-        // Push each to the backend. Flag isSynced individually so a network
-        // failure on one doesn't prevent the others from being attempted.
-        newlyEarned.forEach { def ->
+        // Push every unsynced row — the newly earned AND any earlier rows whose
+        // insert failed (network blip etc.), so the backlog retries on every
+        // evaluation instead of being stranded forever. Flag isSynced
+        // individually so one failure doesn't block the others.
+        achievementData.earnedAchievements.filter { it.isSynced != true }.forEach { ua ->
             val err = SupabaseController.addUserAchievement(
                 UserAchievementInsert(
                     userId = userInfo.userID,
-                    achievementKey = def.key,
-                    earnedAt = nowIso,
+                    achievementKey = ua.achievementKey,
+                    earnedAt = ua.earnedAt,
                     customData = JsonObject(emptyMap()),
                 ),
             )
-            if (err == null) {
-                achievementData.earnedAchievements
-                    .firstOrNull { it.achievementKey == def.key && it.isSynced != true }
-                    ?.isSynced = true
+            if (err == null || err.message?.contains("duplicate key") == true) {
+                // Duplicate key = the row already exists server-side (an earlier
+                // push landed but the local flag was lost) — that IS synced.
+                ua.isSynced = true
+            } else {
+                android.util.Log.w("Achievements", "user_achievements insert failed for ${ua.achievementKey}: $err")
             }
         }
         Clear30Store.save(achievementData)

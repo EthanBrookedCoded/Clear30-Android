@@ -89,12 +89,22 @@ suspend fun refreshAchievementsCache(userID: String) {
     val earned = SupabaseController.getUserAchievements(userID)
     if (defs.isEmpty() && earned.isEmpty()) return  // probably a network failure
     val ad = org.clear30.data.Clear30Store.loadAchievementData()
-    ad.definitions = defs.toMutableList()
-    // Preserve any locally-tracked isVisited flags across the refresh so freshly
-    // synced achievements stay "New" until the user opens them.
-    val previouslyVisited = ad.earnedAchievements.filter { it.isVisited == true }.map { it.achievementKey }.toSet()
-    ad.earnedAchievements = earned.map { ua ->
-        if (ua.achievementKey in previouslyVisited) ua.apply { isVisited = true } else ua
-    }.toMutableList()
+    if (defs.isNotEmpty()) ad.definitions = defs.toMutableList()
+    // Only rebuild the earned list when the server actually returned rows —
+    // getUserAchievements returns emptyList() on FAILURE too, and rebuilding
+    // from an empty read would wipe already-pushed local earns, after which the
+    // next evaluation re-awards them (duplicate analytics, "New" badges
+    // reappearing, duplicate inserts). Preserve local isVisited flags and keep
+    // unsynced local rows (failed pushes) across the merge.
+    if (earned.isNotEmpty()) {
+        val previouslyVisited = ad.earnedAchievements.filter { it.isVisited == true }.map { it.achievementKey }.toSet()
+        val serverKeys = earned.map { it.achievementKey }.toSet()
+        val unsyncedLocal = ad.earnedAchievements.filter { it.isSynced != true && it.achievementKey !in serverKeys }
+        ad.earnedAchievements = (
+            earned.map { ua ->
+                if (ua.achievementKey in previouslyVisited) ua.apply { isVisited = true } else ua
+            }.onEach { it.isSynced = true } + unsyncedLocal
+            ).toMutableList()
+    }
     org.clear30.data.Clear30Store.save(ad)
 }

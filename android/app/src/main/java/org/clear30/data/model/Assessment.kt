@@ -113,7 +113,12 @@ value class AssessmentInfoDataID(val raw: String) {
         val welcomeTyping = AssessmentInfoDataID("welcome_typing")
         val clear30Context = AssessmentInfoDataID("clear30_context")
         val lifeContext = AssessmentInfoDataID("life_context")
-        val planPath = AssessmentInfoDataID("plan_path")
+        // iOS uses `goals_affirmation` for BOTH the WBYH plan-path slides and
+        // the break-reason goals slide (the custom view is attached per-slide
+        // there, id-collision-free). Android's id→view dispatch discriminates
+        // on `affirmationCards` instead — the raw must match iOS so analytics
+        // `type` values and remote `after_question_id` matching line up.
+        val planPath = AssessmentInfoDataID("goals_affirmation")
         // New-break / mid-pilot / post-assessment flows (Wave 6).
         val newBreakLoading = AssessmentInfoDataID("new_break_loading")
         val midPilotAssessment = AssessmentInfoDataID("mid_pilot_assessment")
