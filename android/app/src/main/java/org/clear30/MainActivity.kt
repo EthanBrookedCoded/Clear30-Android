@@ -1,6 +1,7 @@
 package org.clear30
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -41,7 +42,15 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleDeepLink(intent: Intent?) {
-        intent?.data?.let { AppState.setPendingUrl(it) }
+        if (intent == null) return
+        // VIEW-intent deep links (`.onOpenURL`) arrive as `intent.data`, but
+        // notification TAPS deliver the route as the "deep_link" String extra
+        // (NotificationPostWorker + Clear30MessagingService build a launch Intent
+        // with `putExtra`, not a data URI). Honor both, or a slipped-nudge /
+        // content / FCM tap never routes (its extra was silently dropped).
+        val uri = intent.data
+            ?: intent.getStringExtra("deep_link")?.let { runCatching { Uri.parse(it) }.getOrNull() }
+        uri?.let { AppState.setPendingUrl(it) }
     }
 
     private fun observeScenePhase() {

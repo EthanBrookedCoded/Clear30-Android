@@ -207,10 +207,10 @@ fun AssessmentSocialProof(name: String, modifier: Modifier = Modifier) {
         modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(
-                vertical = Dimens.headingTopPadding,
-                horizontal = Dimens.scrollShadowFix,
-            ),
+            // No horizontal padding here: the parent AssessmentInfoSlide already
+            // applies Dimens.horizontalPadding (25dp). iOS nets the same by
+            // cancelling scrollShadowFix (+inner / -outer); we simply omit it.
+            .padding(vertical = Dimens.headingTopPadding),
     ) {
         PeopleCountSection(name = name, peopleCount = peopleCount)
         StatisticsSection(stats = data.stats)

@@ -10,6 +10,7 @@ import kotlinx.serialization.json.put
 import org.clear30.data.model.CustomCheckIn
 import org.clear30.data.model.CustomCheckInOption
 import org.clear30.data.model.DayInfoArraySerializer
+import org.clear30.data.model.LenientInstantSerializer
 import org.clear30.data.model.PlainDate
 import org.clear30.data.model.ProgramBreak
 import org.clear30.data.model.ProgramBreakType
@@ -43,7 +44,9 @@ data class SupabaseContentInfo(
 data class SupabaseProgramBreak(
     val name: String,
     val type: String,
+    @Serializable(with = LenientInstantSerializer::class)
     val start_date: Instant,
+    @Serializable(with = LenientInstantSerializer::class)
     val end_date_override: Instant? = null,
     val assessment_response_id: Int? = null,
     val normative_feedback: ProgramNormativeFeedback? = null,
@@ -102,6 +105,7 @@ data class SupabaseTriggerResponse(
     val if_text: String,
     val feeling_text: String? = null,
     val then_text: String,
+    @Serializable(with = LenientInstantSerializer::class)
     val created_at: Instant,
 )
 
@@ -111,6 +115,7 @@ data class SupabaseUserData(
     val id: String,
     val name: String = "",
     val emoji: String? = null,
+    @Serializable(with = LenientInstantSerializer::class)
     val last_smoked: Instant? = null,
     val your_why: String? = null,
     @Serializable(with = DayInfoArraySerializer::class)
@@ -119,6 +124,7 @@ data class SupabaseUserData(
     val content_info: Map<String, SupabaseContentInfo>? = null,
     val program_breaks: List<SupabaseProgramBreak>? = null,
     val trigger_responses: List<SupabaseTriggerResponse>? = null,
+    @Serializable(with = LenientInstantSerializer::class)
     val created_at: Instant? = null,
 )
 

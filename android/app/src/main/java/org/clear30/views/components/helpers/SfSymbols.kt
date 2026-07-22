@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.rounded.Notes
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.EventAvailable
+import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.Refresh
@@ -181,6 +182,8 @@ fun sfSymbol(name: String): ImageVector = when (name) {
     "info.circle.fill", "info.circle", "info" -> Icons.Rounded.Info
     "arrow.triangle.2.circlepath", "arrow.counterclockwise", "arrow.2.circlepath" -> Icons.Rounded.Autorenew
     "slider.vertical.3", "slider.horizontal.3", "line.3.horizontal.decrease" -> Icons.Rounded.Tune
+    // Library filter button (iOS AllMessagesView / AllReddits / AllYouTubes / AllMeditations header)
+    "line.3.horizontal.decrease.circle.fill", "line.3.horizontal.decrease.circle" -> Icons.Rounded.FilterList
     "arrow.left.and.right", "arrow.right.and.left", "arrow.left.arrow.right" -> Icons.Rounded.SwapHoriz
     "note.text", "note", "doc.plaintext" -> Icons.AutoMirrored.Rounded.Notes
     "figure.walk.departure", "figure.walk", "rectangle.portrait.and.arrow.right" -> Icons.AutoMirrored.Rounded.Logout

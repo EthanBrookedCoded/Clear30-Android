@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import kotlinx.datetime.Instant
@@ -57,18 +58,59 @@ internal fun DailyTopicsSection(
     onOpen: (ProgramMessage) -> Unit,
     onSeeAll: () -> Unit,
 ) {
-    val recent = program.contentInfo.values.flatMap { it.messages }.unlocked.reversed().take(3)
-    if (recent.isEmpty()) return
+    // iOS `recentUnlockedMessageGroups(limit: 3)` (ProgramContent.swift:134-147):
+    // the 3 most-recent fully-unlocked DAY groups, newest-first. W78: a day's
+    // second message (the assessment-response message) folds into the primary
+    // card as a badge — the same same-day grouping the full Messages list uses
+    // (W51) — instead of surfacing as its own Daily Topic row. Opening passes the
+    // primary; SupportTab's OpenMessage route rebuilds the whole day group from it.
+    val recentGroups = program.contentInfo.values
+        .map { it.messages }
+        .filter { group -> group.isNotEmpty() && group.all { it.unlocked } }
+        .sortedByDescending { it.first().unlockOn }
+        .take(3)
+    if (recentGroups.isEmpty()) return
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-        recent.forEach { msg ->
-            Clear30Card(modifier = Modifier.fillMaxWidth().pressScale { onOpen(msg) }, gradient = Clear30Gradients.clear30) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-                    SmallText("${msg.topicEmoji ?: "💬"} ${msg.topicTitle}", color = Color.White, modifier = Modifier.weight(1f), maxLines = 2)
-                    Box(
-                        Modifier.clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.25f))
-                            .padding(horizontal = Dimens.cardSpacing / 2, vertical = Dimens.cardSpacing / 4),
+        recentGroups.forEach { group ->
+            val primary = group.first()
+            val sub = group.getOrNull(1)
+            Clear30Card(modifier = Modifier.fillMaxWidth().pressScale { onOpen(primary) }, gradient = Clear30Gradients.clear30) {
+                Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+                        SmallText("${primary.topicEmoji ?: "💬"} ${primary.topicTitle}", color = Color.White, maxLines = 2)
+                        // Same-day sub-message pill (iOS MessageCard badge).
+                        sub?.let {
+                            Box(
+                                Modifier.clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.25f))
+                                    .padding(horizontal = Dimens.cardSpacing / 2, vertical = Dimens.cardSpacing / 4),
+                            ) {
+                                TinyText("${it.topicEmoji ?: "💬"} ${it.topicTitle}", color = Color.White, maxLines = 1)
+                            }
+                        }
+                    }
+                    // Day-N + progress pill matching the full message list (H37),
+                    // white-on-gradient variant for this clear30 card.
+                    val day = program.getBreak(primary.unlockOn)?.let { "Day ${it.getBreakDay(primary.unlockOn)}" }
+                        ?: primary.unlockOn.let { org.clear30.data.model.PlainDate.from(it) }.let { "${it.month}/${it.day}" }
+                    val progress = program.contentInfo[org.clear30.data.model.PlainDate.from(primary.unlockOn)]?.progress ?: 0.0
+                    val complete = progress >= 1.0
+                    Row(
+                        Modifier.clip(RoundedCornerShape(99.dp))
+                            .then(
+                                if (complete) Modifier.background(Color.White)
+                                else Modifier.progressRing(SolidColor(Color.White), progress.toFloat()),
+                            )
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
                     ) {
-                        TinyText(msg.unlockOn.shortDate(), color = Color.White, maxLines = 1)
+                        TinyText(day, color = if (complete) Clear30Colors.text else Color.White, maxLines = 1)
+                        Icon(
+                            sfSymbol(if (complete) "checkmark" else "arrow.right"),
+                            null,
+                            tint = if (complete) Clear30Colors.text else Color.White,
+                            modifier = Modifier.size(13.dp),
+                        )
                     }
                 }
             }

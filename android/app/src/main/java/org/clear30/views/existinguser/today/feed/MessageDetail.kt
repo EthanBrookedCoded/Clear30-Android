@@ -101,7 +101,7 @@ fun MessageDetail(
     // In-app overlays opened from the content pages.
     var webUrl by remember { mutableStateOf<String?>(null) }
     var redditUrl by remember { mutableStateOf<String?>(null) }
-    var journalPrompt by remember { mutableStateOf<String?>(null) }
+    var creatingJournalSeed by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(messages) {
         val unvisited = messages.filter { !it.visited }
@@ -137,7 +137,8 @@ fun MessageDetail(
                 m.instagramVideos?.takeIf { it.isNotEmpty() }?.let { add(ViewerPage.InstagramVideos(it)) }
                 m.reddits.forEach { add(ViewerPage.Reddit(it)) }
                 m.youTubes.forEach { add(ViewerPage.YouTube(it)) }
-                if (m.hasOnlyResources) add(ViewerPage.Resources(m.onlyResources))
+                // Plain "Resources" (non-reddit / non-youtube cross-links) are no
+                // longer surfaced — only reddit threads and YouTube videos (G34).
                 m.memberPerks?.forEach { add(ViewerPage.Perk(it)) }
                 m.clairePrompts.forEach { add(ViewerPage.Claire(it)) }
                 m.journalPrompts?.takeIf { it.isNotEmpty() }?.let { add(ViewerPage.Journal(it)) }
@@ -227,10 +228,9 @@ fun MessageDetail(
                     is ViewerPage.InstagramVideos -> VideosFeedCard(item.videos, focused = focused)
                     is ViewerPage.Reddit -> RedditFeedCard(item.res, userInfo, glow = glow?.let { Clear30Gradients.reddit }, onOpen = { redditUrl = it })
                     is ViewerPage.YouTube -> YouTubeFeedCard(item.res, userInfo, glow = glow?.let { Clear30Gradients.youtube }, focused = focused, onOpenWeb = { webUrl = it })
-                    is ViewerPage.Resources -> ResourcesCard(item.resources, userInfo, onOpen = { webUrl = it })
                     is ViewerPage.Perk -> MemberPerkFeedCard(item.perk, glow = glow?.let { Clear30Gradients.supplements }, onOpenWeb = { webUrl = it })
                     is ViewerPage.Claire -> ClairePromptFeedCard(item.prompt, userInfo, glow = glow?.let { Clear30Gradients.claire }, focused = focused)
-                    is ViewerPage.Journal -> JournalPromptsFeedCard(item.prompts, glow = glow?.let { Clear30Gradients.journals }, onJournal = { journalPrompt = it })
+                    is ViewerPage.Journal -> JournalPromptsFeedCard(item.prompts, glow = glow?.let { Clear30Gradients.journals }, onJournal = { creatingJournalSeed = it })
                     ViewerPage.FeedEnd -> FeedEndCelebration(
                         message = message,
                         focused = focused,
@@ -251,21 +251,25 @@ fun MessageDetail(
     // In-app overlays (kept outside the pager so they cover the screen).
     webUrl?.let { u -> WebViewDialog(u, onDismiss = { webUrl = null }) }
     redditUrl?.let { u -> RedditDialog(u, onDismiss = { redditUrl = null }) }
-    journalPrompt?.let { prompt ->
-        JournalOnTopicDialog(
-            prompt = prompt,
-            onDismiss = { journalPrompt = null },
-            onSave = { text ->
-                journalEntries?.let { je ->
-                    je.entries.add(JournalEntry(title = prompt, content = text, date = now()))
-                    scope.launch { Clear30Store.save(je) }
-                    Logger.logEvent(
-                        userInfo.loggingID,
-                        LogEventType.createdJournalEntry,
-                        mapOf(LogEventExtraDataType.TYPE to "text"),
-                    )
+    // Journal prompt → full-screen editor (G28), seeded with the prompt as title.
+    creatingJournalSeed?.let { seed ->
+        org.clear30.views.existinguser.profile.TextEntryEditor(
+            initialTitle = seed,
+            initialContent = "",
+            alreadyShared = false,
+            onClose = { title, body ->
+                if (title.isNotBlank() && body.isNotBlank()) {
+                    journalEntries?.let { je ->
+                        je.entries.add(JournalEntry(title = title, content = body, date = now()))
+                        scope.launch { Clear30Store.save(je) }
+                        Logger.logEvent(
+                            userInfo.loggingID,
+                            LogEventType.createdJournalEntry,
+                            mapOf(LogEventExtraDataType.TYPE to "text"),
+                        )
+                    }
                 }
-                journalPrompt = null
+                creatingJournalSeed = null
             },
         )
     }
@@ -282,35 +286,9 @@ private sealed interface ViewerPage {
     data class InstagramVideos(val videos: List<org.clear30.data.model.ProgramVideo>) : ViewerPage
     data class Reddit(val res: ProgramResource) : ViewerPage
     data class YouTube(val res: ProgramResource) : ViewerPage
-    data class Resources(val resources: List<ProgramResource>) : ViewerPage
     data class Perk(val perk: ProgramMemberPerk) : ViewerPage
     data class Claire(val prompt: ProgramClairePrompt) : ViewerPage
     data class Journal(val prompts: List<String>) : ViewerPage
     data object FeedEnd : ViewerPage
 }
 
-/** Non reddit/youtube cross-links, one page (each opens the in-app web viewer). */
-@Composable
-private fun ResourcesCard(resources: List<ProgramResource>, userInfo: UserInfo, onOpen: (String) -> Unit) {
-    Clear30Card(modifier = Modifier.fillMaxWidth()) {
-        Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-            SmallText("Resources", color = Clear30Colors.text.copy(alpha = 0.5f))
-            resources.forEach { res ->
-                Row(
-                    Modifier.fillMaxWidth().clickable {
-                        Logger.logEvent(userInfo.loggingID, LogEventType.openedContent, mapOf(LogEventExtraDataType.URL to res.url))
-                        onOpen(res.url)
-                    }.padding(vertical = Dimens.cardSpacing / 3),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
-                ) {
-                    Icon(sfSymbol("arrow.up.right"), contentDescription = null, tint = Clear30Colors.text)
-                    Column(Modifier.weight(1f)) {
-                        SmallText(res.title)
-                        TinyText(res.url, color = Clear30Colors.text.copy(alpha = 0.5f))
-                    }
-                }
-            }
-        }
-    }
-}

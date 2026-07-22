@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -115,6 +116,9 @@ fun AssessmentSlider(
     val initial = min + ((max - min) / 2.0).roundToInt()
     var value by remember { mutableFloatStateOf(initial.toFloat()) }
     val rounded = value.roundToInt().coerceIn(min, max)
+    // Last integer step we fired haptics for — updated synchronously inside the
+    // drag lambda so we fire exactly once per step crossing (not once per event).
+    val lastHaptic = remember { mutableIntStateOf(rounded) }
 
     var customMode by remember { mutableStateOf(false) }
     var customAmount by remember { mutableStateOf("") }
@@ -161,7 +165,11 @@ fun AssessmentSlider(
                 value = value,
                 valueRange = min.toFloat()..max.toFloat(),
                 onValueChange = { newValue ->
-                    if (newValue.roundToInt().coerceIn(min, max) != rounded) Haptics.mediumImpact()
+                    val stepped = newValue.roundToInt().coerceIn(min, max)
+                    if (stepped != lastHaptic.intValue) {
+                        Haptics.mediumImpact()
+                        lastHaptic.intValue = stepped
+                    }
                     value = newValue
                 },
                 onValueChangeFinished = { value = value.roundToInt().coerceIn(min, max).toFloat() },
@@ -290,6 +298,7 @@ fun AssessmentSpectrum(
     // iOS starts centered: value = (steps - 1) / 2.
     var value by remember { mutableFloatStateOf(((steps - 1) / 2).toFloat()) }
     val index = value.roundToInt().coerceIn(0, steps - 1)
+    val lastHaptic = remember { mutableIntStateOf(index) }
 
     Column(
         Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding),
@@ -302,7 +311,18 @@ fun AssessmentSpectrum(
         // variant (e.g. numeric steps) reads as a Heading1.
         if (index in displays.indices) {
             if (showDots) {
-                androidx.compose.material3.Text(displays[index], fontSize = 75.sp, modifier = Modifier.height(80.dp))
+                // Center the 75sp glyph in the fixed 80dp box with tight line
+                // metrics so the emoji's descender isn't clipped at the bottom.
+                Box(Modifier.height(80.dp), contentAlignment = Alignment.Center) {
+                    androidx.compose.material3.Text(
+                        displays[index],
+                        fontSize = 75.sp,
+                        lineHeight = 75.sp,
+                        style = androidx.compose.ui.text.TextStyle(
+                            platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
+                        ),
+                    )
+                }
             } else {
                 Heading1(displays[index])
             }
@@ -313,7 +333,11 @@ fun AssessmentSpectrum(
             steps = steps,
             showNotches = showDots,
             onValueChange = { newValue ->
-                if (newValue.roundToInt().coerceIn(0, steps - 1) != index) Haptics.mediumImpact()
+                val stepped = newValue.roundToInt().coerceIn(0, steps - 1)
+                if (stepped != lastHaptic.intValue) {
+                    Haptics.mediumImpact()
+                    lastHaptic.intValue = stepped
+                }
                 value = newValue
             },
             onValueChangeFinished = { value = value.roundToInt().coerceIn(0, steps - 1).toFloat() },

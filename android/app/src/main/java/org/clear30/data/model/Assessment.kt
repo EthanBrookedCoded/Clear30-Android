@@ -203,4 +203,29 @@ data class ProgramAssessmentQuestion(
 data class ProgramAssessmentResponse(
     val question: ProgramAssessmentQuestion,
     val responses: List<Int>,
-)
+) {
+    /**
+     * The chosen option strings, or null when none resolve (iOS
+     * `getMultiOptions(displayOptions:)`). [displayOptions] reads the
+     * user-facing `displayedOptions` variant (falling back to `options`).
+     */
+    fun getMultiOptions(displayOptions: Boolean = true): List<String>? {
+        val options = if (displayOptions) question.displayedOptions ?: question.options else question.options
+        val chosen = responses.mapNotNull { options.getOrNull(it) }
+        return chosen.ifEmpty { null }
+    }
+}
+
+/** iOS `[ProgramAssessmentResponse].sorted` — by question number. */
+val List<ProgramAssessmentResponse>.sortedByQuestion: List<ProgramAssessmentResponse>
+    get() = sortedBy { it.question.questionNumber }
+
+/**
+ * strippedPrompt -> chosen option strings for every answered question (iOS
+ * `[ProgramAssessmentResponse].toDictionary(displayOptions:)`). Feeds the
+ * paywall-targeting subscriber attributes and Claire's user context.
+ */
+fun List<ProgramAssessmentResponse>.toDictionary(displayOptions: Boolean = false): Map<String, List<String>> =
+    sortedByQuestion.mapNotNull { response ->
+        response.getMultiOptions(displayOptions)?.let { response.question.strippedPrompt to it }
+    }.toMap()

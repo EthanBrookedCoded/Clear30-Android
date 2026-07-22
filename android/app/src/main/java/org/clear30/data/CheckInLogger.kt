@@ -83,6 +83,24 @@ class CheckInLogger(
             mapOf(LogEventExtraDataType.SOBER to (sober?.toString() ?: "null")),
         )
 
+        // Post-slip nudge (iOS CheckInLogger.handleNotificationsAndSMS,
+        // CheckInLogger.swift:191-210), gated like iOS on this being the LATEST
+        // check-in (CheckInLogger.swift:87-95) — editing an old day must not
+        // re-time or cancel the pending nudge off stale state. A smoked check-in
+        // schedules the 90min–3h nudge (scheduleSlipped itself checks the active
+        // break + settings); a sober one cancels any pending nudge — they've
+        // already returned, so the "you slipped" push would be stale.
+        if (sober != null) {
+            val todayPlain = PlainDate.from(now())
+            val latestLoggedDay = program.dayInfo.entries
+                .filter { it.key <= todayPlain && it.value.sober != null }
+                .maxOfOrNull { it.key } ?: todayPlain
+            if (latestLoggedDay <= plainDate) {
+                if (!sober) NotificationHandler.scheduleSlipped(userInfo, program)
+                else NotificationHandler.removeSlipped()
+            }
+        }
+
         // Confetti celebrations fire inside the animated reward views themselves
         // (CheckInRewardViews.kt — weed-free timer / money saved pops), matching
         // the iOS per-reward ConfettiPop placement. We deliberately don't fire a

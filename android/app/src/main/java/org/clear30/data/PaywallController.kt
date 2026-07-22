@@ -24,8 +24,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.clear30.BuildConfig
 import org.clear30.data.model.EntitlementType
+import org.clear30.data.model.ProgramAssessmentResponse
 import org.clear30.data.model.SignUpType
 import org.clear30.data.model.UserInfo
+import org.clear30.data.model.toDictionary
 import org.clear30.util.justDay
 
 /**
@@ -51,12 +53,48 @@ object PaywallController {
     private val _externalTriggerOverride = MutableStateFlow<String?>(null)
     val externalTriggerOverride: StateFlow<String?> = _externalTriggerOverride.asStateFlow()
 
+    /** iOS sets `currentPaywallID` when a paywall renders and nils it on
+     *  disappear (Paywall.onDisappear) — `isHardPaywall` keys off it. */
+    fun setCurrentPaywallID(id: String?) { _currentPaywallID.value = id }
+
+    /** iOS Paywall.onDisappear — clear the render-scoped paywall state. */
+    fun clearPaywallPresentation() {
+        _currentPaywallID.value = null
+        _externalTriggerOverride.value = null
+    }
+
     /** RevenueCat init — call from Application.onCreate (Swift `initRevenueCat`). */
     fun initRevenueCat(context: Context) {
         if (BuildConfig.REVENUECAT_API_KEY.isBlank()) return
         Purchases.configure(
             PurchasesConfiguration.Builder(context, BuildConfig.REVENUECAT_API_KEY).build()
         )
+    }
+
+    /**
+     * True when a Helium API key is configured. When false the app uses the native
+     * RevenueCat paywall (`Paywall.kt`), exactly like a blank RevenueCat key no-ops
+     * purchases — so dev builds (both keys blank) keep the existing behavior.
+     */
+    fun heliumEnabled(): Boolean = BuildConfig.HELIUM_API_KEY.isNotBlank()
+
+    /**
+     * Boot the Helium SDK — call from Application.onCreate AFTER [initRevenueCat]
+     * (iOS `initHelium` runs in the AppDelegate / ContentView after RC configure).
+     * No-op without a key. The per-paywall RevenueCat purchase bridge
+     * (`RevenueCatDelegate`) is attached at present time in `HeliumPaywall`, where an
+     * Activity is available (its constructor requires one).
+     */
+    fun initHeliumSDK(context: Context) {
+        if (!heliumEnabled()) return
+        runCatching {
+            com.tryhelium.paywall.core.Helium.initialize(
+                context,
+                BuildConfig.HELIUM_API_KEY,
+                // Helium's config environment (matches iOS, which ships production).
+                com.tryhelium.paywall.core.HeliumEnvironment.PRODUCTION,
+            )
+        }.onFailure { android.util.Log.w("Paywall", "Helium init failed: ${it.message}") }
     }
 
     /**
@@ -91,10 +129,12 @@ object PaywallController {
                 }
             },
         )
-        val attrs = mutableMapOf<String, String?>("Name" to userInfo.name)
-        getUserParams(userInfo).forEach { (k, v) -> attrs[k] = v.toString() }
-        userProperties.forEach { (k, v) -> attrs[k] = v.toString() }
-        runCatching { purchases.setAttributes(attrs) }
+        // Push the paywall-targeting traits (iOS forwards them to Helium; Android's
+        // trait vehicle is the RC attribute store). Base params guarantee the
+        // standard keys even for a partial caller map; the caller's
+        // userProperties — which carry the assessment-response traits — win.
+        val merged = getUserParams(userInfo).also { it.putAll(userProperties) }
+        updateUserAttributes(userInfo, merged)
     }
 
     fun signOut(context: Context? = null) {
@@ -108,9 +148,37 @@ object PaywallController {
         context?.let { ShortcutHandler.removeQuickAction(it, ShortcutHandler.ID_MANAGE_SUB_STRIPE) }
     }
 
-    /** TODO(port): Helium init (Android SDK API differs from iOS). */
+    /**
+     * Identify the user to Helium and push the paywall-targeting traits (iOS
+     * `ContentView.initHelium` re-derives `getUserParams`). Helium's RevenueCat
+     * bridge keys off `revenueCatAppUserId` = the Supabase userID (the same
+     * appUserID [signIn] logs into RevenueCat). No-op without a Helium key — the
+     * traits still reach RevenueCat as subscriber attributes via [signIn].
+     */
     fun initHelium(userInfo: UserInfo, userProperties: Map<String, Any>, onInitialized: (() -> Unit)? = null) {
+        if (!heliumEnabled()) { onInitialized?.invoke(); return }
+        runCatching {
+            val identity = com.tryhelium.paywall.core.Helium.identity
+            identity.userId = userInfo.loggingID
+            identity.revenueCatAppUserId = userInfo.userID
+            val merged = getUserParams(userInfo).also { it.putAll(userProperties) }
+            identity.setUserTraits(heliumTraits(merged))
+        }.onFailure { android.util.Log.w("Paywall", "Helium identify failed: ${it.message}") }
         onInitialized?.invoke()
+    }
+
+    /** Map the [getUserParams] trait bag to Helium's typed trait arguments. */
+    internal fun heliumTraits(params: Map<String, Any>): com.tryhelium.paywall.core.HeliumUserTraits {
+        val traits = params.mapValues { (_, v) ->
+            when (v) {
+                is Boolean -> com.tryhelium.paywall.core.HeliumUserTraitsArgument.BooleanParam(v)
+                is Int -> com.tryhelium.paywall.core.HeliumUserTraitsArgument.IntParam(v)
+                is Long -> com.tryhelium.paywall.core.HeliumUserTraitsArgument.LongParam(v)
+                is Double -> com.tryhelium.paywall.core.HeliumUserTraitsArgument.DoubleParam(v)
+                else -> com.tryhelium.paywall.core.HeliumUserTraitsArgument.StringParam(v.toString())
+            }
+        }
+        return com.tryhelium.paywall.core.HeliumUserTraits(traits)
     }
 
     /** No-op on Android — Google Play / RevenueCat surface billing messages. */
@@ -252,19 +320,47 @@ object PaywallController {
     }
 
     /**
-     * Helium / paywall user traits (Swift `getUserParams`). Assessment-response
-     * fields are added once the assessment engine is ported (they need
-     * ProgramAssessmentResponse.toDictionary).
+     * Paywall-targeting user traits (Swift static `getUserParams(userInfo:assessmentResponses:)`).
+     * On iOS these become Helium traits; on Android they reach RevenueCat as
+     * subscriber attributes via [signIn] / [updateUserAttributes]. The
+     * assessment answers are expanded per-option to `"<strippedPrompt>-<i>"`
+     * (raw options) and `"<strippedPrompt>-display-<i>"` (displayed options),
+     * exactly as iOS does.
      */
-    fun getUserParams(userInfo: UserInfo): MutableMap<String, Any> = buildMap {
+    fun getUserParams(
+        userInfo: UserInfo,
+        assessmentResponses: List<ProgramAssessmentResponse> = emptyList(),
+    ): MutableMap<String, Any> = buildMap {
         put("Name", userInfo.name)
         put("random_int_num", (kotlin.math.abs(userInfo.userID.hashCode()) % 100) + 1)
-        put("apple_pay_enabled", false) // iOS-only
-        put("rc_entitlement", userInfo.currentEntitlementType?.name ?: "NA")
+        put("apple_pay_enabled", false) // iOS-only (StripeHandler.applePayEnabled)
+        put("QA", false) // iOS `Paywall.QA` compile-time flag
+        put("rc_entitlement", userInfo.currentEntitlementType?.rawValue ?: "NA")
         userInfo.signUpReturning?.let { put("returning_user", it) }
         userInfo.referralCode?.let { put("referral_code", it) }
-        // TODO(port): assessment-response options/display-options key expansion
+
+        // Assessment responses (raw options): "id-0", "id-1", ...
+        assessmentResponses.toDictionary(displayOptions = false).forEach { (key, values) ->
+            values.forEachIndexed { index, value -> put("$key-$index", value) }
+        }
+        // Assessment responses (display options): "id-display-0", "id-display-1", ...
+        assessmentResponses.toDictionary(displayOptions = true).forEach { (key, values) ->
+            values.forEachIndexed { index, value -> put("$key-display-$index", value) }
+        }
     }.toMutableMap()
+
+    /**
+     * Re-push the paywall-targeting traits as RevenueCat subscriber attributes.
+     * iOS refreshes these by re-running `initHelium` with fresh `getUserParams`
+     * (e.g. after a referral code is applied); Android's trait vehicle is the
+     * RC attribute store, so this is the equivalent. No-op without an API key.
+     */
+    fun updateUserAttributes(userInfo: UserInfo, userProperties: Map<String, Any>) {
+        if (BuildConfig.REVENUECAT_API_KEY.isBlank()) return
+        val attrs = mutableMapOf<String, String?>("Name" to userInfo.name)
+        userProperties.forEach { (k, v) -> attrs[k] = v.toString() }
+        runCatching { Purchases.sharedInstance.setAttributes(attrs) }
+    }
 }
 
 /** PaywallEvent — ported 1:1. */

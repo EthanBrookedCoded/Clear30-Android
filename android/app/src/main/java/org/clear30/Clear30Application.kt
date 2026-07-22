@@ -30,6 +30,10 @@ class Clear30Application : Application() {
         // RevenueCat (Swift AppDelegate.didFinishLaunching -> PaywallController.initRevenueCat)
         PaywallController.initRevenueCat(this)
 
+        // Helium paywall SDK — after RevenueCat (its RC bridge relies on the
+        // configured Purchases instance). No-op until HELIUM_API_KEY is set.
+        PaywallController.initHeliumSDK(this)
+
         // Audio focus / attributes baseline (iOS AVAudioSession setCategory:.playback
         // .mixWithOthers). ExoPlayer uses these as defaults when constructed via
         // [AudioBaseline.attributes]; the Meditations player honors them.

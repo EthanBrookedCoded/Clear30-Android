@@ -1,6 +1,18 @@
 package org.clear30.views.newuser
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +23,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
@@ -20,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,12 +46,21 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.clear30.data.AssessmentSubmissionHandler
 import org.clear30.data.Clear30Store
+import org.clear30.data.model.AssessmentQuestionID
+import org.clear30.data.model.BreakReasonType
 import org.clear30.data.model.OnboardingSetup
 import org.clear30.data.model.Program
 import org.clear30.data.model.SignUpType
@@ -56,13 +79,15 @@ import org.clear30.views.components.MiniText
 import org.clear30.views.components.OffWhiteInput
 import org.clear30.views.components.SmallText
 import org.clear30.views.components.TinyText
+import org.clear30.views.components.cardStyle
 import org.clear30.views.components.pressScale
 import org.clear30.views.components.sfSymbol
 import org.clear30.views.theme.Clear30Colors
+import org.clear30.views.theme.Haptics
 import org.clear30.views.theme.Clear30Gradients
 import org.clear30.views.theme.Dimens
 
-private enum class SignUpStep { INTRO, CONTACT, VERIFICATION, LOADING }
+private enum class SignUpStep { INTRO, CONTACT, VERIFICATION, LOADING, SETUP }
 
 /**
  * AllSignUp — ported from AllSignUp.swift + AllSignUpViewModel.swift. Phone/email
@@ -103,6 +128,10 @@ fun AllSignUp(
     // Set once the OTP verify succeeded — post-verify failures (restore/submit)
     // retry that part directly instead of burning the consumed code.
     var authVerified by remember { mutableStateOf(false) }
+    // Post-verify AccountSetupView state (iOS AllSignUp .loading case): null until
+    // the returning-user check resolves; new users hold on a Done button.
+    var isReturningUi by remember { mutableStateOf<Boolean?>(null) }
+    var setupDone by remember { mutableStateOf(false) }
 
     // Full contact string sent to Supabase: phone prefixes the region code (iOS
     // sends "\(phoneNumberPrefix)\(input)"); email is sent verbatim.
@@ -139,6 +168,9 @@ fun AllSignUp(
             when (step) {
                 SignUpStep.VERIFICATION -> { code = ""; step = SignUpStep.CONTACT }
                 SignUpStep.CONTACT -> { contact = ""; step = SignUpStep.INTRO }
+                // Mid-flight network steps: backing out would abandon a live
+                // verify/restore/submit — swallow the tap (iOS hides back here).
+                SignUpStep.LOADING, SignUpStep.SETUP -> {}
                 else -> onBack()
             }
         }
@@ -146,11 +178,23 @@ fun AllSignUp(
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
+                // Lift the contact/verification fields above the keyboard (B8) —
+                // edge-to-edge means the IME inset isn't auto-applied.
+                .imePadding()
+                .padding(horizontal = Dimens.horizontalPadding)
+                // Reserve the back chevron's height at the top so the heading
+                // renders BELOW it instead of behind it (B14).
+                .padding(top = Dimens.headingTopPadding + 40.dp, bottom = Dimens.headingTopPadding),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             when (step) {
                 SignUpStep.INTRO -> IntroStep(
+                    name = userInfo.name,
+                    breakReasons = remember(onboardingSetup.assessmentInfo) {
+                        val r = onboardingSetup.assessmentInfo?.responses
+                            ?.firstOrNull { it.question.strippedPrompt == AssessmentQuestionID.BREAK_REASON.raw }
+                        r?.responses?.mapNotNull { idx -> r.question.options.getOrNull(idx)?.let { BreakReasonType.from(it) } }.orEmpty()
+                    },
                     onPickPhone = { isEmail = false; contact = ""; step = SignUpStep.CONTACT },
                     onPickEmail = { isEmail = true; contact = ""; step = SignUpStep.CONTACT },
                 )
@@ -172,7 +216,7 @@ fun AllSignUp(
                     onVerify = {
                         if (code.isBlank() && !authVerified) return@VerificationStep
                         error = null
-                        step = SignUpStep.LOADING
+                        step = SignUpStep.SETUP
                         scope.launch {
                             val target = fullContact()
                             // A previous attempt may have consumed the OTP and
@@ -204,9 +248,13 @@ fun AllSignUp(
                                 // state) fall through to fresh onboarding, keeping
                                 // their users row/ID (§17-Q7). Stay on LOADING.
                                 val submitError = when {
-                                    checkIfReturningUser() -> restoreAccount(userInfo, program)
+                                    checkIfReturningUser() -> {
+                                        isReturningUi = true
+                                        restoreAccount(userInfo, program)
+                                    }
                                     signInOnly -> "No account found.\nPlease sign up first."
                                     else -> {
+                                        isReturningUi = false
                                         val err = AssessmentSubmissionHandler.submitAssessment(userInfo, program, onboardingSetup)
                                         if (err == null) {
                                             // D2: an OLD-Android-app account (users row with
@@ -223,10 +271,14 @@ fun AllSignUp(
                                 }
                                 if (submitError != null) {
                                     error = submitError
+                                    isReturningUi = null
+                                    setupDone = false
                                     step = SignUpStep.VERIFICATION
                                 } else {
                                     Clear30Store.save(userInfo)
-                                    onComplete()
+                                    // iOS AccountSetupView: returning users auto-forward
+                                    // (autoForward: true); new users hold on Done.
+                                    if (isReturningUi == true) onComplete() else setupDone = true
                                 }
                             } else { error = err.message; step = SignUpStep.VERIFICATION }
                         }
@@ -239,6 +291,14 @@ fun AllSignUp(
                     CircularProgressIndicator(color = Clear30Colors.green)
                     Spacer(Modifier.weight(1f))
                 }
+
+                SignUpStep.SETUP -> AccountSetupStep(
+                    isReturning = isReturningUi,
+                    clear30 = onboardingSetup.assessmentInfo?.choseClear30 ?: false,
+                    schoolUser = userInfo.schoolId != null,
+                    done = setupDone,
+                    onDone = onComplete,
+                )
             }
 
             error?.let {
@@ -259,6 +319,8 @@ fun AllSignUp(
  */
 @Composable
 private fun ColumnScope.IntroStep(
+    name: String,
+    breakReasons: List<BreakReasonType>,
     onPickPhone: () -> Unit,
     onPickEmail: () -> Unit,
 ) {
@@ -269,7 +331,14 @@ private fun ColumnScope.IntroStep(
 
     Spacer(Modifier.weight(1f))
 
-    BrandGlyph("person.fill.badge.plus")
+    // iOS shows a personalized graphic here (SignUpGoalsDisplay): the user's name
+    // over their chosen break-reason cards. Fall back to the brand glyph when the
+    // assessment didn't capture 3 reasons.
+    if (breakReasons.size >= 3) {
+        SignUpGoalsDisplay(name, breakReasons.take(3))
+    } else {
+        BrandGlyph("person.fill.badge.plus")
+    }
 
     Spacer(Modifier.weight(1f))
 
@@ -463,6 +532,51 @@ private fun BrandGlyph(icon: String) {
 }
 
 /**
+ * SignUpGoalsDisplay — port of iOS `SignUpGoalsDisplay`: the user's name in a
+ * gradient capsule over their three chosen break-reason cards (emoji + noun),
+ * each outlined in the iOS accent colors.
+ */
+@Composable
+private fun SignUpGoalsDisplay(name: String, reasons: List<BreakReasonType>) {
+    Column(
+        Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+    ) {
+        Box(
+            Modifier.clip(RoundedCornerShape(100))
+                .background(Clear30Gradients.clear30)
+                .padding(horizontal = Dimens.cardSpacing, vertical = Dimens.cardSpacing / 2),
+        ) {
+            SmallText(name, color = Color.White)
+        }
+        val outlines = listOf(Color(0xFF5BA3EB), Color(0xFFF69650), Color(0xFFFF6773))
+        Row(
+            Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+            horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+        ) {
+            reasons.forEachIndexed { i, reason ->
+                val noun = reason.asNoun
+                val emoji = noun.substringBefore(' ', "🎯")
+                val label = noun.substringAfter(' ', "").trim().ifBlank { noun }
+                Column(
+                    Modifier.weight(1f).fillMaxHeight()
+                        .clip(RoundedCornerShape(Dimens.cornerRadius))
+                        .background(Clear30Colors.button)
+                        .border(2.dp, outlines[i % outlines.size].copy(alpha = 0.5f), RoundedCornerShape(Dimens.cornerRadius))
+                        .padding(horizontal = Dimens.cardSpacing / 2, vertical = Dimens.cardSpacing),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2, Alignment.CenterVertically),
+                ) {
+                    Heading3(emoji.ifBlank { "🎯" })
+                    TinyText(label, modifier = Modifier.fillMaxWidth(), maxLines = 2, textAlign = TextAlign.Center)
+                }
+            }
+        }
+    }
+}
+
+/**
  * MethodButton — non-gradient OffWhite pill with a leading icon + centered label,
  * a 1:1 of iOS's `TextIconButton(gradient: nil)` used for the phone/email choices.
  */
@@ -525,6 +639,137 @@ private fun OrDivider() {
  * a full-width gradient pill, centered white Lexend text + trailing white icon,
  * with the shared pressScale feedback.
  */
+/**
+ * AccountSetupStep — port of iOS `AccountSetupView` (post-verify loading):
+ * segmented-circle person animation, title + dim subtitle, the "not generated
+ * by AI" / school-privacy callout card for new users, and a Done button once
+ * both the animation and the restore/submit finish (returning users
+ * auto-forward upstream instead).
+ */
+@Composable
+private fun ColumnScope.AccountSetupStep(
+    isReturning: Boolean?,
+    clear30: Boolean,
+    schoolUser: Boolean,
+    done: Boolean,
+    onDone: () -> Unit,
+) {
+    val title = when {
+        isReturning == true -> "Welcome back!"
+        clear30 -> "Compiling your\ncannabis snapshot..."
+        else -> "Setting up\nyour account..."
+    }
+    val subtitle = if (isReturning == true) "Restoring your data..." else "This will only take a few moments."
+
+    Spacer(Modifier.weight(1f))
+
+    Column(
+        Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing * 2),
+    ) {
+        AccountSetupCircle(done = done)
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+        ) {
+            Heading3(title, textAlign = TextAlign.Center)
+            SmallText(subtitle, color = Clear30Colors.text.copy(alpha = 0.5f), textAlign = TextAlign.Center)
+        }
+
+        // iOS showProgramCallout (new users only): school users get the privacy
+        // reassurance, everyone else the personalization one.
+        if (isReturning != true) {
+            val (emoji, text) =
+                if (schoolUser) "🔒" to "Private to you, no individual data is shared with your school."
+                else "✍️" to "Our program is built on behavior change science, not generated by AI."
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .cardStyle(outlineGradient = Clear30Gradients.clear30, outlineOpacity = 0.5f),
+                horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+                verticalAlignment = Alignment.Top,
+            ) {
+                SmallText(emoji)
+                SmallText(text, Modifier.weight(1f))
+            }
+        }
+    }
+
+    Spacer(Modifier.weight(1f))
+
+    if (done && isReturning != true) {
+        TextIconButton("Done", "checkmark") { onDone() }
+    }
+}
+
+/**
+ * The iOS `SegmentedCircleAnimation` used by AccountSetupView: a 75dp
+ * person-in-circle glyph ringed by 4 gradient arc segments that slowly rotate;
+ * the segments pop away one at a time (light haptic each) as "setup" advances.
+ */
+@Composable
+private fun AccountSetupCircle(done: Boolean) {
+    val segments = 4
+    var popped by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(500)
+        repeat(segments) {
+            kotlinx.coroutines.delay(650)
+            popped++
+            Haptics.lightImpact()
+        }
+    }
+    val rotation by rememberInfiniteTransition(label = "setupRing").animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(10_000, easing = LinearEasing)),
+        label = "rotation",
+    )
+    val segScales = (0 until segments).map { index ->
+        animateFloatAsState(
+            targetValue = if (popped > index) 0f else 1f,
+            animationSpec = spring(dampingRatio = 0.35f, stiffness = Spring.StiffnessMedium),
+            label = "seg$index",
+        )
+    }
+
+    Box(Modifier.size(75.dp), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val stroke = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round)
+            val inset = stroke.width / 2
+            val arcSize = Size(size.width - stroke.width, size.height - stroke.width)
+            rotate(rotation) {
+                repeat(segments) { index ->
+                    val scale = segScales[index].value
+                    if (scale > 0f) {
+                        scale(scale) {
+                            drawArc(
+                                brush = Clear30Gradients.clear30,
+                                startAngle = index * (360f / segments),
+                                // iOS SegmentView: sweep = 360/total − 12.5° gap.
+                                sweepAngle = 360f / segments - 12.5f,
+                                useCenter = false,
+                                topLeft = Offset(inset, inset),
+                                size = arcSize,
+                                style = stroke,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        // iOS: gradient person glyph brightening as setup completes (0.5 → 1).
+        GradientIcon(
+            "person.circle.fill",
+            Modifier
+                .size(60.dp)
+                .graphicsLayer { alpha = if (done) 1f else 0.5f },
+        )
+    }
+}
+
 @Composable
 private fun TextIconButton(text: String, icon: String, onClick: () -> Unit) {
     Row(

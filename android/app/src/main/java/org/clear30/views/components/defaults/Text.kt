@@ -87,8 +87,8 @@ private fun sized(
 @Composable fun SmallText(text: String, modifier: Modifier = Modifier, color: Color = Color.Unspecified, maxLines: Int = Int.MAX_VALUE, textAlign: TextAlign? = null) =
     sized(text, 15.5.sp, FontWeight.Normal, modifier, color, maxLines, textAlign)
 
-@Composable fun TinyText(text: String, modifier: Modifier = Modifier, color: Color = Color.Unspecified, maxLines: Int = Int.MAX_VALUE) =
-    sized(text, 14.sp, FontWeight.Normal, modifier, color, maxLines)
+@Composable fun TinyText(text: String, modifier: Modifier = Modifier, color: Color = Color.Unspecified, maxLines: Int = Int.MAX_VALUE, textAlign: TextAlign? = null) =
+    sized(text, 14.sp, FontWeight.Normal, modifier, color, maxLines, textAlign)
 
 @Composable fun MiniText(text: String, modifier: Modifier = Modifier, color: Color = Color.Unspecified) =
     sized(text, 10.sp, FontWeight.Normal, modifier, color, Int.MAX_VALUE)

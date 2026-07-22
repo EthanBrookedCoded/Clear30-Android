@@ -2,6 +2,7 @@ package org.clear30.views.existinguser
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -14,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import org.clear30.data.LogEventType
 import org.clear30.data.Logger
 import org.clear30.data.getMessages
@@ -46,6 +48,40 @@ fun AllTabs(
 ) {
     var selected by remember { mutableStateOf(CustomTabBarItem.TODAY) }
     var showPostAssessment by remember { mutableStateOf(false) }
+    // Popup-paywall presentation state: null = hidden, else the hard flag
+    // (iOS viewModel.activeSheet = .payment(hard:)).
+    var paywallSheet by remember { mutableStateOf<Boolean?>(null) }
+
+    // iOS AllTabs.checkSubscription() (run once per load from loadStorage):
+    // force-show the hard paywall for unpaid users, then ask RevenueCat whether
+    // the entitlement drifted and flip the app state accordingly.
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (!userInfo.isPaid && userInfo.paywallHard) paywallSheet = true
+
+        val (didChange, newEntitlement) =
+            org.clear30.data.PaywallController.checkEntitlementChanged(userInfo)
+        if (didChange) {
+            if (newEntitlement != null) {
+                handleUserPaid(userInfo, program, newEntitlement)
+                selected = CustomTabBarItem.TODAY // iOS goToRoot()
+                paywallSheet = null
+            } else {
+                handleUserUnsubscribed(userInfo)
+                if (userInfo.paywallHard) paywallSheet = true // iOS checkForceShowPaywall()
+            }
+            org.clear30.data.Clear30Store.save(userInfo)
+        }
+    }
+
+    // Externally requested popup paywall (deep links / upsell points — iOS
+    // viewModel.activeSheet = .payment(...) call sites outside AllTabs).
+    val paywallRequest by org.clear30.AppState.paywallRequest.collectAsStateWithLifecycle()
+    androidx.compose.runtime.LaunchedEffect(paywallRequest) {
+        paywallRequest?.let { hard ->
+            paywallSheet = hard
+            org.clear30.AppState.requestPaywall(null) // ack
+        }
+    }
 
     // Post-assessment auto-open (iOS AllTabs.swift:560-566): the break's N days
     // elapsed without completing it → present the flow, unless the welcome-back
@@ -138,6 +174,42 @@ fun AllTabs(
         }
     }
 
+    // Popup paywall (iOS AllTabs .fullScreenCover(viewModel.paymentSheet) →
+    // Paywall(popup: true, hard:)). Hard paywalls can't be dismissed
+    // (interactiveDismissDisabled); soft ones close via back / the X button.
+    paywallSheet?.let { hard ->
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { if (!hard) paywallSheet = null },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = !hard,
+                dismissOnClickOutside = false,
+            ),
+        ) {
+            Box(
+                Modifier.fillMaxSize()
+                    .background(org.clear30.views.theme.Clear30Colors.background),
+            ) {
+                org.clear30.views.newuser.Paywall(
+                    userInfo = userInfo,
+                    popup = true,
+                    hard = hard,
+                ) { entitlement ->
+                    if (entitlement != null) {
+                        handleUserPaid(userInfo, program, entitlement)
+                        selected = CustomTabBarItem.TODAY // iOS goToRoot()
+                        // Persist off the dialog's composition (it unmounts next
+                        // frame — a rememberCoroutineScope launch would be axed).
+                        org.clear30.Clear30Application.appScope.launch {
+                            org.clear30.data.Clear30Store.save(userInfo)
+                        }
+                    }
+                    paywallSheet = null
+                }
+            }
+        }
+    }
+
     if (showPostAssessment) {
         program.lastBreak?.let { lastBreak ->
             org.clear30.views.existinguser.postassessment.PostAssessment(
@@ -149,6 +221,41 @@ fun AllTabs(
             )
         } ?: run { showPostAssessment = false }
     }
+}
+
+/**
+ * iOS AllTabs.handleUserPaid — flip the app into the paid state: store the
+ * entitlement, re-enable + reschedule content notifications. (The iOS
+ * OpeningAnimation "you're upgraded" popup and onboardingSetup.setup replay are
+ * not ported — the former's view doesn't exist yet, the latter's halves are
+ * consumed elsewhere/dormant, see AllNewUserViewModel.handlePayment.)
+ * Caller persists userInfo.
+ */
+private fun handleUserPaid(
+    userInfo: UserInfo,
+    program: Program,
+    entitlement: org.clear30.data.model.EntitlementType,
+) {
+    userInfo.currentEntitlementType = entitlement
+    userInfo.notificationSettings?.options?.set(org.clear30.data.model.ToggleSettingsOption.CONTENT, true)
+    val allMessages = program.contentInfo.values.flatMap { it.messages } + program.schoolMessages
+    org.clear30.data.NotificationHandler.scheduleContent(userInfo, allMessages, program)
+}
+
+/**
+ * iOS AllTabs.handleUserUnsubscribed — revoke paid-only state: clear the
+ * entitlement (+ deprecated `paid` flag), drop scheduled content pushes, turn
+ * every notification toggle off, and log it. Caller persists userInfo and
+ * re-runs the hard-paywall check.
+ */
+private fun handleUserUnsubscribed(userInfo: UserInfo) {
+    userInfo.currentEntitlementType = null
+    userInfo.paid = false
+    org.clear30.data.NotificationHandler.removePendingContent()
+    org.clear30.data.model.ToggleSettingsOption.entries
+        .filter { it.type == org.clear30.data.model.ToggleSettingsOptionType.NOTIFICATIONS }
+        .forEach { userInfo.notificationSettings?.options?.set(it, false) }
+    Logger.logEvent(userInfo.loggingID, LogEventType.unsubscribed)
 }
 
 /** opened-tab analytics events (AllTabs.swift logScreen). */

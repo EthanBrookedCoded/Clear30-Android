@@ -146,6 +146,20 @@ class AppRootViewModel : ViewModel() {
             if (userInfo.schoolData != null) {
                 org.clear30.data.updateSchoolData(userInfo)
             }
+
+            // Refresh the paywall-targeting traits each launch for identified
+            // users (iOS ContentView.initHelium re-derives getUserParams — incl.
+            // the assessment-response traits — every cold start; Android pushes
+            // them to the RC attribute store). No-ops without an API key.
+            if (userInfo.userID.isNotEmpty()) {
+                org.clear30.data.PaywallController.updateUserAttributes(
+                    userInfo,
+                    org.clear30.data.PaywallController.getUserParams(
+                        userInfo,
+                        program.currentBreak?.assessmentResponses ?: emptyList(),
+                    ),
+                )
+            }
         }
     }
 
@@ -165,13 +179,10 @@ class AppRootViewModel : ViewModel() {
         // Back-fill schoolId from an already-cached school bundle (iOS ContentView:272).
         if (userInfo.schoolId == null) userInfo.schoolId = userInfo.schoolData?.school_id
 
-        // Sync the paid entitlement from RevenueCat on load — restores paid state on
-        // a reinstall / new device. Only sets when RevenueCat reports an active
-        // entitlement; never clears a local freeCode/bypass on a transient miss.
-        // Free-code users skip RevenueCat entirely (iOS checkEntitlementChanged).
-        if (userInfo.freeCode == null) {
-            org.clear30.data.PaywallController.activeEntitlement(userInfo)?.let { userInfo.currentEntitlementType = it }
-        }
+        // RevenueCat entitlement sync happens in AllTabs (checkEntitlementChanged →
+        // handleUserPaid / handleUserUnsubscribed), matching iOS
+        // AllTabs.checkSubscription — NOT here, where the network round-trip
+        // would block splash routing.
 
         Clear30Store.save(userInfo)
     }
@@ -195,7 +206,19 @@ class AppRootViewModel : ViewModel() {
     fun syncOnForeground() {
         if (!::program.isInitialized) return
         viewModelScope.launch {
-            SupabaseController.syncProgramState(program)
+            // P0 GUARD: only push the program when it actually has content. An
+            // EMPTY local program (fresh install, or mid-login before the restore
+            // has populated it) must NEVER overwrite the server row — doing so
+            // PATCHes content_info={}/program_breaks=[] and WIPES the account,
+            // producing "No account found." on the next login. iOS never pushes
+            // the program on foreground at all (ContentView `scenePhase == .active`
+            // only logs a session); it pushes only after real mutations
+            // (check-ins, timeline/message changes), all of which imply a
+            // non-empty program. `breaks.isEmpty()` is the emptiness signal —
+            // content_info is derived from breaks, so no breaks ⇒ nothing to sync.
+            if (program.breaks.isNotEmpty()) {
+                SupabaseController.syncProgramState(program)
+            }
             // Re-pull experiment assignments so backend-side variant flips take
             // effect on the next foreground without waiting for a cold start.
             val currentUser = (_state.value as? AppRootState.ExistingUser)?.userInfo

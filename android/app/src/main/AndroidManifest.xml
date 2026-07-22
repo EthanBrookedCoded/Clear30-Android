@@ -31,18 +31,29 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
+            android:screenOrientation="portrait"
             android:theme="@style/Theme.Clear30"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Deep links (mirrors iOS .onOpenURL handling, see URLManager) -->
-            <intent-filter android:autoVerify="true">
+            <!-- Custom scheme: clear30://<host>/... — MUST be its own filter. If the
+                 clear30 scheme and the https/clear30.org host share one filter,
+                 Android combines schemes+hosts and then requires clear30:// URLs to
+                 also have host "clear30.org", so clear30://community never resolves. -->
+            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="clear30" />
+            </intent-filter>
+            <!-- Verified https App Links: https://clear30.org/... — autoVerify needs
+                 /.well-known/assetlinks.json hosted on clear30.org (see DEEP_LINKING.md). -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="clear30.org" />
             </intent-filter>
         </activity>

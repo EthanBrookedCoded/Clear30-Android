@@ -1,10 +1,6 @@
 package org.clear30.views.existinguser.support
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,15 +28,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import org.clear30.data.model.ContentInfo
-import org.clear30.data.model.PlainDate
+import kotlinx.datetime.Instant
 import org.clear30.data.model.Program
 import org.clear30.data.model.ProgramResource
-import org.clear30.data.model.Stage
-import org.clear30.data.model.unlocked
+import org.clear30.data.model.SymptomInfos
 import org.clear30.views.components.Clear30Card
 import org.clear30.views.components.Heading2
 import org.clear30.views.components.IconButton
@@ -53,37 +46,50 @@ import org.clear30.views.theme.Clear30Gradients
 import org.clear30.views.theme.Dimens
 
 /** Which resource shelf to render — Reddit threads or YouTube videos. */
-internal enum class ResourceKind(val title: String, val emptyMsg: String) {
-    REDDIT("Reddit Threads", "Reddit threads will appear here as your content unlocks."),
-    YOUTUBE("YouTube", "YouTube videos will appear here as your content unlocks.");
+internal enum class ResourceKind(val title: String, val contentType: String, val emptyMsg: String) {
+    REDDIT("Reddit Threads", "Reddit threads", "Reddit threads will appear here as your content unlocks."),
+    YOUTUBE("YouTube", "YouTube videos", "YouTube videos will appear here as your content unlocks.");
 }
 
-/** A stage section within a tab — its stage header + the resources beneath it. */
-private data class ResourceSection(val stage: Stage?, val resources: List<ProgramResource>)
-
-/** A break-level tab and the stage sections it contains. */
-private data class ResourceTab(val name: String, val sections: List<ResourceSection>)
+/** A rendered section — stage title + gradient (or symptom name + gradient) and its resources. */
+private data class ResourceDisplaySection(val title: String, val gradient: Brush, val resources: List<ProgramResource>)
 
 /**
  * ResourcesScreen — ported to match iOS AllRedditsView / AllYouTubesView. Content is
- * filtered by program break (the **tabs**, iOS's BreakFilterOption sheet), then
- * **sectioned by stage** (a colored stage header card, iOS `ProgramMessageSectionCard`),
- * and laid out as a **2-column grid** of branded cards (iOS `RedditCard` / `YouTubeCard`).
- * Each card opens its link via the system VIEW intent.
+ * filtered by program break through the [LibraryFilterSheet] (iOS `FilterListSheet`),
+ * then **sectioned by stage** (a colored stage header card, iOS
+ * `ProgramMessageSectionCard`), and laid out as a **2-column grid** of branded cards
+ * (iOS `RedditCard` / `YouTubeCard`, Cards.swift:201-345). The Reddit library
+ * additionally offers a "Symptoms" filter (AllRedditsView.swift:153-159) that
+ * re-sections the list per symptom, alphabetically, using each symptom's gradient.
+ * Cards open their link in the in-app viewers.
  */
 @Composable
-internal fun ResourcesScreen(program: Program, kind: ResourceKind, onBack: () -> Unit) {
-    val context = LocalContext.current
+internal fun ResourcesScreen(
+    program: Program,
+    kind: ResourceKind,
+    symptomInfos: SymptomInfos? = null,
+    onBack: () -> Unit,
+) {
     val brandGradient = if (kind == ResourceKind.REDDIT) Clear30Gradients.reddit else Clear30Gradients.youtube
 
-    // Build the break tabs + their stage sections from the user's unlocked content.
-    val tabs = remember(program.contentInfo.size, kind) { buildResourceTabs(program, kind) }
-    // Default to the current break's tab (iOS opens on the active break), else the last.
-    val defaultIndex = remember(tabs) {
-        val currentName = program.getBreak(org.clear30.util.now())?.name
-        tabs.indexOfFirst { it.name == currentName }.takeIf { it >= 0 } ?: tabs.lastIndex.coerceAtLeast(0)
+    // Break/core tabs + their stage sections (shared library skeleton).
+    val tabs = remember(program.contentInfo.size, kind) {
+        buildLibraryTabs(program) { msgs ->
+            msgs.flatMap { it.allResources }
+                .filter { if (kind == ResourceKind.REDDIT) it.isReddit else it.isYouTube }
+                .distinctBy { it.url }
+        }
     }
+    // Reddit gets an extra "Symptoms" filter option (iOS AllRedditsView.swift:153-159).
+    val symptoms = if (kind == ResourceKind.REDDIT) symptomInfos?.symptomInfos.orEmpty() else emptyMap()
+    val options = tabs.map { LibraryFilterOption(it.name, it.dateText) } +
+        if (symptoms.isNotEmpty()) listOf(LibraryFilterOption("Symptoms", null)) else emptyList()
+
+    val defaultIndex = remember(tabs) { defaultLibraryTab(program, tabs) }
     var selected by remember(tabs) { mutableStateOf(defaultIndex) }
+    var showFilterSheet by remember { mutableStateOf(false) }
+
     // In-app viewers — YouTube links play in the embedded IFrame player, Reddit
     // threads (and anything else) open in the in-app web viewer.
     var webUrl by remember { mutableStateOf<String?>(null) }
@@ -99,51 +105,82 @@ internal fun ResourcesScreen(program: Program, kind: ResourceKind, onBack: () ->
         }
     }
 
+    // The sections to display for the current filter, plus the tab's next-unlock
+    // date (null on the Symptoms filter, hiding the banner — matches iOS).
+    val symptomsSelected = selected >= tabs.size
+    val sections: List<ResourceDisplaySection>
+    val nextUnlockDate: Instant?
+    if (symptomsSelected) {
+        // Per-symptom alphabetical sections (iOS getSectionedReddits(from: symptomInfos),
+        // AllRedditsView.swift:223-233): keys sorted, resources sorted by title.
+        sections = symptoms.keys.sorted().map { key ->
+            val symptom = symptoms.getValue(key)
+            ResourceDisplaySection(
+                title = key,
+                gradient = symptom.getGradient(),
+                resources = symptom.reddits.map { ProgramResource(title = it.key, url = it.value) }.sortedBy { it.title },
+            )
+        }.filter { it.resources.isNotEmpty() }
+        nextUnlockDate = null
+    } else {
+        val tab = tabs.getOrNull(selected) ?: tabs.firstOrNull()
+        sections = tab?.sections.orEmpty().map { section ->
+            ResourceDisplaySection(
+                title = section.stage?.title?.takeIf { it.isNotBlank() } ?: "Featured",
+                gradient = section.stage?.gradient ?: brandGradient,
+                resources = section.items,
+            )
+        }
+        nextUnlockDate = tab?.nextUnlockDate
+    }
+
     Column(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
             IconButton("chevron.backward", onClick = onBack)
             Heading2(kind.title)
+            Spacer(Modifier.weight(1f))
+            // Filter button — only when there's more than one option (iOS
+            // AllRedditsView.swift:48-55 / AllYouTubesView.swift:48-55).
+            if (options.size > 1) {
+                LibraryFilterButton { showFilterSheet = true }
+            }
         }
 
-        if (tabs.isEmpty()) {
+        if (showFilterSheet) {
+            LibraryFilterSheet(
+                options = options,
+                selected = selected,
+                onSelect = { selected = it },
+                onDismiss = { showFilterSheet = false },
+            )
+        }
+
+        if (sections.isEmpty()) {
             Clear30Card(modifier = Modifier.fillMaxWidth().padding(top = Dimens.cardSpacing)) {
                 SmallText(kind.emptyMsg, color = Clear30Colors.text.copy(alpha = 0.5f))
             }
             return
         }
 
-        // Tab row (break filter) — only shown when there's more than one (iOS shows
-        // the filter affordance only when filterOptions.count > 1).
-        if (tabs.size > 1) {
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = Dimens.cardSpacing),
-                horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
-            ) {
-                tabs.forEachIndexed { i, tab ->
-                    TabPill(tab.name, selected = i == selected, gradient = brandGradient) { selected = i }
-                }
-            }
-        }
-
-        val tab = tabs.getOrNull(selected) ?: tabs.first()
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = Dimens.cardSpacing),
             verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
         ) {
-            tab.sections.forEach { section ->
-                StageSectionCard(section.stage, brandGradient)
+            // "More Reddit threads / YouTube videos in N days" (iOS
+            // AllRedditsView.swift:63 / AllYouTubesView.swift:63).
+            MoreContentBanner(nextUnlockDate, kind.contentType)
+            sections.forEach { section ->
+                SectionCard(section.title, section.gradient)
                 // 2-column grid: chunk into pairs, one Row each.
                 section.resources.chunked(2).forEach { pair ->
                     Row(
                         Modifier.fillMaxWidth().height(IntrinsicSize.Min),
                         horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
                     ) {
-                        ResourceGridCell(kind, pair[0], Modifier.weight(1f)) { open(pair[0].url) }
-                        if (pair.size > 1) {
-                            ResourceGridCell(kind, pair[1], Modifier.weight(1f)) { open(pair[1].url) }
-                        } else {
-                            Spacer(Modifier.weight(1f))
+                        pair.forEach { res ->
+                            ResourceGridCell(kind, res, Modifier.weight(1f)) { open(res.url) }
                         }
+                        if (pair.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
             }
@@ -157,57 +194,11 @@ internal fun ResourcesScreen(program: Program, kind: ResourceKind, onBack: () ->
     redditUrl?.let { u -> org.clear30.views.components.RedditDialog(u, onDismiss = { redditUrl = null }) }
 }
 
-/** Build break-filtered, stage-sectioned resource tabs (iOS getSectionedReddits). */
-private fun buildResourceTabs(program: Program, kind: ResourceKind): List<ResourceTab> {
-    fun resourcesIn(entries: List<ContentInfo>): List<ProgramResource> =
-        entries.flatMap { it.messages }.unlocked.flatMap { it.allResources }
-            .filter { if (kind == ResourceKind.REDDIT) it.isReddit else it.isYouTube }
-            .distinctBy { it.url }
-
-    fun sectionsFor(entries: List<Map.Entry<PlainDate, ContentInfo>>): List<ResourceSection> {
-        // Preserve stage order by first-seen date.
-        val grouped = LinkedHashMap<String, MutableList<ContentInfo>>()
-        entries.sortedBy { it.key }.forEach { e ->
-            grouped.getOrPut(e.value.stage?.title ?: "") { mutableListOf() }.add(e.value)
-        }
-        return grouped.map { (_, group) ->
-            ResourceSection(group.firstNotNullOfOrNull { it.stage }, resourcesIn(group))
-        }.filter { it.resources.isNotEmpty() }
-    }
-
-    val byBreak = program.breaks.sortedBy { it.startDate }.mapNotNull { br ->
-        val lo = PlainDate.from(br.startDate)
-        val hi = PlainDate.from(br.endDate)
-        val entries = program.contentInfo.entries.filter { it.key >= lo && it.key <= hi }
-        val sections = sectionsFor(entries)
-        if (sections.isEmpty()) null else ResourceTab(br.name, sections)
-    }
-    if (byBreak.isNotEmpty()) return byBreak
-
-    // Fallback: no break-scoped content — show everything in one tab, stage-sectioned.
-    val all = sectionsFor(program.contentInfo.entries.toList())
-    return if (all.isEmpty()) emptyList() else listOf(ResourceTab("Your Program", all))
-}
-
-/** A selectable break tab pill (iOS BreakFilterOption). */
+/** Colored section header card (iOS `ProgramMessageSectionCard` — stage OR symptom). */
 @Composable
-private fun TabPill(name: String, selected: Boolean, gradient: Brush, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .clip(RoundedCornerShape(99.dp))
-            .then(if (selected) Modifier.background(gradient) else Modifier.background(Clear30Colors.opacityGray))
-            .pressScale(onClick = onClick)
-            .padding(horizontal = Dimens.cardSpacing, vertical = Dimens.cardSpacing / 2),
-    ) {
-        SmallText(name, color = if (selected) Color.White else Clear30Colors.text)
-    }
-}
-
-/** Colored stage header card (iOS `ProgramMessageSectionCard`). */
-@Composable
-private fun StageSectionCard(stage: Stage?, fallbackGradient: Brush) {
-    Clear30Card(modifier = Modifier.fillMaxWidth(), gradient = stage?.gradient ?: fallbackGradient) {
-        SmallText(stage?.title?.takeIf { it.isNotBlank() } ?: "Featured", color = Color.White)
+private fun SectionCard(title: String, gradient: Brush) {
+    Clear30Card(modifier = Modifier.fillMaxWidth(), gradient = gradient) {
+        SmallText(title, color = Color.White)
     }
 }
 

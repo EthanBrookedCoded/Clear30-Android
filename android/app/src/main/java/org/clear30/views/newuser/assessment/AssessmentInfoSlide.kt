@@ -337,11 +337,15 @@ private fun chosenBreakReasons(vm: AssessmentViewModel): List<BreakReasonType> {
     return r.responses.mapNotNull { idx -> r.question.options.getOrNull(idx)?.let { BreakReasonType.from(it) } }
 }
 
-/** Weekly cannabis spend in whole dollars (MONEY_SPENT question), or null. */
+/**
+ * Weekly cannabis spend in whole dollars (MONEY_SPENT question), or null.
+ * iOS parses the option with prefix(2) (AssessmentSlides3.swift:864) — a custom
+ * "100" reads as $10/wk. Quirk kept deliberately (decision §17-Q23).
+ */
 private fun weeklySpend(vm: AssessmentViewModel): Int? {
     val r = vm.responses[AssessmentQuestionID.MONEY_SPENT.raw] ?: return null
     val idx = r.responses.firstOrNull() ?: return null
-    return r.question.options.getOrNull(idx)?.filter(Char::isDigit)?.toIntOrNull()
+    return r.question.options.getOrNull(idx)?.take(2)?.toIntOrNull()
 }
 
 /**

@@ -1,0 +1,22 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "org.clear30.Clear30v1",
+      "sha256_cert_fingerprints": [
+        "REPLACE_WITH_PLAY_APP_SIGNING_SHA256"
+      ]
+    }
+  },
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "org.clear30.Clear30v1.debug",
+      "sha256_cert_fingerprints": [
+        "E2:06:66:00:B7:A6:DD:13:AE:71:1B:DA:55:54:C8:11:AF:CC:6E:DD:D0:D3:18:CE:81:D8:5D:7B:B9:C8:34:32"
+      ]
+    }
+  }
+]

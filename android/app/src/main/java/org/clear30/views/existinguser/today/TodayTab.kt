@@ -131,18 +131,22 @@ fun TodayTab(
     val scope = rememberCoroutineScope()
     val logger = remember { CheckInLogger(program, userInfo, scope) }
     var refresh by remember { mutableIntStateOf(0) }
-    var showCheckInSheet by remember { mutableStateOf(false) }
+    // The day the check-in sheet is open for; null = closed (iOS
+    // CheckInViewModel.showCheckInForDate). Forced flows (W69) open it for
+    // yesterday / a past selected day, not just today.
+    var checkInSheetFor by remember { mutableStateOf<PlainDate?>(null) }
     var showMultiCheckIn by remember { mutableStateOf(false) }
     var showMidPilotAssessment by remember { mutableStateOf(false) }
     // In-app overlays opened from the inlined content cards (YouTube now plays
     // inline within its card).
     var webUrl by remember { mutableStateOf<String?>(null) }
     var redditUrl by remember { mutableStateOf<String?>(null) }
-    var journalPrompt by remember { mutableStateOf<String?>(null) }
     // Catch-up card → full-screen viewer for a missed day's first message; the
     // journal feed cards open the full-screen text editor (create / edit).
     var catchUpMessages by remember { mutableStateOf<List<ProgramMessage>?>(null) }
     var creatingJournalSeed by remember { mutableStateOf<String?>(null) }
+    // Claire opened in-place from a today-feed prompt card (G27) — stays on TODAY.
+    var claireOverlay by remember { mutableStateOf<String?>(null) }
     var editingJournalEntry by remember { mutableStateOf<org.clear30.data.model.JournalEntry?>(null) }
     // Drop feed state saved on a previous calendar day, so a process that
     // lives overnight doesn't silently restore yesterday's selected day/page.
@@ -202,20 +206,53 @@ fun TodayTab(
         org.clear30.data.Logger.logEvent(userInfo.loggingID, org.clear30.data.LogEventType.openedCalendar)
     }
 
-    // Auto-prompt the catch-up flow when 2+ recent days are unlogged (iOS multi-check-in).
-    LaunchedEffect(Unit) {
-        if (missedCheckInDays(program).size >= 2) showMultiCheckIn = true
+    // W69 — forced check-in flows, the iOS CheckInViewModel.handleShowCheckIn
+    // decision ladder (CheckInViewModel.swift:39-93), re-run per selected day
+    // like iOS loadDayContext. In priority order:
+    //   1. Today + 2+ unlogged days → multi check-in (multiCheckInThreshold = 2).
+    //   2. Today + program day >= 1 + yesterday unlogged → force YESTERDAY's
+    //      check-in.
+    //   3. A non-today unlogged selected day → force that day's check-in.
+    //   4. Today unlogged on the first load of the day → auto-present today's
+    //      check-in (iOS forceShowForSelectedDay = firstLoad && sober == nil).
+    // The today-scoped auto-presents (2 & 4) run once per calendar day per
+    // process, via TodayTabUiState — Android disposes this composable on every
+    // tab switch, so without the guard the sheet would re-open each return.
+    LaunchedEffect(selectedDay) {
+        val isToday = selectedDay == today
+        if (isToday && missedCheckInDays(program).size >= 2) {
+            showMultiCheckIn = true
+            return@LaunchedEffect
+        }
+        val yesterday = today.adding(days = -1)
+        if (isToday && program.getDay(now()) >= 1 && program.dayInfo[yesterday]?.sober == null) {
+            if (TodayTabUiState.autoCheckInShownOn != today) {
+                TodayTabUiState.autoCheckInShownOn = today
+                checkInSheetFor = yesterday
+            }
+            return@LaunchedEffect
+        }
+        if (!isToday && program.dayInfo[selectedDay]?.sober == null) {
+            checkInSheetFor = selectedDay
+            return@LaunchedEffect
+        }
+        if (isToday && program.dayInfo[today]?.sober == null &&
+            TodayTabUiState.autoCheckInShownOn != today
+        ) {
+            TodayTabUiState.autoCheckInShownOn = today
+            checkInSheetFor = today
+        }
     }
 
     // Mid-pilot assessment (F2 — iOS TodayFeedView.handlePopups:290-300): a
     // school user with 10+ checked-in days who hasn't completed it. On-load
     // only for v1 (iOS also re-checks after check-ins); deferred while another
     // sheet is up.
-    LaunchedEffect(showMultiCheckIn, showCheckInSheet) {
+    LaunchedEffect(showMultiCheckIn, checkInSheetFor) {
         if (userInfo.schoolId != null &&
             userInfo.midPilotAssessmentCompleted != true &&
             program.numDaysCheckedIn >= 10 &&
-            !showMultiCheckIn && !showCheckInSheet && !showMidPilotAssessment
+            !showMultiCheckIn && checkInSheetFor == null && !showMidPilotAssessment
         ) {
             kotlinx.coroutines.delay(500)
             showMidPilotAssessment = true
@@ -411,7 +448,7 @@ fun TodayTab(
                     program = program,
                     showStreak = selectedDay == today,
                     revision = refresh,
-                    onCheckIn = { showCheckInSheet = true },
+                    onCheckIn = { checkInSheetFor = selectedDay },
                     onCheckInChange = onCheckInChange,
                 )
             }
@@ -466,7 +503,7 @@ fun TodayTab(
                                     program = program,
                                     showStreak = selectedDay == today,
                                     revision = refresh,
-                                    onCheckIn = { showCheckInSheet = true },
+                                    onCheckIn = { checkInSheetFor = selectedDay },
                                     onCheckInChange = onCheckInChange,
                                 )
                                 messages.firstOrNull()?.let { first ->
@@ -532,15 +569,23 @@ fun TodayTab(
                                 item.prompt, userInfo,
                                 glow = glow?.let { Clear30Gradients.claire },
                                 focused = page == pagerState.settledPage,
+                                onOpenClaire = { claireOverlay = it },
                             )
                             is FeedItem.Perk -> MemberPerkFeedCard(item.perk, glow = glow?.let { Clear30Gradients.supplements }, onOpenWeb = { webUrl = it })
-                            is FeedItem.Journal -> JournalPromptsFeedCard(item.prompts, glow = glow?.let { Clear30Gradients.journals }, onJournal = { journalPrompt = it })
+                            is FeedItem.Journal -> JournalPromptsFeedCard(item.prompts, glow = glow?.let { Clear30Gradients.journals }, onJournal = { creatingJournalSeed = it })
                             FeedItem.FeedEnd -> FeedEndCelebration(
                                 message = messages.firstOrNull(),
                                 focused = page == pagerState.settledPage,
                                 alreadyComplete = (program.contentInfo[selectedDay]?.progress ?: 0.0) >= 1.0,
                                 showCta = true,
-                                unreadMessages = messages.count { !it.visited },
+                                // Program-wide unread count (iOS TodayTabEndFeedView):
+                                // non-started unlocked day-groups across the whole
+                                // break, or the core timeline at end of program (H36).
+                                unreadMessages = run {
+                                    val br = program.currentBreak
+                                    (if (br != null) program.getNonStartedMessages(br)
+                                    else program.getNonStartedCoreMessages()).size
+                                },
                                 onAllMessages = {
                                     org.clear30.AppState.requestSubRoute(org.clear30.data.DeepLinkRoute.Messages)
                                     org.clear30.AppState.requestTab("SUPPORT")
@@ -575,13 +620,14 @@ fun TodayTab(
         }
     }
 
-    if (showCheckInSheet) {
+    checkInSheetFor?.let { sheetDay ->
         CheckInSheet(
             logger = logger,
             userInfo = userInfo,
             program = program,
+            selectedDay = sheetDay,
             onDismiss = {
-                showCheckInSheet = false
+                checkInSheetFor = null
                 refresh++
             },
             // Only a COMPLETED check-in advances the feed to the first lesson —
@@ -614,25 +660,25 @@ fun TodayTab(
     // In-app overlays opened from the inlined content cards.
     webUrl?.let { u -> org.clear30.views.components.WebViewDialog(u, onDismiss = { webUrl = null }) }
     redditUrl?.let { u -> org.clear30.views.components.RedditDialog(u, onDismiss = { redditUrl = null }) }
-    journalPrompt?.let { prompt ->
-        JournalOnTopicDialog(
-            prompt = prompt,
-            onDismiss = { journalPrompt = null },
-            onSave = { text ->
-                journalEntries.entries.add(
-                    org.clear30.data.model.JournalEntry(title = prompt, content = text, date = now()),
+    // Claire prompt → open Claire in-place (G27), without leaving the Today tab.
+    claireOverlay?.let { seed ->
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { claireOverlay = null },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            androidx.compose.material3.Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = Clear30Colors.background,
+            ) {
+                org.clear30.views.existinguser.support.ClaireChat(
+                    onBack = { claireOverlay = null },
+                    userInfo = userInfo,
+                    program = program,
+                    initialInput = seed,
                 )
-                scope.launch { Clear30Store.save(journalEntries) }
-                org.clear30.data.Logger.logEvent(
-                    userInfo.loggingID,
-                    org.clear30.data.LogEventType.createdJournalEntry,
-                    mapOf(org.clear30.data.LogEventExtraDataType.TYPE to "text"),
-                )
-                journalPrompt = null
-            },
-        )
+            }
+        }
     }
-
     // Catch-up card → full-screen viewer of the missed day's lesson group (iOS
     // navigates to programMessages for the whole group).
     catchUpMessages?.let { group ->
@@ -1055,6 +1101,13 @@ private object TodayTabUiState {
     var savedDay: PlainDate? = null
     var savedOn: PlainDate? = null
     var savedCommunityPosts: List<Post> = emptyList()
+
+    /**
+     * The calendar day the forced/auto check-in sheet was last auto-presented
+     * on (W69) — the once-per-day guard. Compared against today directly, so a
+     * value from a previous day never suppresses today's auto-present.
+     */
+    var autoCheckInShownOn: PlainDate? = null
 
     fun resetIfStale(today: PlainDate) {
         if (savedOn != null && savedOn != today) {

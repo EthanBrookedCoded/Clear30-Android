@@ -163,8 +163,6 @@ object AssessmentQuestions {
         prompt2 = "How old are you?",
         options = listOf("18-20", "21-25", "26-30", "31-40", "41-50", "51-64", "65+"),
         displayedOptions = listOf("18 - 20", "21 - 25", "26 - 30", "31 - 40", "41 - 50", "51 - 64", "65+"),
-        // Terms-of-Use footer shown on the age screen (iOS subtext via MiniTextWithLinks).
-        subtext = "By continuing you agree to our [Terms of Use](https://www.clear30.org/terms-and-conditions) and [Privacy Policy](https://clear30.org/privacy-policy/).",
         min = 1, max = 1,
     )
 
@@ -447,7 +445,8 @@ object AssessmentQuestions {
         prompt1 = "",
         prompt2 = "When do you want to start your break?",
         options = emptyList(),
-        min = 0, max = 14,
+        // J46: allow 13 days ago … 10 days from now (day offsets from today).
+        min = -13, max = 10,
     )
 
     /** The ordered new-break question set (iOS `newClear30Questions`). */

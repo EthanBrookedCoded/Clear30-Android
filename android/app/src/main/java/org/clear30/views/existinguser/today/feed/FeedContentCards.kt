@@ -77,6 +77,7 @@ import org.clear30.views.components.cardStyle
 import org.clear30.views.components.FeedNativeVideoPlayer
 import org.clear30.views.components.softShadow
 import org.clear30.views.components.Heading3
+import org.clear30.views.components.Heading3Markdown
 import org.clear30.views.components.HighlightedTextFormat
 import org.clear30.views.components.InlineYouTubePlayer
 import org.clear30.views.components.pressScale
@@ -116,11 +117,15 @@ import org.clear30.views.theme.Dimens
  * appear; tapping opens [onTapOverride] if given (e.g. the Reddit viewer),
  * else a full-screen reader with the same [content].
  */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 internal fun ExpandingFeedCard(
     glow: Brush? = null,
     tapHint: String = "Tap to read more",
     onTapOverride: (() -> Unit)? = null,
+    // When true, expanding opens the same bottom sheet the guides use (G25)
+    // instead of a full-screen dialog.
+    useBottomSheet: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     var readerOpen by remember { mutableStateOf(false) }
@@ -169,28 +174,46 @@ internal fun ExpandingFeedCard(
         }
     }
     if (readerOpen) {
-        androidx.compose.ui.window.Dialog(
-            onDismissRequest = { readerOpen = false },
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            androidx.compose.material3.Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = Clear30Colors.background,
+        if (useBottomSheet) {
+            // Same bottom sheet the guides use (iOS `.sheet`).
+            androidx.compose.material3.ModalBottomSheet(
+                onDismissRequest = { readerOpen = false },
+                sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                containerColor = Clear30Colors.background,
             ) {
-                Column(Modifier.fillMaxSize()) {
-                    Row(
-                        Modifier.fillMaxWidth().statusBarsPadding()
-                            .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.cardSpacing / 2),
-                    ) {
-                        Spacer(Modifier.weight(1f))
-                        org.clear30.views.components.IconButton("xmark", onClick = { readerOpen = false })
+                Column(
+                    Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                        .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.cardSpacing),
+                    verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+                ) {
+                    content()
+                    Spacer(Modifier.height(Dimens.cardSpacing * 2))
+                }
+            }
+        } else {
+            androidx.compose.ui.window.Dialog(
+                onDismissRequest = { readerOpen = false },
+                properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+            ) {
+                androidx.compose.material3.Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = Clear30Colors.background,
+                ) {
+                    Column(Modifier.fillMaxSize()) {
+                        Row(
+                            Modifier.fillMaxWidth().statusBarsPadding()
+                                .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.cardSpacing / 2),
+                        ) {
+                            Spacer(Modifier.weight(1f))
+                            org.clear30.views.components.IconButton("xmark", onClick = { readerOpen = false })
+                        }
+                        Column(
+                            Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                                .padding(horizontal = Dimens.horizontalPadding)
+                                .padding(bottom = Dimens.cardSpacing * 2),
+                            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+                        ) { content() }
                     }
-                    Column(
-                        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                            .padding(horizontal = Dimens.horizontalPadding)
-                            .padding(bottom = Dimens.cardSpacing * 2),
-                        verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
-                    ) { content() }
                 }
             }
         }
@@ -281,7 +304,7 @@ internal fun MessageContentCard(msg: ProgramMessage, program: Program, userInfo:
             )
         }
     }
-    ExpandingFeedCard(glow = glow) {
+    ExpandingFeedCard(glow = glow, useBottomSheet = true) {
         // iOS MessageFeedView badge (TodayFeedViews.swift:154-169): a school
         // pill for school messages, else the badge configured for the user's
         // own assessment answer (personalized), top-right of the heading.
@@ -338,7 +361,10 @@ internal fun CarouselFeedCard(images: List<String>, glow: Brush? = null) {
                         model = images[page],
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(Dimens.cornerRadius))
+                        // iOS CarouselImageView fits to width and rounds the image's
+                        // OWN bounds (fillMaxWidth + wrap height), so the rounded
+                        // corners land on the visible image, not the letterbox box.
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(Dimens.cornerRadius))
                             // iOS CarouselImageView: tapping a loaded image opens the
                             // pinch-zoom overlay with a medium haptic.
                             .clickable {
@@ -556,12 +582,6 @@ internal fun RedditFeedCard(res: ProgramResource, userInfo: UserInfo, glow: Brus
             )
             val t = thread
             Heading3(t?.post?.title ?: res.title)
-            t?.post?.let { post ->
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-                    RedditStat(if (post.score >= 0) "chevron.up" else "chevron.down", kotlin.math.abs(post.score))
-                    RedditStat("text.bubble.fill", post.numComments)
-                }
-            }
             val preview = t?.post?.body?.let { redditInlinePreview(it) }.orEmpty()
             if (preview.isNotBlank()) {
                 SmallText(
@@ -571,9 +591,20 @@ internal fun RedditFeedCard(res: ProgramResource, userInfo: UserInfo, glow: Brus
                     maxLines = 12,
                 )
             }
-            // "Tap to see more" pinned at the bottom of the card (like the guides).
+            // Bottom row: stats (upvotes + comments) bottom-LEFT, "Tap to see more"
+            // bottom-RIGHT — always, regardless of preview length.
             Spacer(Modifier.weight(1f))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                t?.post?.let { post ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+                    ) {
+                        RedditStat(if (post.score >= 0) "chevron.up" else "chevron.down", kotlin.math.abs(post.score))
+                        RedditStat("text.bubble.fill", post.numComments)
+                    }
+                }
+                Spacer(Modifier.weight(1f))
                 TinyText("Tap to see more", color = Clear30Colors.text.copy(alpha = 0.5f))
             }
         }
@@ -671,13 +702,20 @@ internal fun ClairePromptFeedCard(
     userInfo: UserInfo,
     glow: Brush? = null,
     focused: Boolean = false,
+    // When provided (Today feed), Claire opens in-place on the current tab (G27)
+    // instead of switching to the Support tab.
+    onOpenClaire: ((String) -> Unit)? = null,
 ) {
     fun openClaire() {
         Logger.logEvent(userInfo.loggingID, LogEventType.openedContent, mapOf(LogEventExtraDataType.EXTRA to prompt.title))
-        // Claire lives on the Support tab — stash the seed, then switch tabs
-        // (a sub-route alone doesn't navigate; the destination tab consumes it).
-        AppState.requestSubRoute(DeepLinkRoute.Claire(prompt.prompt))
-        AppState.requestTab("SUPPORT")
+        if (onOpenClaire != null) {
+            onOpenClaire(prompt.prompt)
+        } else {
+            // Fallback: Claire lives on the Support tab — stash the seed, then
+            // switch tabs (a sub-route alone doesn't navigate).
+            AppState.requestSubRoute(DeepLinkRoute.Claire(prompt.prompt))
+            AppState.requestTab("SUPPORT")
+        }
     }
     Clear30Card(modifier = Modifier.fillMaxSize(), glowGradient = glow) {
         Column(Modifier.fillMaxSize()) {
@@ -828,7 +866,8 @@ internal fun JournalPromptsFeedCard(prompts: List<String>, glow: Brush? = null, 
                 formats = listOf(HighlightedTextFormat("New Journal", highlighted = true)),
                 highlightBrush = Clear30Gradients.journals,
             )
-            Heading3(prompts.getOrNull(index) ?: "Create a new journal.")
+            // Prompts can carry markdown (e.g. "**bold**") — render it.
+            Heading3Markdown(prompts.getOrNull(index) ?: "Create a new journal.")
             Spacer(Modifier.weight(1f))
             if (prompts.size > 1) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

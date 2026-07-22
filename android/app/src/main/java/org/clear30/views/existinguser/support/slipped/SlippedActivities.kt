@@ -68,6 +68,7 @@ import org.clear30.views.components.cardStyle
 import org.clear30.views.components.pressScale
 import org.clear30.views.components.sfSymbol
 import org.clear30.views.existinguser.community.communityProgramTagName
+import org.clear30.views.existinguser.community.getDayTag
 import org.clear30.views.theme.Clear30Colors
 import org.clear30.views.theme.Clear30Gradients
 import org.clear30.views.theme.Dimens
@@ -542,12 +543,7 @@ private fun SlipCommunityActivity(activity: SlipActivity, userInfo: UserInfo, pr
                                     } else {
                                         communityTags.firstOrNull { it.type == "program" && it.name == program.communityProgramTagName }?.let { add(it.name) }
                                     }
-                                    val breakDay = program.currentBreak?.takeIf { !it.isStartSoon }?.currentBreakDay
-                                    if (breakDay != null) {
-                                        communityTags.firstOrNull {
-                                            it.type == "day" && it.name.filter(Char::isDigit).toIntOrNull() == breakDay
-                                        }?.let { add(it.name) }
-                                    }
+                                    communityTags.getDayTag(program)?.let { add(it.name) }
                                 }
                                 val uid = SupabaseController.getUserID() ?: userInfo.userID
                                 Logger.logEvent(userInfo.loggingID, LogEventType.createdCommunityPost)

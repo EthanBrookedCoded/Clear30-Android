@@ -50,6 +50,9 @@ data class LoggedCheckIn(
     val id: String,
     val amount: Int? = null,
     val completion: Boolean? = null,
+    // Lenient parse — iOS writes check-in timestamps offset-less (see
+    // LenientInstantSerializer); a strict Instant would fail the whole day_info decode.
+    @Serializable(with = LenientInstantSerializer::class)
     val timestamp: Instant? = now().nearestHour,
     val distinctID: String? = UUID.randomUUID().toString(),
 ) {

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -78,7 +79,7 @@ fun NormativeFeedbackView(
     }
 
     Column(
-        Modifier.fillMaxSize().padding(
+        Modifier.fillMaxSize().systemBarsPadding().padding(
             horizontal = Dimens.horizontalPadding,
             vertical = Dimens.headingTopPadding,
         ),

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -96,6 +97,7 @@ fun ReviewsSlide(userInfo: UserInfo, onNext: () -> Unit) {
         Modifier
             .fillMaxSize()
             .statusBarsPadding()
+            .navigationBarsPadding()
             .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
         horizontalAlignment = Alignment.Start,
     ) {
@@ -150,13 +152,58 @@ fun ReviewsSlide(userInfo: UserInfo, onNext: () -> Unit) {
     }
 }
 
-/** Local placeholder analogue of the iOS `Review` Codable until getReviews lands. */
+/** iOS `Review` analogue. The real copy below is the live `library.onboarding_reviews`
+ *  table (sorted by priority), transcribed here so the slide doesn't need the
+ *  non-public `library` Postgrest schema wired up. */
 private data class PlaceholderReview(val priority: Int, val title: String, val body: String)
 
 private val placeholderReviews = listOf(
-    PlaceholderReview(0, "Life changing", "Clear30 gave me the structure and support I needed to finally take a break. The daily check-ins keep me honest."),
-    PlaceholderReview(1, "Worth every penny", "I tried quitting on my own so many times. Having a plan made all the difference — I'm on day 22 and feeling amazing."),
-    PlaceholderReview(2, "So much clarity", "I sleep better, I'm more present with my family, and I finally feel like myself again. Highly recommend."),
+    PlaceholderReview(
+        1, "Exceptional quality app! Kudos to the team!",
+        "Woah. I rarely leave reviews on here but this is so clean and elegant.\n\n" +
+            "I found this app through a TikTok of someone dancing and celebrating that they're two weeks " +
+            "into their break and then mentioned this app.\n\n" +
+            "I usually don't download apps like this but I guess I liked that it was advertised as just a " +
+            "30-day break and not a \"you need to stop doing this immediately.\" The onboarding experience " +
+            "was welcoming and made me think about my own habits without feeling guilty.",
+    ),
+    PlaceholderReview(
+        1, "Very helpful",
+        "This has been the most helpful thing during my journey to quit smoking. I do not believe I could " +
+            "have come as far as I have without the Clear 30 app.\n\n" +
+            "There is a wonderful community of other smokers trying to quit that you can chat with, even an AI " +
+            "bot to help. Daily check ins have helped me tremendously. I 100% recommend this app. 10/10",
+    ),
+    PlaceholderReview(
+        2, "Highly recommend",
+        "I have been smoking for 8 years straight every day. I randomly got the urge to try quitting for the " +
+            "second time. I saw an ad for this app and decided to give it a try — I did not expect it to work. " +
+            "However I was wrong; simply seeing the time I've been clean for and the symptoms that are normal to " +
+            "feel has really helped me!",
+    ),
+    PlaceholderReview(
+        2, "New beginnings",
+        "This app really helped me see how much I relied on weed. I'm a month in and I can't tell you how much " +
+            "clearer and better I am feeling. I love the check ins and everything this app has to offer. I didn't " +
+            "think I could ever quit weed but here I am.",
+    ),
+    PlaceholderReview(
+        2, "Finally something personal!",
+        "I really appreciated this app and how personalized it was. I didn't want to fully quit, and just wanted " +
+            "to monitor my use. Nobody tried to force me to fully quit, and I was able to really cut down. When I " +
+            "was struggling with cravings I reached out to peer support and they had great advice!",
+    ),
+    PlaceholderReview(
+        3, "Incredible guided meditations!",
+        "The meditations really get me through the cravings and have a lot of very real and useful insight on " +
+            "getting your power back and how cravings work.",
+    ),
+    PlaceholderReview(
+        5, "NEEDED",
+        "I have been struggling with weed for a while now and this app has helped boost my mental strength to " +
+            "stop. I did slip up once but it really pushed me to keep trying. If you want to quit look no further " +
+            "than this app.",
+    ),
 )
 
 /**
@@ -264,7 +311,8 @@ private fun UsersRow(modifier: Modifier = Modifier) {
     Row(
         modifier,
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+        // Center the emoji avatars + "+ 15,000 people" as a group (D12).
+        horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2, Alignment.CenterHorizontally),
     ) {
         listOf("☺️", "😎", "🥹").forEach { e ->
             Box(

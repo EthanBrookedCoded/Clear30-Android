@@ -6,8 +6,12 @@
 > (`git log --follow android/PARITY.md`, last full version at `d62f296`).
 > This version keeps: remaining work, the decision log, verification debt,
 > and the implementation gotchas still worth knowing.
-> **Active work: Wave 9 (§1a-ii) — Thatcher's 2026-07-21 emulator smoke-test
-> notes.**
+> **Active work: Wave 17 = Thatcher's big change batch (2026-07-22) — 51/~54
+> items landed + clean `assembleDebug` green; full per-item spec/status/manual-tests in
+> `android/PLAN-2026-07-22.md` (+ `VIDEO_REENCODE_LIST.md`). Only E15 (device),
+> G26 (device / HEVC re-encode), and J49/J50 (needs clear30.org assetlinks.json)
+> remain from Wave 17. Also still open: Wave 15 W15, §1b verification debt, §1c
+> prod-readiness externals, Wave 16 findings (§1a-viii).**
 
 ## For AI agents working from this doc
 
@@ -146,7 +150,7 @@ Severity: **P0** = data integrity / prod blocker · **P1** = core-flow bug ·
   submission only. §17-Q2 is moot: the short flow never reaches the modAbs
   question on either platform.
 
-- [ ] **EXP4 · P3 · polish — Small assessment deltas found by the audit:**
+- [x] **EXP4 · P3 · polish — Small assessment deltas found by the audit:**
   (a) ~~post-assessment interview slide shown to everyone by fallback~~
   **(done 2026-07-21 on Android, §17-Q22: interview branch hardcoded OUT of
   `PostAssessmentViewModel.kt` — chain is now coach-referral(exp) →
@@ -161,8 +165,10 @@ Severity: **P0** = data integrity / prod blocker · **P1** = core-flow bug ·
   2026-07-21 with O12 — see O12 note).
   (c) ~~"(More breaks coming soon)" suffix always shown on new-break~~ (done
   2026-07-21 — count logic now mirrors iOS `allCases`, suffix never shows).
-  (d) Android's Age question adds a Terms/Privacy footer iOS doesn't have;
-  referral-logo rendering is moot now that the in-assessment referral is gone.
+  (d) ~~Android's Age question adds a Terms/Privacy footer iOS doesn't have~~
+  (done 2026-07-22 — subtext removed from the age question; verified iOS
+  ProgramAssessmentQuestions.swift:214-219 has none); referral-logo rendering
+  is moot now that the in-assessment referral is gone.
   (e) latent only-if-flags-change gaps (accepted): `new-onboarding`→hide has
   no Android Slides2; remote `afterQuestionId` questions, guardian/adolescent
   branch, and live normative-data fetch unported (baked-in
@@ -314,7 +320,25 @@ account exists locally.)*
   libx264 -crf 22 -c:a aac -movflags +faststart out.mp4` — and re-upload. No
   app change needed.) **W17 · P1 · bug — Some testimonial videos don't
   load** — encoding/codec issue confirmed.
-- [~] (PARTIAL 2026-07-21, uncommitted — (a) **SORTING fixed at the shared
+- [x] (COMPLETED 2026-07-22, uncommitted — the remaining pieces landed +
+  verified on-emulator: per-break **FilterListSheet** (ModalBottomSheet @ 0.4
+  height, gradient-highlighted active row w/ break start-month @ 0.5, "Better
+  Life Program" entry, opened from a `line.3.horizontal.decrease.circle.fill`
+  header button shown only when >1 option) across all four libraries;
+  **Reddit 'Symptoms' filter** → per-symptom alphabetical sections with the
+  symptom gradients (banner hidden there, iOS AllRedditsView:223-233);
+  **MoreContentBanner** ("More {type} {reltime}", clock.fill, opacityGray, only
+  when a locked unlock date exists) atop every library; **Meditations became
+  the 2-col MeditationCard grid** (gradient play disc + VisitedNode + "emoji
+  name"; Reddit/YouTube already had grid cards, now on the shared skeleton);
+  **Messages day pill** got the iOS progress RING (stage gradient @ 0.25
+  outline + PathMeasure-trimmed full-alpha arc, 3dp) and the completed pill's
+  white 0.5 outline; ResourcesScreen/AllPrompts rebuilt onto the shared
+  `buildLibraryTabs` (killing a private oldest-first copy). Intentional
+  deltas: iOS's normative-feedback pseudo-card at the messages-list bottom not
+  wired; filter-switch fade animation skipped; Reddit brand icon still the
+  glyph pending svg-import. Original partial notes below.)
+  (PARTIAL 2026-07-21, uncommitted — (a) **SORTING fixed at the shared
   level**: buildLibraryTabs now buckets newest-first (sections AND items),
   matching iOS .reversed() — applies to Messages/Reddit/YouTube/Meditations
   at once; (b) **Messages library**: iOS MessageCard row ported (emoji+title
@@ -750,30 +774,102 @@ detail. Everything below compiles; not yet exercised on-device.)*
 
 **Still open from the audit (not yet implemented):**
 
-- [ ] **W69 · P2 — forced check-in flows** (iOS CheckInViewModel:52-93): on
+- [x] (done 2026-07-22, uncommitted — full iOS decision ladder ported to
+  TodayTab (`LaunchedEffect(selectedDay)`): multi-sheet first (≥2 missed,
+  unchanged), then forced-YESTERDAY (gated `program.getDay(now()) >= 1`,
+  iOS CheckInViewModel:53-65), then forced non-today unlogged selected day
+  (:68-79, unguarded like iOS), then first-load auto-present for an unlogged
+  today — the today-scoped presents guarded once per calendar day via
+  `TodayTabUiState.autoCheckInShownOn`. CheckInSheet now takes the day
+  (`checkInSheetFor: PlainDate?` replaced the bool) — see W73a. VERIFIED
+  on-emulator: fresh app load auto-presented "Check in for Today".)
+  **W69 · P2 — forced check-in flows** (iOS CheckInViewModel:52-93): on
   load iOS forces an unlogged YESTERDAY's check-in (gated program day ≥ 1)
   and auto-presents the check-in on first load of an unlogged day. Android
   only auto-opens the multi sheet at ≥2 missed days. Port with the day-0
   gate + a once-per-day guard (TodayTabUiState).
-- [ ] **W70 · P3 — community day tags**: iOS auto-attaches the "Day N" tag to
-  new posts and offers it in the filter (hidden during start-soon); Android
-  strips day tags from the filter and never attaches them on create.
+- [x] (done 2026-07-22, uncommitted — iOS TagModel.swift ported exactly:
+  `extractDayCount` (:76-85), `getDayTag` (:179-184, nil during start-soon),
+  and the full `filterTags` (:115-151 — hidden + lobby drop, day tag only
+  when == current break day, program-tag → day → general → other-programs
+  sort) as shared extensions in CommunityTab; the old strip-all-day-tags
+  filter removed; CreatePostScreen seeds `selectedTagIds` with the day tag
+  (visible + removable, iOS CreatePostView:227-230); SlippedActivities now
+  reuses the shared helper; `PostTag.Tag` gained the `hidden` column.
+  VERIFIED on-emulator: "Day 4" offered 2nd in the filter sheet and
+  pre-attached as a removable pill on create-post. NB the local "4/21 Lobby"
+  tag still lists because its DB `type` is 'general', not 'lobby' — data,
+  not app.) **W70 · P3 — community day tags**: iOS auto-attaches the "Day N"
+  tag to new posts and offers it in the filter (hidden during start-soon);
+  Android strips day tags from the filter and never attaches them on create.
   SlippedActivities already ports `getDayTag` correctly — reuse it in
   CommunityTab + CreatePostScreen.
-- [ ] **W71 · P3 — slipped-nudge notification** (iOS NotificationHandlerSlipped
+- [x] (done 2026-07-22, uncommitted — `NotificationHandler.scheduleSlipped`:
+  iOS's 10-entry copy pool verbatim, fire = now + random 90–180 min
+  (NotificationHandlerSlipped.swift:96-101), gated on the check-in
+  notification toggle + an active break, unique WorkManager job w/ REPLACE so
+  a repeat slip swaps not stacks, CHANNEL_CHECK_IN; CheckInLogger ports the
+  latest-check-in gate (iOS CheckInLogger.swift:87-95) then smoked →
+  schedule / sober → cancel (:202-209). Divergence: taps deep-link to the
+  Support tab (no dedicated Slipped route on Android).)
+  **W71 · P3 — slipped-nudge notification** (iOS NotificationHandlerSlipped
   via CheckInLogger): scheduled after a smoked check-in, cancelled on sober.
   No Android port.
-- [ ] **W72 · P3 — remote pop-ups** (`program.popUps`): model field exists but
-  is never refreshed or rendered (iOS refreshPopUps + day-matched popup in
-  the Today feed).
-- [ ] **W73 · P3 — misc small deltas**: check-in sheet logs `now()` even when
+- [ ] ~~**W72 · P3 — remote pop-ups** (`program.popUps`)~~ **CLOSED — won't
+  fix ("we don't care about popups", Thatcher 2026-07-21; consistent with
+  §17-Q13's pop-in deferral).**
+- [x] (done 2026-07-22, uncommitted — full iOS spec extracted first (key
+  facts: RC entitlements are **"Core"/"Plus"** (Plus wins), appUserID =
+  Supabase userID, loggingID only an attribute; iOS renders the paywall via
+  Helium with RC underneath, so Android's native paywall + RC SDK covers the
+  same contract; iOS has NO explicit restore call — it's a paywall-template
+  button). Landed: `getUserParams` now emits the full iOS trait set incl.
+  per-assessment-response `"{id}-{i}"`/`"{id}-display-{i}"` keys + QA
+  (PaywallController.swift:327-385) pushed as RC subscriber attributes
+  (closes W73d); launch-time trait refresh (iOS ContentView.initHelium) +
+  referral-code re-push; AllTabs ported `checkSubscription` → hard-paywall
+  force-show for lapsed unpaid users, `checkEntitlementChanged` →
+  `handleUserPaid` (entitlement set, content notifications rescheduled) /
+  `handleUserUnsubscribed` (entitlement cleared, content pushes dropped,
+  toggles off, `unsubscribed` logged, re-gate) + full-screen popup Paywall
+  (hard = undismissable); paywall analytics parity (`openedPaywall` w/
+  placement + `currentPaywallID` stamp, `subscribed` w/ popup/product/
+  restored extras, free-code path) + failed-restore alert;
+  `AppState.requestPaywall(hard)` hook for future upsell/deep-link points.
+  Blank-`REVENUECAT_API_KEY` no-op guard preserved everywhere (verified
+  quiet on-emulator). Deliberately not ported: Helium/Stripe/Shopify/
+  Superwall + one-time-offer downsell (§6), StoreKit messages (Play handles),
+  the "you're upgraded" OpeningAnimation popup. RC purchases SDK 8.10.5 was
+  already a dependency.) **W75 · P1 — RevenueCat + paywall logic, COMPLETE**
+  (Thatcher 2026-07-21): port the full iOS RC/paywall behavior — offerings
+  fetch, paywall presentation in onboarding (+ any re-present points),
+  purchase + restore flows, entitlement→isPaid gating, subscriber attributes
+  (incl. the assessment-trait attributes from W73), and graceful no-op while
+  `REVENUECAT_API_KEY` is blank (no Play app yet, §1c). The
+  Helium→Stripe→Shopify chain stays out of scope (§6).
+- [x] (done 2026-07-22, uncommitted — all four: (a) CheckInSheet logs the
+  SELECTED day at current time-of-day (new `selectedDay` param; reward +
+  title keyed off it — "Today"/"Yesterday"/weekday like iOS `dayOfWeek()`);
+  (b) post-verify loading is now an iOS `AccountSetupView` port (new SETUP
+  step in AllSignUp: rotating 4-segment gradient ring around a person glyph,
+  segments pop w/ light haptics, "Compiling your cannabis snapshot..." /
+  "Setting up your account..." / "Welcome back!" titles, school-vs-AI callout
+  card, Done button for new users, returning users auto-forward, back
+  swallowed mid-flight); (c) `where_you_going` extra title/body removed —
+  only the centered custom view renders (iOS AssessmentSlides3.swift:833-853);
+  (d) RC assessment-trait subscriber attributes — closed with W75.)
+  **W73 · P3 — misc small deltas**: check-in sheet logs `now()` even when
   a past day is selected (iOS logs the selected day); Android's post-verify
   loading screen is a bare spinner vs iOS AccountSetupView; `where_you_going`
   has an extra title; RC paywall subscriber attributes missing the
   assessment-response traits (PaywallController TODO).
-- **Decision needed (Q23?): custom weekly-spend ≥$100 dream-outcome math** —
-  iOS truncates to the first 2 digits ("100" → $10 → +$40/mo, a quirk);
-  Android uses the full amount (+$400/mo, arguably correct). Pick one.
+- [x] (decided 2026-07-22 per the standing "iOS is the behavior spec" rule —
+  **MIRROR the iOS quirk**, logged as §17-Q23; both dream-outcome parse sites
+  now use `take(2)` like iOS `prefix(2)` with a comment citing the decision.
+  Flip both if Thatcher prefers the correct math — iOS would need the same
+  change.) **Decision needed (Q23?): custom weekly-spend ≥$100 dream-outcome
+  math** — iOS truncates to the first 2 digits ("100" → $10 → +$40/mo, a
+  quirk); Android uses the full amount (+$400/mo, arguably correct). Pick one.
 
 - [x] (done 2026-07-21 late — **D2 old-Android-app restore implemented** as
   `OldAppMigrationHandler`, wired after a successful onboarding submit.
@@ -800,6 +896,183 @@ detail. Everything below compiles; not yet exercised on-device.)*
   RARITY gradient at 0.25 opacity (was neutral gray), and non-earned
   LEGENDARY achievements are hidden from the list (section disappears when
   empty; no "X of Y" count for Legendary so the total can't leak).
+
+### 1a-vii. Wave 15 — Thatcher's follow-up list (2026-07-22)
+
+- [x] (done 2026-07-22, uncommitted — root cause: the `List<ProgramMessage>.unlocked`
+  extension re-sorts ascending (`.sorted` = compareBy(isSchoolMessage, unlockOn)),
+  so within-section items were oldest-first despite `buildLibraryTabs`' newest-first
+  grouping. `MessagesLibraryScreen` now reverses the DAY-GROUP order only (iOS
+  AllMessagesView.swift:148 `(0..<count).reversed()`), keeping each day's
+  core-message-first order so the assessment message stays the badge. VERIFIED
+  on-emulator: Physical Withdrawal section renders Day 4→3→2→1.)
+  **W76 · P3 — Messages library: reverse message order WITHIN sections.**
+- [x] (done 2026-07-22, uncommitted — removed the header heart + `favoritesMode`
+  state + the entire favorites branch from `MessagesLibraryScreen`; header is now
+  just back-chevron + "Messages" (+ the >1-option filter button). Follows W35.
+  VERIFIED on-emulator: no heart in the header.)
+  **W77 · P3 — Remove favorites from the Messages library.**
+- [x] (done 2026-07-22, uncommitted — `DailyTopicsSection` now uses the iOS
+  `recentUnlockedMessageGroups(limit:3)` shape (ProgramContent.swift:134-147): the
+  3 most-recent fully-unlocked DAY groups, newest-first, each day's second message
+  folded into the primary card as a badge pill (iOS MessageCard badge). Opening
+  passes the primary; SupportTab's OpenMessage route already rebuilds the whole
+  day group from it. VERIFIED on-emulator: "Finding Your Why" shows the
+  "Motivation as Your Why" badge, "Riding Out Cravings" shows its sub-badge.)
+  **W78 · P2 — Daily Topics section must group assessment messages with
+  core ones.**
+
+### 1a-viii. Wave 16 — full iOS↔Android edge-case audit (agent, 2026-07-22 night)
+
+*(8 parallel domain-auditor agents diffed the whole app line-by-line — data
+models/serialization, check-in/rewards/timers, community/groups, notifications,
+Supabase RPC contracts, paywall/RevenueCat/routing, support hub/library, plus a
+405-file coverage/gap scan. Each agent read PARITY §4/§5/§6 first to skip
+intentional divergences. Full findings: session `scratchpad/audit/*.md`.)*
+
+**FIXED this wave (all compile; app relaunches clean, no regressions on the
+day_info decode / all-tabs smoke test):**
+
+- [x] **W79 · P1 — `PopInType` broke `day_info` cross-platform (X1 blocker).**
+  Swift `Codable` writes the enum externally-tagged (`{"day0":{}}`); the backend
+  `day_info` column (on `public.users`) stores exactly that (verified in the
+  local DB — user rows carry `{"day0":{}}`/`{"day1":{}}`/`{"day2":{}}`). Android's
+  kotlinx sealed class emitted/expected `{"type":"day0"}`, and the per-day decode
+  in `DayInfoArraySerializer` isn't wrapped — so ONE iOS-written popInType threw
+  and dropped the WHOLE day_info map → an iOS user restoring on Android loses all
+  check-in history. **Bidirectional**: Android writes `PopInType.RestartedBreak`
+  (`ProgramTimelineHandler.kt:404`), so an Android→iOS restore broke too. Fix:
+  new `PopInTypeSerializer` — always ENCODES the Swift external-tag form, DECODES
+  both that and the legacy kotlinx `{"type":…}` form (so on-device history from
+  earlier builds still loads). `A/data/model/PopInType.kt`.
+- [x] **W80 · P1 — Group member stats counted the wrong days.**
+  iOS `Clear30GroupMember` filters `dayInfo` by `joinDate` (`filteredDayInfo`) and
+  counts `daysCheckedIn` as `sober != nil`; Android counted the member's ENTIRE
+  dayInfo and used `dayInfo.size` (so pre-join days + symptom-only days inflated
+  every total). Feeds the group-card totals and the `daysSoberCount`-ordered
+  leaderboard. Fixed to mirror iOS (Clear30Group.swift:120-138). ISO date-string
+  keys sort chronologically so no parsing needed. `A/data/model/Clear30Group.kt`.
+- [x] **W81 · P1 — DB experiments never loaded on Android.**
+  `getExperiments()` called `get_user_experiments` on the PUBLIC schema, no params,
+  decoding `flag_key`/`experiment_key`. Real fn: `experiments.get_user_experiments(
+  p_user_id text) RETURNS (experiment_id, variant, payload)` (verified in DB; iOS
+  `ExperimentControllerAbstracted.swift:99-103`). Three defects → the RPC always
+  threw → every DB-driven experiment silently fell back (e.g. the `feedback-method`
+  card). Fixed schema + `p_user_id` + fields, plus iOS's "only log exposure on a
+  NEW variant" guard. `A/data/supabase/SupabaseExperiments.kt`. *(Assessment
+  branches stay hardcoded per Q22 — unaffected.)*
+- [x] **W82 · P2 — Notification-tap deep links were silently dropped.**
+  `MainActivity.handleDeepLink` read only `intent.data`, but the local worker +
+  FCM service deliver the route via `putExtra("deep_link", …)` — never read. So
+  W71's slipped-nudge (and any FCM/content tap) didn't navigate. Fixed to honor
+  both. `A/MainActivity.kt`.
+- [x] **W83 · P2 — Peer-support read-marker hit the wrong schema.**
+  `markPeerMessagesRead` called `mark_peer_messages_read` with no schema (→ public);
+  the fn is `comms.mark_peer_messages_read` (iOS `.schema("comms")`). Best-effort/
+  swallowed, so Gerad's unread badge never cleared server-side. Fixed.
+  `A/data/supabase/SupabasePeerSupport.kt`.
+- [x] **W84 · P2 — Android→iOS group invites never joined.**
+  Android shared `clear30.org/group/<id>` (path form); iOS joins ONLY off the
+  `group_id` query param, so iOS recipients silently didn't join. Now emits iOS's
+  exact URL `clear30.org/join-a-group/?group_id=<id>&name=<name>` (Clear30Group
+  .swift:267); Android's parser accepts both. `A/views/.../groups/GroupsTab.kt`.
+- [x] **W85 · P3 — RC `rc_entitlement` trait used `.name` ("PLUS") not iOS
+  rawValue ("Plus")** → RevenueCat targeting rules keyed on iOS casing wouldn't
+  match. Added `EntitlementType.rawValue`; `A/data/PaywallController.kt:284`.
+
+**OPEN — diagnosed, NOT changed (need Thatcher's call or a device test the
+agent couldn't run tonight). Ranked:**
+
+- [ ] **W86 · P1 — Offline paywall bypass (fresh W75 code, PROD-ONLY).**
+  `PaywallController.checkEntitlementChanged` has no network guard; offline with an
+  RC key set, `activeEntitlement` throws → catch returns `DEFAULT`(=PLUS) for a
+  never-paid user → grants PLUS + dismisses the hard wall + persists it (airplane
+  mode = clean bypass; self-corrects online). iOS returns `(false,nil)` when
+  offline (PaywallController.swift:165-169). No-ops with the blank dev key, so
+  untested here — recommend adding the same offline guard. `A/data/PaywallController.kt`.
+- [ ] **W87 · P2 — Sober spans not banked on the NORMAL check-in path.**
+  iOS `handleLastSmoked` routes through `resetLastSmoked` (banks a `DateSpan` into
+  `lastSmokedSpans`, the `personalBest` reward's only feed); Android sets
+  `program.lastSmoked` directly (`CheckInLogger.kt:160`), so `personalBest` never
+  fires from ordinary check-ins and no personal-best history accrues. W62 fixed the
+  timeline-mutator paths but not this one. **Fix needs care**: iOS gates the reset
+  on `originalLatestSmokedCheckIn != latestSmokedCheckIn`; without that guard,
+  routing through `resetLastSmoked` would bank bogus intra-day spans on every sober
+  check-in (worse than today). Thread the pre-mutation latest-smoked through the
+  caller, then route + guard. Same gap in the profile timer edit (`DopamineTimer.kt:139`).
+- [ ] **W88 · P2 — Onboarding paywall never silently auto-restores.** iOS
+  `checkPaidInitial` auto-closes the onboarding wall for a user with an existing
+  entitlement; Android only restores on a manual tap, so a reinstalling subscriber
+  is stuck at the hard onboarding wall. `A/views/newuser/payment/Paywall.kt:64-97`.
+- [ ] **W89 · P2 — Support-tab surfaces aren't paywall-gated.** iOS gates Dr. Fred/
+  Gerad chats, symptom-card taps, and slip "Talk" rows behind the entitlement (+dims
+  + upsell); Android opens them all free. Android has the W75 primitives but these
+  surfaces don't call them. *(Product decision — confirm you want them gated.)*
+- [ ] **W90 · P2 — Community feed: no pagination + no reacting from the feed.**
+  One `getCommunityFeed(end=20)` with no load-more and no "Other suggested posts"
+  cross-program append (`CommunityTab.kt:94-113`); feed pills are inert, no "+" chip
+  (`:576-599`). Both are the unfinished half of W19's spec (iOS pages infinitely;
+  feed pills are interactive).
+- [ ] **W91 · P2 — Check-in reward headline is hardcoded.** iOS
+  `CheckInRewardTextGenerator` (7 scenarios, name/date substitution, seeded per-day)
+  wasn't ported — `CheckInSheet.kt:583-591` shows 2 fixed strings for every check-in
+  (the sober one is literally iOS's "smoked yesterday, clean today" copy shown for
+  ALL sober days). All personalization lost.
+- [ ] **W92 · P2 — Notification depth gaps.** (a) check-in reminder is one hardcoded
+  string on a 24h worker — iOS fetches remote personalized copy, schedules 3 at day
+  offsets + a 2h trial nudge, reschedules per check-in; (b) content/check-in/health
+  local notifs carry no deep-link/category, so even post-W82 a tap won't scroll to
+  the lesson day / open the check-in sheet / open the health category; (c)
+  abandoned-onboarding fires hardcoded 1h/24h/72h copy vs iOS remote copy at DAY
+  offsets. `A/data/NotificationHandler.kt`, `NotificationPostWorker.kt`.
+- [ ] **W93 · P2 — Remote "Extras" support-items section not ported.** iOS renders
+  remote-configured `GradientActionButton`s (existing-sheet / direct-URL / generic
+  dispatch); no Android `RemoteSupportItem` model/fetch/section.
+- [ ] **W94 · P2 — Post-onboarding Tutorial/Tutorial2 walkthrough (18 iOS files)
+  entirely cut.** iOS shows it to every new user (`AllTabs.swift:610`); Android only
+  extracted the start-date step. §17-Q4 only covers *tab* tutorial popups, so this
+  isn't clearly documented as out-of-scope. *(Confirm intended-out or port it.)*
+- [ ] **W95 · P3 batch — smaller deltas:** F3/F4/F6/F7 paywall analytics/trait
+  drift (placement hardcoded; restore omits product `.type`; signIn attrs pushed
+  pre-alias; expiry guard keys off `currentEntitlementType`); E-P3 achievement sync
+  `insert`→`upsert`+`is_visited`; symptom-carousel Insomnia bias + ignores
+  `SymptomInfo.selected`; human-support rows drop unread badge/preview; hub rails
+  "Coming soon" even with ≥5 items; meditation scrubber shown pre-first-play;
+  craving-game analytics events unemitted; forced yesterday/past check-ins
+  skippable (iOS mandatory); post-reward "Today's Focus" screen + auto-advance bar
+  not ported; catch-up capped at 30 days; SocialUserView (tap post author = no-op,
+  `PostDetail.kt:204` TODO); Zoom "Support Group" card; create-post tag picker uses
+  `filterTags` not `postingTags`; deep-link group-join lacks the "leave current
+  group" alert; `ClaireMessage` history loses real timestamp. Details per domain in
+  `scratchpad/audit/{A..H}-*.md`.
+
+### 1a-ix. Helium paywall SDK integration (2026-07-22)
+
+- [x] (done 2026-07-22, uncommitted — **Helium Android SDK wired as the primary
+  paywall**, mirroring iOS `HeliumPaywallView` + `HeliumRevenueCatDelegate`.
+  Landed: deps `com.tryhelium.paywall:core:4.0.0` + `:revenue-cat:4.0.0`
+  (resolve from Maven Central); **RevenueCat bumped 8.10.5 → 9.7.0** — FORCED by
+  Helium's revenue-cat module (it depends on RC 9.7.0), the existing
+  PaywallController compiles unchanged against 9.x (verified); `HELIUM_API_KEY`
+  BuildConfig from local.properties (blank-safe like the RC key);
+  `PaywallController.initHeliumSDK` (`Helium.initialize`, called in
+  `Clear30Application.onCreate` after RC) + filled `initHelium` (pushes
+  `Helium.identity` userId/revenueCatAppUserId + the `getUserParams` traits as
+  typed `HeliumUserTraits`) + `heliumEnabled()`; new `HeliumPaywall` composable
+  (`Helium.presentPaywall(trigger, PaywallPresentationConfig(...), onEntitled,
+  HeliumEventListener, onPaywallNotShown)` with the `RevenueCatDelegate(activity)`
+  purchase bridge attached per-presentation) that maps Helium events onto the
+  existing `PaywallController`/`onCompleted` flow — `PaywallWebViewRendered` →
+  openedPaywall + currentPaywallID, `PurchaseSucceeded`/`PurchaseRestored` →
+  resolve entitlement + complete, soft `PaywallDismissed` → free-close; `Paywall`
+  now branches Helium-vs-native on `heliumEnabled()`, and `onPaywallNotShown`
+  (holdout/error) or a blank key falls back to the untouched native RevenueCat
+  paywall (renamed `NativePaywall`). API verified by introspecting the resolved
+  AARs (javap), compiles clean, installs + boots with no crash (blank key →
+  no-op → native path, unchanged). Free codes honored; §6 extras
+  (OTO downsell / Stripe / sale checks) deliberately not ported. NEEDS Thatcher's
+  external config to actually render — see §1c.)
+  **Helium paywall SDK — integrated, gated on `HELIUM_API_KEY`.**
 
 ### 1b. Verification debt (landed, but not fully exercised on-device)
 
@@ -838,7 +1111,15 @@ detail. Everything below compiles; not yet exercised on-device.)*
 app's signing key still exists or the listing is on Play App Signing.)*
 
 - [ ] RevenueCat: create the Play Store app in the dashboard → `goog_` key into
-  `local.properties`.
+  `local.properties`. *(NB the SDK was bumped 8.10.5 → 9.7.0 to match Helium's
+  `revenue-cat` module — smoke-test a real purchase/restore once the key is live.)*
+- [ ] **Helium paywall (SDK now integrated, needs external config to turn on):**
+  (1) grab the Android API key at app.tryhelium.com → `HELIUM_API_KEY=...` in
+  `local.properties`; (2) in the Helium dashboard, build the paywalls + create the
+  triggers whose keys match `PaywallTrigger` raws — `clear30_onboarding` and
+  `clear30_popup` are the two the Android app requests today; (3) with both the
+  Helium and RevenueCat keys set, exercise onboarding + the existing-user popup.
+  Blank `HELIUM_API_KEY` → the app uses the native RevenueCat paywall (§1a-ix).
 - [ ] Firebase: add Android apps `org.clear30.Clear30v1` +
   `org.clear30.Clear30v1.debug` to project `clear30-24f18` → real
   `google-services.json`.
@@ -890,6 +1171,7 @@ history (`d62f296` and earlier).
 | 7 — post-Wave-5 feedback | T8, P7, G3, F1b | 2026-07-13, 89941d2 |
 | 8 — post-Wave-7 feedback | X10, P9, B6, B5+P8, T9, O5, S13, A1 (verified no-code), N3, X9, A3, O9-styling | 2026-07-14, 3f171e9 |
 | follow-ups | T10 (day-scoped feed + full-height layouts) · T11 (meditation/YouTube/Claire cards) | 2026-07-14, c81c05b · d62f296 |
+| 14 — remaining-items closeout | W18 remainder, W69, W70, W71, W73(a-d), W75, EXP4(d), Q23 decision | 2026-07-22, uncommitted |
 
 Closed / won't fix: X8 (loggingID device-ID, §17-Q15) · A4 (appstack, §17-Q16)
 · A5 (§17-Q16) · G2 (remainders, §17-Q19) · O9's reviews fetch (§17-Q16).
@@ -997,10 +1279,17 @@ feature ideas, health-step notification copy, test-school messages/activities),
   short onboarding flow coded in (no `assessment-short-flow` read), moderation
   users share the main path, post-assessment interview branch removed.
 
+**2026-07-22 (agent decision under the standing rules, not Thatcher):**
+- **Q23 (W73):** Custom weekly-spend ≥$100 dream-outcome math — mirrored the
+  iOS `prefix(2)` truncation quirk ("100" → $10/wk) per "iOS is the behavior
+  spec"; both platforms would need changing together to use the full amount.
+
 ## 6. Out of scope (per Thatcher, 2026-07-13)
 
 Experiments setup work · ShortcutHandler depth · Welcome-back popup ·
 Three-day encouragement · Claire voice mode · Counselor/B2B/NYS modes ·
 Supplements · Video testimonials · Influencer mode · School leaderboard ·
-Google Sign-In · SMS/Twilio · Helium/Stripe/Shopify payment fallback chain
-(RevenueCat-only for now).
+Google Sign-In · SMS/Twilio · Stripe/Shopify/Superwall payment fallback chain +
+one-time-offer downsell (still out). **Helium is now integrated** (§1a-ix,
+2026-07-22) as the primary paywall with the native RevenueCat paywall as the
+holdout/error/unconfigured fallback — it no longer belongs on this list.

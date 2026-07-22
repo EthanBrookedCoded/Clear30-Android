@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -84,7 +86,7 @@ fun AiChatScreen(
         if (count > 0) listState.animateScrollToItem(count - 1)
     }
 
-    Column(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding)) {
+    Column(Modifier.fillMaxSize().navigationBarsPadding().imePadding().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
             IconButton("chevron.backward", onClick = onBack)
             if (avatarRes != null) {

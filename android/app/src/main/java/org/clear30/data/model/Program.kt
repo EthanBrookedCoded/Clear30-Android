@@ -282,6 +282,20 @@ class Program(
             .map { it.value.messages }
     }
 
+    /**
+     * Program-wide non-started (unlocked) Life-content day groups — iOS
+     * `getNonStartedCoreMessages`. Used at end of program to count unread
+     * messages across the whole core timeline (not just the current day).
+     */
+    fun getNonStartedCoreMessages(): List<List<ProgramMessage>> {
+        val today = PlainDate.from(now())
+        return getCoreContentInfo()
+            .filter { it.key <= today && (it.value.progress ?: 0.0) == 0.0 }
+            .entries.sortedBy { it.key }
+            .map { it.value.messages }
+            .filter { it.isNotEmpty() }
+    }
+
     // MARK: - Core (Life) program (ProgramContent.swift)
     /**
      * The "Life" timeline — every `contentInfo` entry whose date falls OUTSIDE

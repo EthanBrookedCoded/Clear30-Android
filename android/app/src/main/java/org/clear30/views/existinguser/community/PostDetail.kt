@@ -8,7 +8,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -72,6 +77,8 @@ fun PostDetail(
     val scope = rememberCoroutineScope()
     val comments = remember { mutableStateListOf<Comment>() }
     var newComment by remember { mutableStateOf("") }
+    // The comment being replied to (null = a new top-level comment).
+    var replyingTo by remember { mutableStateOf<Comment?>(null) }
 
     LaunchedEffect(post.id) {
         // Count this open as a view (community.increment_view_count).
@@ -84,14 +91,12 @@ fun PostDetail(
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding)) {
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
-        ) {
+    Column(Modifier.fillMaxSize().navigationBarsPadding().imePadding().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding)) {
+        // Top bar: back chevron (left) + overflow menu (right). Title moves BELOW,
+        // under the emoji+user row (F20; iOS PostDetailView order).
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             IconButton("chevron.backward", onClick = onBack)
-            Heading3(post.title, Modifier.weight(1f))
+            Spacer(Modifier.weight(1f))
             // iOS PostDetailView header: owner sees Edit/Delete, others see
             // Report; pinned posts get no menu at all.
             if (!post.isPinned) {
@@ -99,61 +104,115 @@ fun PostDetail(
             }
         }
 
-        LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-            // Video posts play inline (in-app ExoPlayer) at the top of the detail.
+        val directory by org.clear30.data.UserDirectory.cache.collectAsStateWithLifecycle()
+        val author = remember(post.userId, directory) { org.clear30.data.UserDirectory.lookup(post.userId) }
+        val tags = post.postTags.orEmpty().mapNotNull { it.tag }
+        val commentCount = maxOf(post.totalCommentsCount, comments.size)
+
+        // Order (iOS): emoji+user → title → tags → body → reactions·stats → divider
+        // → comments.
+        LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SmallText(
+                        buildString {
+                            author.emoji?.let { append(it).append(" ") }
+                            append(author.displayName)
+                        },
+                        color = Clear30Colors.text.copy(alpha = 0.75f),
+                    )
+                    TinyText(" · ${relativeTime(post.createdAt)}", color = Clear30Colors.text.copy(alpha = 0.25f))
+                }
+            }
+            item { Heading3(post.title) }
+            if (tags.isNotEmpty()) {
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        tags.take(4).forEach { tag -> TagPill(tag) }
+                    }
+                }
+            }
+            // Existing video posts still play inline (creation is removed, F23).
             if (post.isVideo && !post.videoUrl.isNullOrBlank()) {
                 item {
                     org.clear30.views.components.InlineVideoPlayer(
                         uri = post.videoUrl!!,
                         thumbnailUrl = post.thumbnailUrl,
-                        modifier = Modifier.padding(top = Dimens.cardSpacing),
                     )
                 }
             }
             if (post.body.isNotBlank()) {
-                item { SmallText(post.body, Modifier.padding(vertical = Dimens.cardSpacing)) }
+                item { SmallText(post.body, color = Clear30Colors.text.copy(alpha = 0.75f)) }
+            }
+            // Reactions on the LEFT, stats (comments + views) on the RIGHT.
+            item {
+                Row(Modifier.fillMaxWidth().padding(top = Dimens.cardSpacing / 2), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) {
+                        ReactionRow(
+                            post = post,
+                            userInfo = userInfo,
+                            onReact = { emoji ->
+                                scope.launch {
+                                    val uid = SupabaseController.getUserID() ?: userInfo.userID
+                                    org.clear30.data.Logger.logEvent(
+                                        userInfo.loggingID,
+                                        org.clear30.data.LogEventType.reactedToCommunityPost,
+                                        mapOf(
+                                            org.clear30.data.LogEventExtraDataType.ID to post.id,
+                                            org.clear30.data.LogEventExtraDataType.EXTRA to emoji,
+                                        ),
+                                    )
+                                    SupabaseController.addReaction(post.id, uid, emoji)
+                                }
+                            },
+                            onRemove = { emoji ->
+                                scope.launch {
+                                    val uid = SupabaseController.getUserID() ?: userInfo.userID
+                                    SupabaseController.removeReaction(post.id, uid, emoji)
+                                }
+                            },
+                        )
+                    }
+                    FeedStat("bubble.fill", compactCount(commentCount))
+                    Spacer(Modifier.width(Dimens.cardSpacing / 2))
+                    FeedStat("chart.bar.fill", compactCount(post.viewCount))
+                }
             }
             item {
-                ReactionRow(
-                    post = post,
-                    userInfo = userInfo,
-                    onReact = { emoji ->
-                        scope.launch {
-                            val uid = SupabaseController.getUserID() ?: userInfo.userID
-                            org.clear30.data.Logger.logEvent(
-                                userInfo.loggingID,
-                                org.clear30.data.LogEventType.reactedToCommunityPost,
-                                mapOf(
-                                    org.clear30.data.LogEventExtraDataType.ID to post.id,
-                                    org.clear30.data.LogEventExtraDataType.EXTRA to emoji,
-                                ),
-                            )
-                            SupabaseController.addReaction(post.id, uid, emoji)
-                        }
-                    },
-                    onRemove = { emoji ->
-                        scope.launch {
-                            val uid = SupabaseController.getUserID() ?: userInfo.userID
-                            SupabaseController.removeReaction(post.id, uid, emoji)
-                        }
-                    },
-                )
+                Box(Modifier.fillMaxWidth().padding(vertical = Dimens.cardSpacing / 2).height(1.dp).background(Clear30Colors.text.copy(alpha = 0.1f)))
             }
-            item {
-                val count = maxOf(post.totalCommentsCount, comments.size)
-                if (count == 0) {
-                    // iOS PostDetailView empty state: centered SmallText at 0.5.
+            if (commentCount == 0) {
+                // iOS PostDetailView empty state: centered SmallText at 0.5.
+                item {
                     SmallText(
                         "Be the first to comment!",
                         Modifier.fillMaxWidth().padding(vertical = Dimens.cardSpacing * 2),
                         color = Clear30Colors.text.copy(alpha = 0.5f),
                         textAlign = TextAlign.Center,
                     )
-                } else {
-                    TinyText("$count comments", color = Clear30Colors.text.copy(alpha = 0.5f))
                 }
             }
-            items(comments) { c -> CommentCard(c) }
+            // Threaded rendering (iOS convertToNestedComments): top-level comments
+            // with their replies nested one level under the root (a reply-to-a-reply
+            // still resolves up to its root).
+            val byId = comments.associateBy { it.id }
+            fun rootIdOf(c: Comment): String {
+                var cur = c
+                var guard = 0
+                while (guard++ < 50) {
+                    val pid = cur.parentCommentId ?: return cur.id
+                    cur = byId[pid] ?: return cur.id
+                }
+                return cur.id
+            }
+            val roots = comments.filter { it.parentCommentId == null }
+            val repliesByRoot = comments.filter { it.parentCommentId != null }.groupBy { rootIdOf(it) }
+            roots.forEach { root ->
+                item(key = root.id) { CommentCard(root, depth = 0, onReply = { replyingTo = root }) }
+                repliesByRoot[root.id].orEmpty().sortedBy { it.createdAt }.forEach { reply ->
+                    item(key = reply.id) { CommentCard(reply, depth = 1, onReply = { replyingTo = reply }) }
+                }
+            }
         }
 
         // iOS ChatComposeMessageViewBinding: borderless off-white compose field +
@@ -161,8 +220,10 @@ fun PostDetail(
         fun sendComment() {
             val body = newComment.trim()
             if (body.isEmpty()) return
+            val parent = replyingTo
             newComment = ""
-            comments.add(Comment(id = "local-${comments.size}", userId = userInfo.userID, body = body))
+            replyingTo = null
+            comments.add(Comment(id = "local-${comments.size}", userId = userInfo.userID, body = body, parentCommentId = parent?.id))
             scope.launch {
                 val uid = SupabaseController.getUserID() ?: userInfo.userID
                 org.clear30.data.Logger.logEvent(
@@ -170,11 +231,28 @@ fun PostDetail(
                     org.clear30.data.LogEventType.commentedOnCommunityPost,
                     mapOf(org.clear30.data.LogEventExtraDataType.ID to post.id),
                 )
-                SupabaseController.addComment(post.id, uid, body)
+                SupabaseController.addComment(post.id, uid, body, parentCommentId = parent?.id)
+            }
+        }
+        // "Replying to <name>" banner with a cancel affordance.
+        replyingTo?.let { rc ->
+            val replyName = rc.userId?.let { org.clear30.data.UserDirectory.lookup(it).displayName } ?: "user"
+            Row(
+                Modifier.fillMaxWidth().padding(bottom = Dimens.cardSpacing / 4),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 4),
+            ) {
+                TinyText("Replying to $replyName", color = Clear30Colors.text.copy(alpha = 0.5f))
+                androidx.compose.material3.Icon(
+                    sfSymbol("xmark"),
+                    contentDescription = "Cancel reply",
+                    tint = Clear30Colors.text.copy(alpha = 0.5f),
+                    modifier = Modifier.size(12.dp).pressScale(onClick = { replyingTo = null }),
+                )
             }
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-            MultiLineOffWhiteInput(newComment, { newComment = it }, placeholder = "Comment", modifier = Modifier.weight(1f), smallText = true)
+            MultiLineOffWhiteInput(newComment, { newComment = it }, placeholder = if (replyingTo != null) "Reply…" else "Comment", modifier = Modifier.weight(1f), smallText = true)
             if (newComment.isNotBlank()) {
                 Box(
                     Modifier.pressScale(onClick = { sendComment() }).size(30.dp).clip(CircleShape).background(Clear30Gradients.clear30),
@@ -192,14 +270,18 @@ fun PostDetail(
     }
 }
 
-/** A single comment: author label (from the user directory) + body. */
+/** A single comment: author label (from the user directory) + body + Reply.
+ *  [depth] > 0 indents the comment as a nested reply. */
 @Composable
-private fun CommentCard(c: Comment) {
+private fun CommentCard(c: Comment, depth: Int = 0, onReply: () -> Unit = {}) {
     val directory by org.clear30.data.UserDirectory.cache.collectAsStateWithLifecycle()
     val author = remember(c.userId, directory) { c.userId?.let { org.clear30.data.UserDirectory.lookup(it) } }
     // iOS CommentView renders comments card-less: emoji at full opacity, the
-    // name at 0.5 (UserNameWithEmoji), then the body.
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 4)) {
+    // name at 0.5 (UserNameWithEmoji), then the body, then a Reply button.
+    Column(
+        Modifier.fillMaxWidth().padding(start = if (depth > 0) Dimens.cardSpacing * 2 else 0.dp),
+        verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 4),
+    ) {
         author?.let {
             // TODO(port): SocialUserView — iOS opens the commenter's profile
             // sheet on tap; the per-user profile view isn't ported yet.
@@ -209,6 +291,7 @@ private fun CommentCard(c: Comment) {
             }
         }
         SmallText(c.body)
+        TinyText("Reply", modifier = Modifier.pressScale(onClick = onReply), color = Clear30Colors.text.copy(alpha = 0.5f))
     }
 }
 

@@ -244,8 +244,8 @@ private fun ClaireMini(title: String, onStartChat: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                TinyText("Start chat", color = Clear30Colors.claire1)
-                Icon(sfSymbol("arrow.right"), null, tint = Clear30Colors.claire1, modifier = Modifier.size(11.dp))
+                TinyText("Start chat", color = Clear30Colors.text)
+                Icon(sfSymbol("arrow.right"), null, tint = Clear30Colors.text, modifier = Modifier.size(11.dp))
             }
         }
     }

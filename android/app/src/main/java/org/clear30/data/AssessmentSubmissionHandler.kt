@@ -69,9 +69,14 @@ object AssessmentSubmissionHandler {
         userInfo.peerSupportMigrated = true
 
         // Identify the user with RevenueCat so purchases attach to their account and
-        // subscriber attributes are set for targeting (iOS PaywallController.signIn).
-        // No-ops when RevenueCat isn't configured (blank API key).
-        PaywallController.signIn(userInfo, PaywallController.getUserParams(userInfo))
+        // subscriber attributes are set for targeting (iOS PaywallController.signIn
+        // with getUserParams(userInfo:assessmentResponses:) — the assessment
+        // answers become per-option traits). No-ops when RevenueCat isn't
+        // configured (blank API key).
+        PaywallController.signIn(
+            userInfo,
+            PaywallController.getUserParams(userInfo, info?.responses ?: emptyList()),
+        )
 
         // Clear any existing breaks and messages (iOS does the same before starting)
         // — a fresh signup starts clean. Accounts with existing server data never

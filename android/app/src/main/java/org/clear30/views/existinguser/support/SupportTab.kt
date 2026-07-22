@@ -96,6 +96,9 @@ fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30
     val route = backStack.last()
     val push: (SupportRoute) -> Unit = { backStack.add(it) }
     val back: () -> Unit = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) }
+    // Hoisted above the Hub `if` so the hub's scroll position survives while a
+    // nested route is on top (returning doesn't reset to the top).
+    val hubScroll = rememberScrollState()
 
     // The `feedback-method` experiment payload drives the feedback card + sheet
     // (iOS Support2.feedbackMonster). Loaded from the persisted controller —
@@ -181,7 +184,8 @@ fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30
         is SupportRoute.DrFred -> DrFredChat(userInfo, onBack = back)
         is SupportRoute.PeerSupport -> PeerSupportChat(userInfo, onBack = back)
         is SupportRoute.Meditations -> MeditationsScreen(program, onBack = back)
-        is SupportRoute.Reddits -> ResourcesScreen(program, kind = ResourceKind.REDDIT, onBack = back)
+        is SupportRoute.Reddits ->
+            ResourcesScreen(program, kind = ResourceKind.REDDIT, symptomInfos = symptomInfos, onBack = back)
         is SupportRoute.YouTubes -> ResourcesScreen(program, kind = ResourceKind.YOUTUBE, onBack = back)
         is SupportRoute.Messages -> MessagesLibraryScreen(program, userInfo, journalEntries, onBack = back)
         is SupportRoute.AllPrompts ->
@@ -254,7 +258,7 @@ fun SupportTab(program: Program, userInfo: UserInfo, journalEntries: org.clear30
     val context = LocalContext.current
     val openResource = rememberOpenResource()
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+        Modifier.fillMaxSize().verticalScroll(hubScroll)
             .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
         verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
     ) {

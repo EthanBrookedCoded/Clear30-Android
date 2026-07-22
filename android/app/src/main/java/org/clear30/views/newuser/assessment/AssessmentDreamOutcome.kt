@@ -78,7 +78,9 @@ fun AssessmentDreamOutcome(
     Column(
         modifier
             .verticalScroll(rememberScrollState())
-            .padding(vertical = Dimens.headingTopPadding, horizontal = Dimens.scrollShadowFix),
+            // Parent AssessmentInfoSlide already applies Dimens.horizontalPadding
+            // (25dp); omit the extra scrollShadowFix so we don't double-inset.
+            .padding(vertical = Dimens.headingTopPadding),
     ) {
         // --- one green hero card (matches iOS): centered name + "30 Days From Now",
         // the outcome tiles, and a single "+$<monthly>" savings card inside it ---
@@ -155,7 +157,12 @@ private fun OutcomeTile(reason: BreakReasonType, modifier: Modifier = Modifier) 
             verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2, Alignment.CenterVertically),
         ) {
             Heading3(emoji)
-            TinyText(label, modifier = Modifier.fillMaxWidth(), maxLines = 2)
+            TinyText(
+                label,
+                modifier = Modifier.fillMaxWidth().alpha(0.5f),
+                maxLines = 2,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }

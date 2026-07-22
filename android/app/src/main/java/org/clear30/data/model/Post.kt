@@ -47,7 +47,13 @@ data class Reaction(
 @Serializable
 data class PostTag(val tag: Tag? = null) {
     @Serializable
-    data class Tag(val id: String, val name: String, val type: String? = null, val color: String? = null)
+    data class Tag(
+        val id: String,
+        val name: String,
+        val type: String? = null,
+        val color: String? = null,
+        val hidden: Boolean? = null,
+    )
 }
 
 @Serializable
@@ -56,6 +62,8 @@ data class Comment(
     @SerialName("user_id") val userId: String? = null,
     val body: String,
     @SerialName("created_at") val createdAt: String? = null,
+    // Null = top-level comment; set = a reply to that comment (iOS parentCommentId).
+    @SerialName("parent_comment_id") val parentCommentId: String? = null,
 )
 
 /** A community profile row (`community.profiles`) — Swift `UserCommunity`. */

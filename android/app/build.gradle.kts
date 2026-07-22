@@ -53,6 +53,10 @@ android {
         buildConfigField("String", "SUPABASE_URL", "\"${if (useLocalSupabase) localSupabaseUrl else prodSupabaseUrl}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${if (useLocalSupabase) localSupabaseKey else prodSupabaseKey}\"")
         buildConfigField("String", "REVENUECAT_API_KEY", "\"${props.getProperty("REVENUECAT_API_KEY", "")}\"")
+        // Helium paywall SDK key (app.tryhelium.com → Profile). Blank = Helium
+        // disabled → PaywallController falls back to the native RevenueCat paywall,
+        // exactly like a blank REVENUECAT_API_KEY no-ops purchases.
+        buildConfigField("String", "HELIUM_API_KEY", "\"${props.getProperty("HELIUM_API_KEY", "")}\"")
     }
 
     buildTypes {
@@ -120,6 +124,10 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui)
     implementation(libs.androidx.media3.session)
+    // YouTube embeds — the maintained community player (iOS YouTubePlayerKit
+    // equivalent). Handles the IFrame origin + WebView video-surface quirks that
+    // a hand-rolled WebView embed hits (error 152 / black video).
+    implementation("com.pierfrancescosoffritti.androidyoutubeplayer:core:13.0.0")
 
     // Serialization / dates / coroutines
     implementation(libs.kotlinx.serialization.json)
@@ -143,6 +151,11 @@ dependencies {
 
     // RevenueCat
     implementation(libs.revenuecat)
+
+    // Helium paywall SDK (remote/A-B-tested paywalls) + its RevenueCat purchase
+    // bridge — iOS uses Helium + HeliumRevenueCat the same way.
+    implementation(libs.helium.core)
+    implementation(libs.helium.revenuecat)
 
     // Play In-App Review (iOS requestReview parity — O9)
     implementation(libs.play.review)

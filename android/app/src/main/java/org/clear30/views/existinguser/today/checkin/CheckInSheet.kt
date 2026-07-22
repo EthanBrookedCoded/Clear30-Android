@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
+import kotlinx.datetime.LocalDate
 import org.clear30.data.CheckInLogger
 import org.clear30.data.LogEventType
 import org.clear30.data.Logger
@@ -64,6 +65,7 @@ import org.clear30.data.model.PlainDate
 import org.clear30.data.model.Program
 import org.clear30.data.model.UserInfo
 import org.clear30.util.now
+import org.clear30.util.withCurrentTime
 import org.clear30.views.components.DefaultText
 import org.clear30.views.components.Heading2
 import org.clear30.views.components.SmallText
@@ -100,10 +102,21 @@ fun CheckInSheet(
     userInfo: UserInfo,
     program: Program,
     onDismiss: () -> Unit,
+    // The day being checked in for (iOS `showCheckInForDate` / `selectedDay`) —
+    // the forced-yesterday flow (W69) and past-day forced check-ins pass a
+    // non-today day here, and the whole log/reward path keys off it (W73a).
+    selectedDay: PlainDate = PlainDate.from(now()),
     // Fired only when a check-in was actually COMPLETED (not skipped/closed) —
     // iOS scrolls the feed only in this case (CheckInViewModel.swift:136-146).
     onCompleted: (() -> Unit)? = null,
 ) {
+    // Reward + feed-scroll are a CURRENT-DAY-only affair (iOS shows the fullscreen
+    // reward only when `isToday`). Previous-day catch-up check-ins log silently.
+    val isToday = selectedDay == PlainDate.from(now())
+    // Whether the day's lesson was already started before this check-in — if so the
+    // reward's Continue must not auto-scroll the feed onto the lesson (G30).
+    val dayAlreadyStarted = remember { (program.contentInfo[selectedDay]?.progress ?: 0.0) > 0.0 }
+
     var phase by remember { mutableStateOf("slide") }
     // The rewards are generated once, at the moment of check-in (inside the
     // OnScreenCheckIn callback) — never during composition. The variable
@@ -148,7 +161,9 @@ fun CheckInSheet(
                     variableReward = variableReward,
                     sober = rewardSober,
                     onContinue = {
-                        onCompleted?.invoke()
+                        // Advance the feed to the lesson only for a fresh current-day
+                        // check-in; an already-started day stays put (G30).
+                        if (isToday && !dayAlreadyStarted) onCompleted?.invoke()
                         onDismiss()
                     },
                 )
@@ -163,10 +178,10 @@ fun CheckInSheet(
                 ) {
                     Spacer(Modifier.weight(1f))
 
-                    // "Check in for / Today"
+                    // "Check in for / Today" (iOS CheckIn.swift:29-32 — `selectedDay.dayOfWeek()`)
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         SmallText("Check in for", color = Clear30Colors.text.copy(alpha = 0.5f))
-                        Heading2(relativeCheckInTitle(), color = Clear30Colors.text)
+                        Heading2(relativeCheckInTitle(selectedDay), color = Clear30Colors.text)
                     }
 
                     Spacer(Modifier.height(Dimens.cardSpacing * 2))
@@ -177,11 +192,17 @@ fun CheckInSheet(
                         // the static reward is derived on the spot. Both sober days
                         // (celebratory rewards) and slips (encouraging quotes /
                         // growth) get one.
-                        val today = PlainDate.from(now())
-                        variableReward = logger.logCheckIns(now(), checkIns)
-                        staticReward = org.clear30.data.CheckInRewardStaticGenerator.generate(userInfo, program, today)
-                        rewardSober = program.dayInfo[today]?.sober
-                        phase = "reward"
+                        // W73(a): log for the SELECTED day, not now() — iOS logs
+                        // `showCheckInForDate` (CheckInViewModel.logCheckIns(day:)
+                        // → CheckInLogger.logCheckIns(date: day)). The instant is
+                        // the selected day at the current time-of-day (iOS
+                        // `withCurrentTime()` semantics in handleLastSmoked).
+                        variableReward = logger.logCheckIns(selectedDay.dateObject.withCurrentTime(), checkIns)
+                        staticReward = org.clear30.data.CheckInRewardStaticGenerator.generate(userInfo, program, selectedDay)
+                        rewardSober = program.dayInfo[selectedDay]?.sober
+                        // Current day → celebratory reward screen. Previous-day
+                        // catch-up → no reward, no scroll, just log and close (G33).
+                        if (isToday) phase = "reward" else onDismiss()
                     }
 
                     Spacer(Modifier.weight(1f))
@@ -646,5 +667,16 @@ private fun RewardAppear(content: @Composable () -> Unit) {
     ) { content() }
 }
 
-/** The day being checked in for — always "Today" in this entry point. */
-private fun relativeCheckInTitle(): String = "Today"
+/**
+ * The day being checked in for — iOS `Date.dayOfWeek()` (CalendarUtils.swift:663-674):
+ * "Today", "Yesterday", or the weekday name ("Monday").
+ */
+private fun relativeCheckInTitle(day: PlainDate): String {
+    val today = PlainDate.from(now())
+    return when (day) {
+        today -> "Today"
+        today.adding(days = -1) -> "Yesterday"
+        else -> LocalDate(day.year, day.month, day.day).dayOfWeek.name
+            .lowercase().replaceFirstChar { it.titlecase() }
+    }
+}

@@ -42,9 +42,23 @@ data class Clear30GroupMember(
     val showInRank: Boolean? = null,
     val joinDate: Instant? = null,
 ) {
-    val daysCheckedIn: Int get() = dayInfo?.size ?: 0
-    val daysSoberCount: Int get() = dayInfo?.values?.count { it.sober == true } ?: 0
-    val daysSmokedCount: Int get() = dayInfo?.values?.count { it.sober == false } ?: 0
+    /**
+     * iOS `filteredDayInfo` (Clear30Group.swift:120-126): drop days BEFORE the
+     * member's join date so pre-join history doesn't inflate their group stats.
+     * dayInfo keys are zero-padded `YYYY-MM-DD`, so a lexical `>=` compare equals
+     * a chronological one — no parsing needed.
+     */
+    private val filteredDayInfo: Map<String, ProgramDayInfo>? get() {
+        val di = dayInfo ?: return null
+        val join = joinDate?.let { PlainDate.from(it).dateString } ?: return di
+        return di.filterKeys { it >= join }
+    }
+
+    // iOS (Clear30Group.swift:128-138): checked-in = days with a sober value (NOT
+    // map size — symptom-only days have sober == null and must not count).
+    val daysCheckedIn: Int get() = filteredDayInfo?.values?.count { it.sober != null } ?: 0
+    val daysSoberCount: Int get() = filteredDayInfo?.values?.count { it.sober == true } ?: 0
+    val daysSmokedCount: Int get() = filteredDayInfo?.values?.count { it.sober == false } ?: 0
 }
 
 @Serializable

@@ -26,6 +26,14 @@ enum class EntitlementType {
     @SerialName("Core") CORE,
     @SerialName("Plus") PLUS;
 
+    /** iOS `rawValue` ("Core"/"Plus") — used for RC subscriber-attribute traits
+     *  and any string contract; `.name` ("CORE"/"PLUS") must NOT be used there or
+     *  RevenueCat targeting rules keyed on the iOS casing won't match. */
+    val rawValue: String get() = when (this) {
+        CORE -> "Core"
+        PLUS -> "Plus"
+    }
+
     companion object {
         val DEFAULT = PLUS
     }

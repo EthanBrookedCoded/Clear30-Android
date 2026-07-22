@@ -53,11 +53,25 @@ fun AllPromptsScreen(program: Program, onBack: () -> Unit, onOpenPrompt: (Progra
     }
     val defaultIndex = remember(tabs) { defaultLibraryTab(program, tabs) }
     var selected by remember(tabs) { mutableStateOf(defaultIndex) }
+    var showFilterSheet by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
             IconButton("chevron.backward", onClick = onBack)
             Heading1("Claire Prompts")
+            Spacer(Modifier.weight(1f))
+            if (tabs.size > 1) {
+                LibraryFilterButton { showFilterSheet = true }
+            }
+        }
+
+        if (showFilterSheet) {
+            LibraryFilterSheet(
+                options = tabs.map { LibraryFilterOption(it.name, it.dateText) },
+                selected = selected,
+                onSelect = { selected = it },
+                onDismiss = { showFilterSheet = false },
+            )
         }
 
         if (tabs.isEmpty()) {
@@ -70,14 +84,13 @@ fun AllPromptsScreen(program: Program, onBack: () -> Unit, onOpenPrompt: (Progra
             return
         }
 
-        if (tabs.size > 1) {
-            LibraryTabRow(tabs.map { it.name }, selected, Clear30Gradients.claire) { selected = it }
-        }
         val tab = tabs.getOrNull(selected) ?: tabs.first()
         Column(
             Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = Dimens.cardSpacing),
             verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
         ) {
+            // "More Claire prompts in N days" (iOS AllPromptsView.swift:62).
+            MoreContentBanner(tab.nextUnlockDate, "Claire prompts")
             // iOS renders stage sections latest-first (AllPromptsView reversed loop).
             tab.sections.reversed().forEach { section ->
                 StageHeaderCard(section.stage, Clear30Gradients.claire)
@@ -122,8 +135,8 @@ private fun PromptCard(prompt: ProgramClairePrompt, onClick: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                TinyText("Start chat", color = Clear30Colors.claire1)
-                Icon(sfSymbol("arrow.right"), null, tint = Clear30Colors.claire1, modifier = Modifier.size(11.dp))
+                TinyText("Start chat", color = Clear30Colors.text)
+                Icon(sfSymbol("arrow.right"), null, tint = Clear30Colors.text, modifier = Modifier.size(11.dp))
             }
         }
     }

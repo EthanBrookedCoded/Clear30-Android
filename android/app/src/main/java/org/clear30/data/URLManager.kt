@@ -25,6 +25,9 @@ sealed interface DeepLinkRoute {
     data class Group(val code: String) : DeepLinkRoute
     /** `?school=<id>` on ANY inbound URL — unlocks the app + school content (iOS URLManager.swift:52-72). */
     data class School(val schoolID: String) : DeepLinkRoute
+    /** `?code=<code>` on ANY inbound URL — referral code (iOS ReferralCodeHandler.handleURL):
+     *  unlocks the app (is_free) and/or joins a group if the code carries one. */
+    data class Referral(val code: String) : DeepLinkRoute
     data class Meditation(val url: String) : DeepLinkRoute
     /** The all-messages library on the Support tab (feed-end "All Messages" CTA). */
     data object Messages : DeepLinkRoute
@@ -67,6 +70,10 @@ object URLManager {
         // before the kind dispatch, like iOS checks it before group_id.
         uri.getQueryParameter("school")?.takeIf { it.isNotBlank() }?.let {
             return DeepLinkRoute.School(it)
+        }
+        // Referral code (iOS ReferralCodeHandler.handleURL reads `?code=`).
+        uri.getQueryParameter("code")?.takeIf { it.isNotBlank() }?.let {
+            return DeepLinkRoute.Referral(it)
         }
 
         return when (kind) {

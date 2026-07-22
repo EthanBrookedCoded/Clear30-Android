@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -47,7 +48,8 @@ import org.clear30.views.theme.Dimens
  * iOS `handleReferralCode` round-trip: `checkReferralCodeJson` → free-code
  * unlock + group-join alert (`onboardingSetup.groupToJoin`). Note the code path
  * does NOT resolve a school_id — school assignment comes from the email-domain
- * check or deep link. Helium paywall init stays a TODO(port).
+ * check or deep link. Where iOS re-inits Helium so the referral trait hits
+ * paywall targeting, Android re-pushes the RC subscriber attributes.
  */
 @Composable
 fun ReferralSlide(
@@ -59,7 +61,7 @@ fun ReferralSlide(
     val scope = rememberCoroutineScope()
 
     Column(
-        Modifier.fillMaxSize().statusBarsPadding().padding(
+        Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(
             horizontal = Dimens.horizontalPadding,
             vertical = Dimens.headingTopPadding,
         ),
@@ -95,10 +97,20 @@ fun ReferralSlide(
                     )
                     // iOS OnboardingReferralCode.handleReferralCode: validate the
                     // code; a free code unlocks the app, a group code offers the
-                    // group join. TODO(port): Helium paywall re-init on free codes.
+                    // group join.
                     val result = SupabaseController.checkReferralCodeJson(trimmed)
                     if (result?.is_free == true) userInfo.freeCode = trimmed
                     Clear30Store.save(userInfo)
+                    // iOS re-inits Helium with fresh getUserParams so the
+                    // referral_code trait reaches paywall targeting; Android
+                    // re-pushes the RC subscriber attributes instead.
+                    org.clear30.data.PaywallController.updateUserAttributes(
+                        userInfo,
+                        org.clear30.data.PaywallController.getUserParams(
+                            userInfo,
+                            onboardingSetup.assessmentInfo?.responses ?: emptyList(),
+                        ),
+                    )
                     val groupID = result?.group_id
                     if (groupID != null) {
                         org.clear30.data.AlertHandler.show(

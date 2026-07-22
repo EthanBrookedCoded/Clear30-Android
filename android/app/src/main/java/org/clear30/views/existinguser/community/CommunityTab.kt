@@ -114,7 +114,10 @@ fun CommunityTab(program: org.clear30.data.model.Program, userInfo: org.clear30.
 
     LaunchedEffect(Unit) {
         SupabaseController.getCommunityTags().onSuccess { t ->
-            allTags = t.filter { it.type != "day" && it.type != "lobby" }
+            // iOS CommunityTags.filterTags: hidden/lobby stripped, and the only
+            // day tag offered is the user's current "Day N" (none during
+            // start-soon).
+            allTags = t.filterTags(program)
             // iOS CommunityFeed.setupTags: seed the filter with the current
             // program's tag so the feed opens scoped to the user's program.
             t.firstOrNull { it.type == "program" && it.name == program.communityProgramTagName }
@@ -221,50 +224,26 @@ fun CommunityTab(program: org.clear30.data.model.Program, userInfo: org.clear30.
                     reload++
                 }
             },
-            onSubmitVideo = { title, tagNames, video, thumb ->
-                showCreate = false
-                scope.launch {
-                    // Mirror iOS CreatePostView: upload clip + thumbnail to the
-                    // `community` bucket under <userId>/<uuid>.{mp4,png}, then
-                    // create a "video" post pointing at the public URLs.
-                    val uid = SupabaseController.getUserID() ?: userInfo.userID
-                    org.clear30.data.Logger.logEvent(userInfo.loggingID, org.clear30.data.LogEventType.createdCommunityPost)
-                    val uuid = java.util.UUID.randomUUID().toString()
-                    val videoUrl = SupabaseController.uploadPublicFile(
-                        org.clear30.data.supabase.COMMUNITY_BUCKET, "$uid/$uuid.mp4", video.readBytes(),
-                    ).getOrNull()
-                    val thumbUrl = thumb?.let {
-                        SupabaseController.uploadPublicFile(
-                            org.clear30.data.supabase.COMMUNITY_BUCKET, "$uid/$uuid.png", it.toPngBytes(),
-                        ).getOrNull()
-                    }
-                    video.delete()
-                    if (videoUrl == null) {
-                        org.clear30.data.AlertHandler.info("Couldn't post", "Video upload failed. Check your connection and try again.")
-                        return@launch
-                    }
-                    val err = SupabaseController.createCommunityPost(
-                        org.clear30.data.supabase.CreatePost(
-                            p_title = title, p_content_type = "video", p_body = "", p_user_id = uid, p_tags = tagNames,
-                            p_video_url = videoUrl, p_thumbnail_url = thumbUrl,
-                        ),
-                    )
-                    if (err != null) org.clear30.data.AlertHandler.info("Couldn't post", err.message)
-                    reload++
-                }
-            },
         )
         return
     }
 
-    androidx.compose.material3.Scaffold { padding ->
+    // The parent AllTabs Scaffold already insets content above the tab bar; this
+    // inner Scaffold must NOT re-add system-bar insets or it leaves a blank strip
+    // above the tab bar (only this tab used a nested Scaffold).
+    androidx.compose.material3.Scaffold(
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
+    ) { padding ->
         when (val p = posts) {
-            null -> Column(
-                Modifier.fillMaxSize().padding(padding).padding(horizontal = Dimens.horizontalPadding),
-                verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
-            ) {
-                Heading1("Community", Modifier.padding(top = Dimens.headingTopPadding, bottom = Dimens.cardSpacing))
-                androidx.compose.material3.CircularProgressIndicator()
+            null -> Box(Modifier.fillMaxSize().padding(padding)) {
+                Heading1(
+                    "Community",
+                    Modifier.align(Alignment.TopStart)
+                        .padding(horizontal = Dimens.horizontalPadding)
+                        .padding(top = Dimens.headingTopPadding),
+                )
+                // Centered loading spinner (iOS LoadingIcon fills the viewport).
+                androidx.compose.material3.CircularProgressIndicator(Modifier.align(Alignment.Center))
             }
             else -> {
                 // iOS shouldHidePost: in Newest mode, pinned posts the user has
@@ -384,6 +363,52 @@ internal val org.clear30.data.model.Program.communityProgramTagName: String
         null -> coreProgramName
     }
 
+/** iOS `Tag.extractDayCount` (TagModel.swift): second space component as Int ("Day 12" → 12). */
+internal fun org.clear30.data.model.PostTag.Tag.extractDayCount(): Int? =
+    name.split(" ").getOrNull(1)?.toIntOrNull()
+
+/**
+ * iOS `CommunityTags.getDayTag` (TagModel.swift): the "Day N" tag matching the
+ * current break day — null while there's no break or during start-soon.
+ */
+internal fun List<org.clear30.data.model.PostTag.Tag>.getDayTag(
+    program: org.clear30.data.model.Program,
+): org.clear30.data.model.PostTag.Tag? {
+    val currentBreak = program.currentBreak
+    if (currentBreak == null || currentBreak.isStartSoon) return null
+    return firstOrNull { it.type == "day" && it.extractDayCount() == currentBreak.currentBreakDay }
+}
+
+/**
+ * iOS `CommunityTags.filterTags` (TagModel.swift) — the tags the user can filter
+ * the feed by: hidden and lobby tags dropped, day tags reduced to the user's
+ * current "Day N" (none during start-soon), ordered as the user's program tag →
+ * day tag → general tags → other program tags, by name within each group.
+ */
+internal fun List<org.clear30.data.model.PostTag.Tag>.filterTags(
+    program: org.clear30.data.model.Program,
+): List<org.clear30.data.model.PostTag.Tag> {
+    val userProgramTag = firstOrNull { it.type == "program" && it.name == program.communityProgramTagName }
+    val userBreakDay = program.currentBreak?.takeIf { !it.isStartSoon }?.currentBreakDay
+    return this
+        .filter { !(it.hidden ?: false) }
+        .filter { it.type != "lobby" }
+        .filter { it.type != "day" || it.extractDayCount() == userBreakDay }
+        .sortedWith(
+            compareBy(
+                { tag ->
+                    when {
+                        tag.type == "program" && tag.id == userProgramTag?.id -> 0
+                        tag.type == "day" -> 1
+                        tag.type != "program" -> 2
+                        else -> 3
+                    }
+                },
+                { it.name },
+            ),
+        )
+}
+
 /** iOS empty feed: centered "No posts, yet..." + a TinyTextButton "Refresh". */
 @Composable
 private fun EmptyCommunityState(onRefresh: () -> Unit) {
@@ -441,8 +466,11 @@ internal fun PostCard(
     // FeedCardText/FeedContainer — cards were removed for text posts); VIDEO
     // posts keep the card (iOS FeedCardMedia).
     val content: @Composable () -> Unit = {
-        Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-            // Author row: "emoji name · relative-time"  + overflow menu.
+        // W19/F19: tighter per-element spacing (iOS FeedCardText uses ~cardSpacing/4
+        // between the name row and the body) and NO overflow menu in the feed — the
+        // three-dots menu lives only in the detail view.
+        Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 4)) {
+            // Author row: "emoji name · relative-time".
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TinyText(
                     buildString {
@@ -452,10 +480,6 @@ internal fun PostCard(
                     color = Clear30Colors.text.copy(alpha = 0.75f),
                 )
                 TinyText(" · ${relativeTime(post.createdAt)}", color = Clear30Colors.text.copy(alpha = 0.25f))
-                androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
-                if (!post.isPinned) {
-                    PostOverflowMenu(post, userInfo, onEdit = onEdit, onDeleted = onDeleted)
-                }
             }
 
             // Video posts: show the poster frame + play badge (tap the card to
@@ -506,7 +530,7 @@ internal fun PostCard(
 
 /** Left-side feed stat: small muted icon + compact count (comments / views). */
 @Composable
-private fun FeedStat(icon: String, value: String) {
+internal fun FeedStat(icon: String, value: String) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         androidx.compose.material3.Icon(
             org.clear30.views.components.sfSymbol(icon),

@@ -118,13 +118,20 @@ object AchievementEngine {
                 }
                 else -> false
             }
-            // COUNT achievements are ACTIVITY counts (claire_conversation, meditation,
-            // community_post, …), NOT day counts. The app doesn't track per-activity
-            // totals yet, and evaluating them against `daysTracked` falsely earns a
-            // whole batch at once (e.g. "Claire BFF" — 15 Claire chats — fires after
-            // 15 tracked days despite zero chats). Until real activity counters exist,
-            // COUNT never auto-earns.
-            AchievementCheckType.COUNT -> false
+            // COUNT achievements are ACTIVITY counts (check_in, claire_conversation,
+            // meditation, community_post, …). We only evaluate activities we ACTUALLY
+            // have a counter for — `check_in` maps to `program.numDaysCheckedIn`
+            // (iOS CountChecker.getCheckInCount). The others (claire_conversation,
+            // meditation, community_*) have no per-activity counter yet, so they stay
+            // un-earned rather than falsely firing a whole batch at once.
+            AchievementCheckType.COUNT -> {
+                val target = intParam(def, "count")
+                val actual = when (stringParam(def, "activity")) {
+                    "check_in" -> program.numDaysCheckedIn
+                    else -> null
+                }
+                target != null && actual != null && actual >= target
+            }
             AchievementCheckType.REDUCTION -> reductionEarned(def, program)
         }
 

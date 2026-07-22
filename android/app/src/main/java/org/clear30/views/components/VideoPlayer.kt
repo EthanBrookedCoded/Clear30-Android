@@ -243,17 +243,12 @@ fun openYouTubeExternally(context: android.content.Context, videoId: String) {
 }
 
 /**
- * Embedded YouTube player driven by the IFrame Player API with a JS bridge, so
- * in-player failures actually surface (a raw embed WebView renders embed errors
- * as a white/black frame with no signal). Mirrors iOS's YouTubePlayerKit error
- * state (`YouTubeViewer.swift:150-158`): [onFailed] fires on player error codes
- * (2 invalid id, 5 HTML5 error, 100 removed/private, 101/150 embedding
- * disabled), a main-frame load failure, or a load timeout; [onPlaying] fires
- * when playback actually starts.
- *
- * The page is served via `loadDataWithBaseURL("https://www.youtube.com", …)` so
- * the player sees a genuine youtube.com origin — an opaque/null origin is what
- * triggers the embedded-player "Error code: 150/152".
+ * Embedded YouTube player backed by the `android-youtube-player` library — a
+ * maintained WebView + IFrame wrapper (the Android equivalent of iOS's
+ * YouTubePlayerKit). It handles the embedding origin and the WebView
+ * video-surface quirks that a hand-rolled embed hit (onError 152 / black
+ * video, audio-only). [onPlaying] fires when playback starts; [onFailed] on a
+ * player error. The view auto-plays [videoId] and is lifecycle-aware.
  */
 @Composable
 fun YouTubeEmbedPlayer(
@@ -262,88 +257,38 @@ fun YouTubeEmbedPlayer(
     onPlaying: () -> Unit = {},
     onFailed: () -> Unit = {},
 ) {
-    val context = LocalContext.current
-    var playing by remember(videoId) { mutableStateOf(false) }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    AndroidView(
+        modifier = modifier,
+        factory = { ctx ->
+            com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView(ctx).apply {
+                lifecycleOwner.lifecycle.addObserver(this)
+                addYouTubePlayerListener(
+                    object : com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener() {
+                        override fun onReady(youTubePlayer: com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer) {
+                            youTubePlayer.loadVideo(videoId, 0f)
+                        }
 
-    // If the IFrame API never reaches a playable state (script blocked, dead
-    // network — cases with no error callback at all), fail over after 20s —
-    // long enough that a cold WebView + player boot on a slow connection isn't
-    // misreported as "can't play".
-    androidx.compose.runtime.LaunchedEffect(videoId) {
-        kotlinx.coroutines.delay(20_000)
-        if (!playing) {
-            android.util.Log.w("YouTubeEmbed", "load timeout for $videoId")
-            onFailed()
-        }
-    }
+                        override fun onStateChange(
+                            youTubePlayer: com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer,
+                            state: com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants.PlayerState,
+                        ) {
+                            if (state == com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants.PlayerState.PLAYING) onPlaying()
+                        }
 
-    val webView = remember(videoId) {
-        val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
-        WebView(context).apply {
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.mediaPlaybackRequiresUserGesture = false
-            // Cache aggressively so re-opening a video (or the same one after a
-            // network blip) is near-instant instead of a full cold load each time.
-            settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
-            setBackgroundColor(android.graphics.Color.BLACK)
-            webChromeClient = WebChromeClient()
-            webViewClient = object : WebViewClient() {
-                override fun onReceivedError(
-                    view: WebView?,
-                    request: android.webkit.WebResourceRequest?,
-                    error: android.webkit.WebResourceError?,
-                ) {
-                    if (request?.isForMainFrame == true) mainHandler.post { onFailed() }
-                }
+                        override fun onError(
+                            youTubePlayer: com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer,
+                            error: com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants.PlayerError,
+                        ) {
+                            android.util.Log.w("YouTubeEmbed", "player error $error for $videoId")
+                            onFailed()
+                        }
+                    },
+                )
             }
-            addJavascriptInterface(
-                object {
-                    @android.webkit.JavascriptInterface
-                    fun playerStateChange(state: Int) {
-                        // 1 = playing, 3 = buffering — both mean the video works.
-                        if (state == 1 || state == 3) mainHandler.post { playing = true; onPlaying() }
-                    }
-
-                    @android.webkit.JavascriptInterface
-                    fun playerError(code: Int) {
-                        android.util.Log.w("YouTubeEmbed", "player error $code for $videoId")
-                        mainHandler.post { onFailed() }
-                    }
-                },
-                "Clear30Bridge",
-            )
-            loadDataWithBaseURL(
-                "https://www.youtube.com",
-                """
-                <!DOCTYPE html><html><head>
-                <meta name="viewport" content="width=device-width, initial-scale=1">
-                <style>html,body{margin:0;padding:0;background:#000;height:100%;overflow:hidden}
-                #player{position:absolute;top:0;left:0;width:100%;height:100%}</style>
-                </head><body><div id="player"></div>
-                <script src="https://www.youtube.com/iframe_api"></script>
-                <script>
-                function onYouTubeIframeAPIReady() {
-                  new YT.Player('player', {
-                    videoId: '$videoId',
-                    playerVars: {autoplay: 1, playsinline: 1, fs: 1, rel: 0, origin: 'https://www.youtube.com'},
-                    events: {
-                      onReady: function(e) { e.target.playVideo(); },
-                      onStateChange: function(e) { Clear30Bridge.playerStateChange(e.data); },
-                      onError: function(e) { Clear30Bridge.playerError(e.data); }
-                    }
-                  });
-                }
-                </script></body></html>
-                """.trimIndent(),
-                "text/html",
-                "utf-8",
-                null,
-            )
-        }
-    }
-    DisposableEffect(webView) { onDispose { webView.destroy() } }
-    AndroidView(factory = { webView }, modifier = modifier)
+        },
+        onRelease = { it.release() },
+    )
 }
 
 /**

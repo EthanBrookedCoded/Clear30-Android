@@ -15,6 +15,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import org.clear30.data.getMessages
+import org.clear30.data.supabase.checkReferralCodeJson
 import org.clear30.data.supabase.getSchoolData
 import org.clear30.views.newuser.AllNewUser
 import org.clear30.views.existinguser.AllTabs
@@ -106,6 +107,24 @@ fun AppRoot(viewModel: AppRootViewModel = viewModel()) {
                                 ),
                             )
                         }
+                    }
+                }
+            }
+            is org.clear30.data.DeepLinkRoute.Referral -> {
+                // iOS ReferralCodeHandler.handleURL: validate the code, unlock the
+                // app if it's a free code, and join the group it carries (if any).
+                val userInfo = (state as? AppRootState.ExistingUser)?.userInfo
+                    ?: (state as? AppRootState.NewUser)?.userInfo
+                if (userInfo != null) {
+                    val result = org.clear30.data.supabase.SupabaseController.checkReferralCodeJson(route.code)
+                    if (result?.is_free == true) {
+                        userInfo.freeCode = route.code
+                        org.clear30.data.Clear30Store.save(userInfo)
+                    }
+                    val groupId = result?.group_id
+                    if (!groupId.isNullOrBlank()) {
+                        AppState.requestTab("GROUPS")
+                        AppState.requestSubRoute(org.clear30.data.DeepLinkRoute.Group(groupId))
                     }
                 }
             }

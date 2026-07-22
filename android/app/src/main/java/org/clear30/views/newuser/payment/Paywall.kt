@@ -41,15 +41,37 @@ import org.clear30.views.theme.Clear30Gradients
 import org.clear30.views.theme.Dimens
 
 /**
- * Paywall — ported from Paywall.swift. iOS rendered a Helium-managed paywall over
- * RevenueCat; Android renders the RevenueCat `Default` offering directly
- * (`$rc_annual` / `$rc_monthly`). Tapping a package launches the Google Play
- * purchase; success resolves the [EntitlementType] (`Plus` / `Core`) via
- * [PaywallController]. When RevenueCat isn't configured (no API key / no offering,
- * e.g. local dev), a dev "Continue" pass-through keeps onboarding runnable.
+ * Paywall entry point. When a `HELIUM_API_KEY` is configured this presents the
+ * Helium remote/A-B-tested paywall (iOS parity — iOS renders Helium over
+ * RevenueCat); otherwise, or when Helium can't show (holdout / error / not
+ * configured), it falls back to [NativePaywall]. Dev builds (blank key) always get
+ * the native path, unchanged.
  */
 @Composable
 fun Paywall(
+    userInfo: UserInfo? = null,
+    popup: Boolean = false,
+    hard: Boolean = true,
+    onCompleted: (EntitlementType?) -> Unit,
+) {
+    var fellBack by remember { mutableStateOf(false) }
+    if (PaywallController.heliumEnabled() && !fellBack) {
+        HeliumPaywall(userInfo, popup, hard, onCompleted, onFallback = { fellBack = true })
+        return
+    }
+    NativePaywall(userInfo, popup, hard, onCompleted)
+}
+
+/**
+ * NativePaywall — ported from Paywall.swift's RevenueCat path. Renders the
+ * RevenueCat `Default` offering directly (`$rc_annual` / `$rc_monthly`). Tapping a
+ * package launches the Google Play purchase; success resolves the [EntitlementType]
+ * (`Plus` / `Core`) via [PaywallController]. When RevenueCat isn't configured (no
+ * API key / no offering, e.g. local dev), a dev "Continue" pass-through keeps
+ * onboarding runnable.
+ */
+@Composable
+private fun NativePaywall(
     userInfo: UserInfo? = null,
     popup: Boolean = false,
     hard: Boolean = true,
@@ -62,13 +84,43 @@ fun Paywall(
     var busy by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        // iOS Paywall auto-completes when a free code is present.
-        if (userInfo?.freeCode != null) {
+        // iOS Paywall auto-completes when a free code is present
+        // (HeliumPaywallView.registerFreeCodePayment — logs a free `subscribed`).
+        val freeCode = userInfo?.freeCode
+        if (userInfo != null && freeCode != null) {
+            org.clear30.data.Logger.logEvent(
+                userInfo.loggingID,
+                org.clear30.data.LogEventType.subscribed,
+                mapOf(org.clear30.data.LogEventExtraDataType.FREE_CODE to freeCode),
+            )
             onCompleted(EntitlementType.DEFAULT)
             return@LaunchedEffect
         }
         offering = PaywallController.currentOffering()
         loading = false
+        // iOS logs `.openedPaywall` when the paywall renders and stamps
+        // currentPaywallID (the hard-paywall lookup keys off it).
+        offering?.let { off ->
+            PaywallController.setCurrentPaywallID(off.identifier)
+            if (userInfo != null) {
+                org.clear30.data.Logger.logEvent(
+                    userInfo.loggingID,
+                    org.clear30.data.LogEventType.openedPaywall,
+                    mapOf(
+                        org.clear30.data.LogEventExtraDataType.TYPE to off.identifier,
+                        org.clear30.data.LogEventExtraDataType.TITLE to "revenuecat",
+                        org.clear30.data.LogEventExtraDataType.PLACEMENT to
+                            (if (popup) org.clear30.data.PaywallTrigger.CLEAR30_POPUP.raw
+                            else org.clear30.data.PaywallTrigger.CLEAR30_ONBOARDING.raw),
+                    ),
+                )
+            }
+        }
+    }
+
+    // iOS Paywall.onDisappear — drop the render-scoped paywall state.
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose { PaywallController.clearPaywallPresentation() }
     }
 
     Column(
@@ -104,7 +156,20 @@ fun Paywall(
                         scope.launch {
                             val entitlement = PaywallController.purchase(activity, pkg)
                             busy = false
-                            if (entitlement != null) onCompleted(entitlement)
+                            if (entitlement != null) {
+                                // iOS HeliumPaywallView.handlePaid — log the sale.
+                                userInfo?.let {
+                                    org.clear30.data.Logger.logEvent(
+                                        it.loggingID,
+                                        org.clear30.data.LogEventType.subscribed,
+                                        mapOf(
+                                            org.clear30.data.LogEventExtraDataType.POPUP to "$popup",
+                                            org.clear30.data.LogEventExtraDataType.TYPE to pkg.product.id,
+                                        ),
+                                    )
+                                }
+                                onCompleted(entitlement)
+                            }
                         }
                     }
                 }
@@ -118,7 +183,26 @@ fun Paywall(
                             scope.launch {
                                 val entitlement = PaywallController.restore()
                                 busy = false
-                                if (entitlement != null) onCompleted(entitlement)
+                                if (entitlement != null) {
+                                    // iOS handlePaid(restored: true).
+                                    userInfo?.let {
+                                        org.clear30.data.Logger.logEvent(
+                                            it.loggingID,
+                                            org.clear30.data.LogEventType.subscribed,
+                                            mapOf(
+                                                org.clear30.data.LogEventExtraDataType.POPUP to "$popup",
+                                                org.clear30.data.LogEventExtraDataType.EXTRA to "restored",
+                                            ),
+                                        )
+                                    }
+                                    onCompleted(entitlement)
+                                } else {
+                                    // iOS restore surfaces a "nothing to restore" /
+                                    // failure state via the master alert.
+                                    org.clear30.data.AlertHandler.error(
+                                        message = "No purchases were found to restore.",
+                                    )
+                                }
                             }
                         },
                 )

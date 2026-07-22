@@ -54,6 +54,15 @@ object AppState : ViewModel() {
     val pendingSubRoute: StateFlow<org.clear30.data.DeepLinkRoute?> = _pendingSubRoute.asStateFlow()
 
     /**
+     * Popup-paywall request (iOS `viewModel.activeSheet = .payment(hard:)`).
+     * AllTabs observes it, presents the paywall, and acks with null. `true`
+     * forces the hard (undismissable) variant; `false` presents dismissable.
+     * Set by deep links / locked-content upsells that can't reach AllTabs state.
+     */
+    private val _paywallRequest = MutableStateFlow<Boolean?>(null)
+    val paywallRequest: StateFlow<Boolean?> = _paywallRequest.asStateFlow()
+
+    /**
      * Foreground/background transitions (iOS `scenePhase`), driven by
      * MainActivity's lifecycle. Starts true so the launch transition doesn't
      * double-fire the foreground work `patchUserInfo` already does.
@@ -70,4 +79,5 @@ object AppState : ViewModel() {
     fun setNotification(data: Map<String, String>?) { _notification.value = data }
     fun requestTab(tabName: String?) { _requestedTab.value = tabName }
     fun requestSubRoute(route: org.clear30.data.DeepLinkRoute?) { _pendingSubRoute.value = route }
+    fun requestPaywall(hard: Boolean?) { _paywallRequest.value = hard }
 }

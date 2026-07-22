@@ -1,6 +1,8 @@
 package org.clear30.views.existinguser.support
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -186,13 +188,22 @@ private fun MeditationPlayerCore(
                         Modifier.background(Clear30Gradients.meditation)
                     },
                 )
-                .pressScale {
+                // A graphicsLayer-backed `pressScale` here made the disc blank out
+                // whenever the tree stopped invalidating — after pause the 500ms
+                // position poll halts, so nothing re-drew the layer (the disc only
+                // reappeared while pressed/animating). A plain clickable draws
+                // straight into the persisting canvas and stays put (E15).
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) {
+                    Haptics.mediumImpact()
                     if (player.isPlaying && ownsPlayer()) {
                         player.pause()
                     } else {
-                        // Point the shared player at this meditation (keeps
-                        // position if it's already the loaded track), then keep
-                        // the media service alive for background playback.
+                        // Point the shared player at this meditation (keeps position
+                        // if it's already the loaded track), then keep the media
+                        // service alive for background playback.
                         org.clear30.data.MeditationAudioController.prepare(context, meditation.url, meditation.name)
                         org.clear30.data.MeditationAudioController.ensureService(context)
                         player.play()

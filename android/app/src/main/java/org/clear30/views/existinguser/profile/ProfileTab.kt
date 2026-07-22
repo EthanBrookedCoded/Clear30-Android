@@ -3,6 +3,7 @@ package org.clear30.views.existinguser.profile
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,9 +46,12 @@ import org.clear30.data.model.JournalEntries
 import org.clear30.data.model.Program
 import org.clear30.data.model.UserInfo
 import org.clear30.data.supabase.SupabaseController
+import org.clear30.data.supabase.syncProgramState
 import org.clear30.data.supabase.updateYourWhy
 import org.clear30.views.components.Clear30Card
+import org.clear30.views.components.DefaultButton
 import org.clear30.views.components.Heading1
+import org.clear30.views.components.Heading3
 import org.clear30.views.components.Heading2
 import org.clear30.views.components.SmallText
 import org.clear30.views.components.TinyText
@@ -85,6 +89,9 @@ fun ProfileTab(
     var showJournal by remember { mutableStateOf(false) }
     var showPreviousBreaks by remember { mutableStateOf(false) }
     var showNewBreak by remember { mutableStateOf(false) }
+    // Hidden dev tool (K52): 10 taps on the name opens the timeline shifter.
+    var showDevSheet by remember { mutableStateOf(false) }
+    var devTaps by remember { mutableIntStateOf(0) }
     // Tapped health category + whether the tap caught a fresh unlock (iOS
     // handleHealthProgress: `hasNew` is captured BEFORE lastVisited is stamped —
     // Swift passes a struct copy; here we capture the flag explicitly).
@@ -118,9 +125,22 @@ fun ProfileTab(
                 horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
             ) {
                 UserEmojiPickerButton(userInfo)
-                Heading1(userInfo.name.ifBlank { "You" })
+                Heading1(
+                    userInfo.name.ifBlank { "You" },
+                    modifier = Modifier.clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null,
+                    ) {
+                        devTaps++
+                        if (devTaps >= 10) { devTaps = 0; showDevSheet = true }
+                    },
+                )
                 Spacer(Modifier.weight(1f))
                 CircleIconButton("gearshape.fill") { showSettings = true }
+            }
+
+            if (showDevSheet) {
+                TimelineDevSheet(program, onDismiss = { showDevSheet = false }) { refresh++ }
             }
 
             // Day 0 of an upcoming break (iOS Profile.displayMode →
@@ -182,13 +202,19 @@ fun ProfileTab(
             val lastBreak = program.lastBreak
             val moneySaved = lastBreak?.takeIf { it.startDate <= now() }
                 ?.let { program.getTotalMoneySavedOverBreak(it) }
+            // "Days without weed" is break-scoped in the break layout (iOS
+            // Profile.swift:148 numDaysSober(programBreak:)): day 0 / pre-break sober
+            // check-ins don't count, so it reads 0 on the first day of a fresh break.
+            // Life layout (no active break) keeps the all-time count.
+            val daysWithoutWeed = calendarBreak?.let { maxOf(0, program.numDaysSober(it)) }
+                ?: maxOf(0, program.numDaysSober)
             // Starting a new break is only offered in the Life program — i.e. when
             // there's no current break (iOS shows "New Break" solely in lifeLayout,
             // never during an active Clear30). Adolescent mode never starts breaks.
             val canStartBreak = program.currentBreak == null && userInfo.mode != AppMode.ADOLESCENT
             if (moneySaved != null) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-                    ProfileDaysWithoutWeed(program.numDaysSober, Modifier.weight(1f))
+                    ProfileDaysWithoutWeed(daysWithoutWeed, Modifier.weight(1f))
                     ProfileMoneySaved(moneySaved, program, revision = refresh, modifier = Modifier.weight(1f)) { refresh++ }
                 }
                 if (canStartBreak) {
@@ -196,7 +222,7 @@ fun ProfileTab(
                 }
             } else {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-                    ProfileDaysWithoutWeed(program.numDaysSober, Modifier.weight(1f))
+                    ProfileDaysWithoutWeed(daysWithoutWeed, Modifier.weight(1f))
                     if (canStartBreak) {
                         ProfileNewBreakButton(Modifier.weight(1f)) { showNewBreak = true }
                     }
@@ -652,7 +678,14 @@ private fun ProfileMoneySaved(
                     if (desired != null && desired >= 0 && currentBreak != null) {
                         val auto = program.getAutoCalculatedMoneySavedOverBreak(currentBreak) ?: 0
                         currentBreak.moneySavedAdjustment = desired - auto
-                        scope.launch { Clear30Store.save(program) }
+                        // Persist locally AND push to the server right away, on the
+                        // app scope so it survives leaving Profile. Without the push
+                        // the adjustment lived only in local state and was wiped on
+                        // sign-out before the next foreground sync (iOS pushes here).
+                        org.clear30.Clear30Application.appScope.launch {
+                            Clear30Store.save(program)
+                            SupabaseController.syncProgramState(program)
+                        }
                         onChanged()
                     }
                     showEditor = false
@@ -783,6 +816,58 @@ private fun ProfileSettingsOverlay(
             // symptoms / start-date / share-calendar rows were cut (the start-date
             // picker also desynced the timeline, B5).
             SettingsSection(userInfo, program, onSignOut, onClose)
+        }
+    }
+}
+
+/**
+ * Hidden timeline dev tool (K52) — 10 taps on the Profile name opens this sheet.
+ * Shifts the whole program/current day via `ProgramTimelineHandler.adjustBreakTime`
+ * (the same mechanism as "Change Break Start Date"), then persists + syncs.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun TimelineDevSheet(program: Program, onDismiss: () -> Unit, onChanged: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    val currentDay = program.currentBreak?.currentBreakDay
+    var jumpTo by remember { mutableStateOf("") }
+    fun shift(days: Int) {
+        if (days == 0) return
+        scope.launch {
+            org.clear30.data.ProgramTimelineHandler.adjustBreakTime(program, days)
+            Clear30Store.save(program)
+            runCatching { org.clear30.data.supabase.SupabaseController.syncProgramState(program) }
+            onChanged()
+        }
+    }
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Clear30Colors.background) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.cardSpacing),
+            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+        ) {
+            Heading3("🛠 Timeline (dev)")
+            SmallText(
+                if (currentDay != null) "Current break day: $currentDay" else "No active break — start one first.",
+                color = Clear30Colors.text.copy(alpha = 0.5f),
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+                listOf(-7, -1, 1, 7).forEach { d ->
+                    DefaultButton(if (d > 0) "+$d" else "$d", gradient = Clear30Gradients.clear30, modifier = Modifier.weight(1f)) { shift(d) }
+                }
+            }
+            if (currentDay != null) {
+                androidx.compose.material3.OutlinedTextField(
+                    jumpTo, { jumpTo = it.filter(Char::isDigit) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { androidx.compose.material3.Text("Jump to break day N") },
+                    singleLine = true,
+                )
+                DefaultButton("Jump", gradient = Clear30Gradients.clear30, modifier = Modifier.fillMaxWidth()) {
+                    jumpTo.toIntOrNull()?.let { target -> shift(target - currentDay) }
+                    jumpTo = ""
+                }
+            }
+            Spacer(Modifier.height(Dimens.cardSpacing * 2))
         }
     }
 }

@@ -373,9 +373,9 @@ object AssessmentSlides3 {
     private fun whereYouCouldBe() = info(
         AssessmentInfoData(
             id = AssessmentInfoDataID.whereYouGoing,
-            title = "Where you could be",
+            title = "",
             subtitle = "",
-            body = "Now, this is where we'll take you.",
+            body = "",
             primaryButtonText = "Show Me!",
         ),
     )
@@ -387,8 +387,10 @@ object AssessmentSlides3 {
             reasonResp.question.options.getOrNull(idx)?.let { BreakReasonType.from(it)?.asNoun }
         }?.takeIf { it.isNotEmpty() }
         val spendResp = vm.responses[AssessmentQuestionID.MONEY_SPENT.raw]
+        // iOS parses the option with prefix(2) (AssessmentSlides3.swift:864) — a
+        // custom "100" reads as $10/wk. Quirk kept deliberately (decision §17-Q23).
         val monthly = spendResp?.responses?.firstOrNull()?.let { idx ->
-            spendResp.question.options.getOrNull(idx)?.filter(Char::isDigit)?.toIntOrNull()?.let { it * 4 }
+            spendResp.question.options.getOrNull(idx)?.take(2)?.toIntOrNull()?.let { it * 4 }
         }
         return info(
             // iOS renders the "30 Days From Now" projection on a WHITE

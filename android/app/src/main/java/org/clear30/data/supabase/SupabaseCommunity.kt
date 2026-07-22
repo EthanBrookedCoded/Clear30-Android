@@ -162,14 +162,24 @@ suspend fun SupabaseController.createCommunityPost(post: CreatePost): SupabaseFu
 data class ReactionInsert(val post_id: String, val user_id: String, val emoji: String)
 
 @Serializable
-data class CommentInsert(val post_id: String, val user_id: String, val body: String)
+data class CommentInsert(
+    val post_id: String,
+    val user_id: String,
+    val body: String,
+    val parent_comment_id: String? = null,
+)
 
 suspend fun SupabaseController.addReaction(postId: String, userId: String, emoji: String): SupabaseFunctionError? = runCatching {
     client.postgrest.from(COMMUNITY_SCHEMA, "reactions").insert(ReactionInsert(postId, userId, emoji))
 }.fold({ null }, { it.toError() })
 
-suspend fun SupabaseController.addComment(postId: String, userId: String, body: String): SupabaseFunctionError? = runCatching {
-    client.postgrest.from(COMMUNITY_SCHEMA, "comments").insert(CommentInsert(postId, userId, body))
+suspend fun SupabaseController.addComment(
+    postId: String,
+    userId: String,
+    body: String,
+    parentCommentId: String? = null,
+): SupabaseFunctionError? = runCatching {
+    client.postgrest.from(COMMUNITY_SCHEMA, "comments").insert(CommentInsert(postId, userId, body, parentCommentId))
 }.fold({ null }, { it.toError() })
 
 /**

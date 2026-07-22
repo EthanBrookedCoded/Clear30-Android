@@ -31,6 +31,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import org.clear30.data.Clear30Store
@@ -66,11 +70,12 @@ fun MessagesLibraryScreen(
     onBack: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    // Rev counter forces the tabs to recompute after a star toggle.
+    // Rev counter forces the tabs to recompute after a viewer close (progress
+    // rings / day pills read in-place-mutated content).
     var rev by remember { mutableIntStateOf(0) }
     // The opened day GROUP (iOS navigates with the whole [ProgramMessage] group).
     var open by remember { mutableStateOf<List<ProgramMessage>?>(null) }
-    var favoritesMode by remember { mutableStateOf(false) }
+    var showFilterSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         Logger.logEvent(userInfo.loggingID, LogEventType.openedContent)
@@ -96,41 +101,16 @@ fun MessagesLibraryScreen(
 
     Column(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-            IconButton(if (favoritesMode) "xmark" else "chevron.backward", onClick = {
-                if (favoritesMode) favoritesMode = false else onBack()
-            })
-            Heading1(if (favoritesMode) "Favorites" else "Messages")
+            IconButton("chevron.backward", onClick = onBack)
+            Heading1("Messages")
             Spacer(Modifier.weight(1f))
-            // Favorites heart (iOS AllMessagesView header, W18).
-            Icon(
-                sfSymbol("heart.fill"),
-                contentDescription = "Favorites",
-                tint = if (favoritesMode) Clear30Colors.red2 else Clear30Colors.text.copy(alpha = 0.5f),
-                modifier = Modifier.size(22.dp).clickable { favoritesMode = !favoritesMode },
-            )
-        }
-
-        if (favoritesMode) {
-            val favorites = remember(rev) {
-                program.contentInfo.entries.sortedByDescending { it.key }
-                    .flatMap { it.value.messages }.unlocked.filter { it.favorited }
+            // Break filter (iOS AllMessagesView.swift:108-115 — shown only when
+            // there's more than one filter option). W77: the favorites heart was
+            // removed (follows W35's in-viewer heart removal), so only the filter
+            // button remains in the header.
+            if (tabs.size > 1) {
+                LibraryFilterButton { showFilterSheet = true }
             }
-            if (favorites.isEmpty()) {
-                Clear30Card(modifier = Modifier.fillMaxWidth().padding(top = Dimens.cardSpacing)) {
-                    SmallText(
-                        "Favorite a message with the heart inside it and it'll appear here.",
-                        color = Clear30Colors.text.copy(alpha = 0.5f),
-                    )
-                }
-            } else {
-                Column(
-                    Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = Dimens.cardSpacing),
-                    verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
-                ) {
-                    favorites.forEach { msg -> MessageRow(msg, program) { open = listOf(msg) } }
-                }
-            }
-            return
         }
 
         if (tabs.isEmpty()) {
@@ -143,27 +123,42 @@ fun MessagesLibraryScreen(
             return
         }
 
-        if (tabs.size > 1) {
-            LibraryTabRow(tabs.map { it.name }, selected, Clear30Gradients.clear30) { selected = it }
+        if (showFilterSheet) {
+            LibraryFilterSheet(
+                options = tabs.map { LibraryFilterOption(it.name, it.dateText) },
+                selected = selected,
+                onSelect = { selected = it },
+                onDismiss = { showFilterSheet = false },
+            )
         }
         val tab = tabs.getOrNull(selected) ?: tabs.first()
         Column(
             Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = Dimens.cardSpacing),
             verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
         ) {
+            // "More messages in N days" (iOS AllMessagesView.swift:132).
+            MoreContentBanner(tab.nextUnlockDate, "messages")
             tab.sections.forEach { section ->
+                val sectionGradient = section.stage?.gradient ?: Clear30Gradients.clear30
                 StageHeaderCard(section.stage, Clear30Gradients.clear30)
                 // Group same-day messages (iOS AllMessagesView: one card per DAY;
                 // a second message that day — the assessment-response message —
                 // becomes a badge on the card and its content follows the main
                 // message inside the viewer).
-                val dayGroups = section.items.groupBy { org.clear30.data.model.PlainDate.from(it.unlockOn) }.values
+                // W76: render day-groups NEWEST-first (iOS renders the group loop
+                // `(0..<count).reversed()`, AllMessagesView.swift:148). `.unlocked`
+                // sorts ascending (core-message-first within a day), so reversing
+                // only the day order keeps the assessment message as the badge.
+                val dayGroups = section.items
+                    .groupBy { org.clear30.data.model.PlainDate.from(it.unlockOn) }
+                    .values.reversed()
                 dayGroups.forEach { group ->
                     val primary = group.first()
                     val sub = group.getOrNull(1)
                     MessageRow(
                         msg = primary,
                         program = program,
+                        gradient = sectionGradient,
                         badge = sub?.let { "${it.topicEmoji ?: "💬"} ${it.topicTitle}" },
                         onOpen = { open = group },
                     )
@@ -175,11 +170,14 @@ fun MessagesLibraryScreen(
 
 /** iOS `MessageCard` (AllMessagesView.swift:361-521): "emoji title" left, and a
  *  Day-N pill right — gradient-filled + checkmark once the day's feed was
- *  completed, outlined + arrow otherwise. */
+ *  completed; otherwise outlined with a partial PROGRESS RING (the stage-gradient
+ *  outline drawn at 0.25 opacity, with the completed fraction re-stroked at full
+ *  opacity — iOS `outlineTrim`, AllMessagesView.swift:470-485). */
 @Composable
 private fun MessageRow(
     msg: ProgramMessage,
     program: Program,
+    gradient: Brush = Clear30Gradients.clear30,
     badge: String? = null,
     onOpen: () -> Unit,
 ) {
@@ -209,13 +207,17 @@ private fun MessageRow(
                     .clip(androidx.compose.foundation.shape.RoundedCornerShape(99.dp))
                     .then(
                         if (complete) {
-                            Modifier.background(Clear30Gradients.clear30)
+                            // iOS completed pill: gradient fill + white outline @ 0.5
+                            // (AllMessagesView.swift:459-468).
+                            Modifier
+                                .background(gradient)
+                                .border(
+                                    3.dp,
+                                    androidx.compose.ui.graphics.Color.White.copy(alpha = 0.5f),
+                                    androidx.compose.foundation.shape.RoundedCornerShape(99.dp),
+                                )
                         } else {
-                            Modifier.border(
-                                2.dp,
-                                Clear30Colors.text.copy(alpha = 0.25f),
-                                androidx.compose.foundation.shape.RoundedCornerShape(99.dp),
-                            )
+                            Modifier.progressRing(gradient, progress.toFloat())
                         },
                     )
                     .padding(horizontal = 10.dp, vertical = 5.dp),
@@ -234,16 +236,33 @@ private fun MessageRow(
     }
 }
 
-@Composable
-private fun FilterPill(label: String, selected: Boolean, onClick: () -> Unit) {
-    Clear30Card(
-        modifier = Modifier.clickable(onClick = onClick),
-        gradient = if (selected) org.clear30.views.theme.Clear30Gradients.clear30 else null,
-    ) {
-        SmallText(
-            label,
-            color = if (selected) androidx.compose.ui.graphics.Color.White else Clear30Colors.text,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+/**
+ * The iOS MessageCard pill outline: the full stadium outline stroked with the
+ * stage [gradient] at 0.25 opacity, then the leading [progress] fraction of the
+ * SAME path re-stroked at full opacity (SwiftUI `.trim(from: 0, to: progress)`
+ * via CardStyle `outlineTrim`).
+ */
+internal fun Modifier.progressRing(gradient: Brush, progress: Float): Modifier = drawBehind {
+    // iOS outlineWidth: 3 (AllMessagesView.swift:473,481).
+    val sw = 3.dp.toPx()
+    val inset = sw / 2
+    val path = androidx.compose.ui.graphics.Path().apply {
+        addRoundRect(
+            androidx.compose.ui.geometry.RoundRect(
+                left = inset,
+                top = inset,
+                right = size.width - inset,
+                bottom = size.height - inset,
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius((size.height - sw) / 2),
+            ),
         )
+    }
+    drawPath(path, brush = gradient, alpha = 0.25f, style = Stroke(sw))
+    val trim = progress.coerceIn(0f, 1f)
+    if (trim > 0f) {
+        val measure = androidx.compose.ui.graphics.PathMeasure().apply { setPath(path, false) }
+        val segment = androidx.compose.ui.graphics.Path()
+        measure.getSegment(0f, measure.length * trim, segment, true)
+        drawPath(segment, brush = gradient, style = Stroke(sw, cap = StrokeCap.Round))
     }
 }

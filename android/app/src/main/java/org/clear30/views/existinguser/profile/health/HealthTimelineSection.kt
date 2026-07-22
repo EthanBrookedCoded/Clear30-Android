@@ -173,7 +173,9 @@ fun HealthTimelinePage(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
-                    modifier = Modifier.clickable(
+                    // Weighted so a long longName ("Brain recalibration") wraps within
+                    // its bounds instead of shoving the % + ring off-screen (H39).
+                    modifier = Modifier.weight(1f).clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                     ) {
@@ -187,12 +189,12 @@ fun HealthTimelinePage(
                     },
                 ) {
                     GradientIcon(healthProgress.category.sfSymbol, gradient, size = 25.dp)
-                    Column {
+                    Column(Modifier.weight(1f, fill = false)) {
                         SmallText("${userInfo.name}'s", color = Clear30Colors.text.copy(alpha = 0.5f))
                         Heading1(healthProgress.category.longName ?: healthProgress.category.name)
                     }
                 }
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.width(Dimens.cardSpacing))
                 if (!showProgressRing && healthProgress.currentStep != null) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,

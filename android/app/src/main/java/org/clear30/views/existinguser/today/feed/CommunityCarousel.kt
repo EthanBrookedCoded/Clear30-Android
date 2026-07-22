@@ -28,6 +28,7 @@ import org.clear30.views.components.Heading3
 import org.clear30.views.components.SmallText
 import org.clear30.views.components.SmallTextHighlighted
 import org.clear30.views.components.TinyText
+import org.clear30.views.components.pressScale
 import org.clear30.views.components.sfSymbol
 import org.clear30.views.theme.Clear30Colors
 import org.clear30.views.theme.Clear30Gradients
@@ -109,21 +110,31 @@ private fun DayPostCard(post: Post, onClick: () -> Unit) {
 @Composable
 private fun CreateDayPostCard(onOpenCommunity: () -> Unit) {
     Clear30Card(modifier = Modifier.fillMaxSize()) {
+        // Text at the TOP, a text+icon button pinned at the BOTTOM (not a filled
+        // button) — mirrors the reddit/journal card affordance.
         Column(
             Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing, Alignment.CenterVertically),
-            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
         ) {
             Heading3("Share your experience")
             SmallText(
                 "Your story could help someone today.",
                 color = Clear30Colors.text.copy(alpha = 0.5f),
             )
-            DefaultButton(
-                "Enter the Community",
-                gradient = Clear30Gradients.community,
-                modifier = Modifier.fillMaxWidth(),
-            ) { onOpenCommunity() }
+            Spacer(Modifier.weight(1f))
+            Row(
+                Modifier.fillMaxWidth().pressScale { onOpenCommunity() },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TinyText("Enter the Community", color = Clear30Colors.text.copy(alpha = 0.5f))
+                Spacer(Modifier.weight(1f))
+                Icon(
+                    sfSymbol("arrow.right"),
+                    contentDescription = null,
+                    tint = Clear30Colors.text.copy(alpha = 0.5f),
+                    modifier = Modifier.size(14.dp),
+                )
+            }
         }
     }
 }

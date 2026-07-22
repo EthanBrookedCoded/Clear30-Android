@@ -92,17 +92,11 @@ fun JournalSection(
     // `editing` an existing one (iOS pushes TextEntry onto the nav stack).
     var creatingNew by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<JournalEntry?>(null) }
-    // A freshly recorded video waiting to be named (iOS: title = selected prompt).
-    var namingVideoId by remember { mutableStateOf<String?>(null) }
 
     @Suppress("UNUSED_EXPRESSION") version
-    val entries = journalEntries.entries.sortedByDescending { it.date }
-
-    // Journal prompts from the unlocked program content — offered as video
-    // titles (iOS selects the prompt before recording).
-    val prompts = remember(program.contentInfo, version) {
-        JournalEntries.getPrompts(program.contentInfo.values.flatMap { it.messages }).distinct()
-    }
+    // Video journaling is removed on Android (J47) — text entries only. Any legacy
+    // video entries are filtered out of the list.
+    val entries = journalEntries.entries.filter { it.isVideo != true }.sortedByDescending { it.date }
 
     fun saveEntries() = scope.launch { Clear30Store.save(journalEntries) }
 
@@ -134,34 +128,6 @@ fun JournalSection(
         }
     }
 
-    // Video capture pipeline:
-    //   1. We allocate a destination file id BEFORE launching the camera so we
-    //      know where the bytes will land and we can build the matching journal
-    //      entry on success.
-    //   2. The camera writes into the FileProvider URI we pass it.
-    //   3. On success (result == true) we ask for a title (prompt picker) and
-    //      materialise the JournalEntry.
-    // Video journals play back in-app (ExoPlayer) rather than handing the file
-    // to an external player via ACTION_VIEW.
-    var playingVideo by remember { mutableStateOf<File?>(null) }
-    var pendingVideoId by remember { mutableStateOf<String?>(null) }
-    val videoLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CaptureVideo(),
-    ) { saved ->
-        val id = pendingVideoId
-        pendingVideoId = null
-        if (saved == true && id != null) {
-            val file = videoFile(id)
-            if (file.exists() && file.length() > 0) {
-                namingVideoId = id
-            } else {
-                file.delete()  // empty / cancelled write
-            }
-        } else if (id != null) {
-            videoFile(id).delete()
-        }
-    }
-
     Box(Modifier.fillMaxSize().background(Clear30Colors.background)) {
     Column(
         Modifier.fillMaxSize()
@@ -175,69 +141,35 @@ fun JournalSection(
             Spacer(Modifier.size(Dimens.cardSpacing / 2))
             Heading1("Journal")
             Spacer(Modifier.weight(1f))
-            // Video first so the headline "+" is reserved for the most common
-            // (text) action, matching iOS.
-            IconButton("video.fill") {
-                val id = "video-${System.currentTimeMillis()}"
-                pendingVideoId = id
-                val dest = videoFile(id)
-                dest.parentFile?.mkdirs()
-                dest.createNewFile()
-                val uri = FileProvider.getUriForFile(
-                    context,
-                    "${context.packageName}.fileprovider",
-                    dest,
-                )
-                videoLauncher.launch(uri)
-            }
             IconButton("plus") { creatingNew = true }
         }
 
         if (entries.isEmpty()) {
-            SmallText("No entries yet. Tap + to write one or 🎥 to record one.", color = Clear30Colors.text.copy(alpha = 0.5f))
+            SmallText("No entries yet. Tap + to write one.", color = Clear30Colors.text.copy(alpha = 0.5f))
         } else {
             entries.forEach { entry ->
                 Clear30Card(
                     modifier = Modifier.fillMaxWidth().clickable {
-                        if (entry.isVideo == true) {
-                            playingVideo = entry.videoFile() ?: return@clickable
-                        } else {
-                            editing = entry
-                            Logger.logEvent(
-                                userInfo.loggingID,
-                                LogEventType.viewedJournalEntry,
-                                mapOf(LogEventExtraDataType.TYPE to "text"),
-                            )
-                        }
+                        editing = entry
+                        Logger.logEvent(
+                            userInfo.loggingID,
+                            LogEventType.viewedJournalEntry,
+                            mapOf(LogEventExtraDataType.TYPE to "text"),
+                        )
                     },
                 ) {
                     Column {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            if (entry.isVideo == true) {
-                                Icon(
-                                    sfSymbol("video.fill"),
-                                    contentDescription = null,
-                                    tint = Clear30Colors.green,
-                                    modifier = Modifier.padding(end = 8.dp),
-                                )
-                            }
                             SmallText(entry.title.ifBlank { "Untitled" })
                             Spacer(Modifier.weight(1f))
                             TinyText(entry.date.dateLabel(), color = Clear30Colors.text.copy(alpha = 0.5f))
                         }
-                        if (entry.content.isNotBlank() && entry.isVideo != true) TinyText(entry.content, maxLines = 3)
+                        if (entry.content.isNotBlank()) TinyText(entry.content, maxLines = 3)
                     }
                 }
             }
         }
     }
-    }
-
-    playingVideo?.let { f ->
-        org.clear30.views.components.VideoPlayerDialog(
-            uri = Uri.fromFile(f).toString(),
-            onDismiss = { playingVideo = null },
-        )
     }
 
     // New text entry — full-screen editor (iOS NewTextEntry → TextEntry). The
@@ -306,70 +238,7 @@ fun JournalSection(
         )
     }
 
-    // Name a freshly recorded video (iOS: `title = selectedPrompt`).
-    namingVideoId?.let { id ->
-        VideoNameDialog(
-            prompts = prompts,
-            onSave = { title ->
-                namingVideoId = null
-                journalEntries.entries.add(
-                    JournalEntry(title = title, content = id, isVideo = true, date = now()),
-                )
-                saveEntries()
-                Logger.logEvent(
-                    userInfo.loggingID,
-                    LogEventType.createdJournalEntry,
-                    mapOf(LogEventExtraDataType.TYPE to "video"),
-                )
-                version++
-            },
-        )
-    }
 }
-
-/**
- * Title picker for a new video journal — free-text title plus the unlocked
- * journal prompts as one-tap suggestions (iOS records against a selected
- * prompt and names the entry with it).
- */
-@Composable
-private fun VideoNameDialog(prompts: List<String>, onSave: (String) -> Unit) {
-    var title by remember { mutableStateOf("") }
-    AlertDialog(
-        // The clip is already recorded — dismissing still keeps it, just unnamed.
-        onDismissRequest = { onSave(title.trim()) },
-        title = { Text("Name your video") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
-                OutlinedTextField(
-                    title, { title = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Title") },
-                    singleLine = true,
-                )
-                if (prompts.isNotEmpty()) {
-                    TinyText("Or pick a prompt:", color = Clear30Colors.text.copy(alpha = 0.5f))
-                    Column(
-                        Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
-                    ) {
-                        prompts.take(5).forEach { prompt ->
-                            TinyText(
-                                prompt,
-                                modifier = Modifier.fillMaxWidth().clickable { title = prompt },
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = { onSave(title.trim()) }) { Text("Save") } },
-    )
-}
-
-/** Resolve the on-disk file for a video journal id (matches `JournalEntry.videoFile()`). */
-private fun videoFile(id: String): File =
-    File(File(Clear30Application.instance.filesDir, "videos"), "$id.mov")
 
 private fun kotlinx.datetime.Instant.dateLabel(): String {
     val d = toLocalDateTime(TimeZone.currentSystemDefault()).date

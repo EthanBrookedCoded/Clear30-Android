@@ -20,7 +20,11 @@ kotlinxCoroutines = "1.9.0"
 supabase = "3.0.3"          # supabase-kt (jan-tennert) -> Supabase
 ktor = "3.0.1"              # HTTP engine for supabase-kt + RestHandler
 firebaseBom = "33.7.0"     # Firebase (Messaging, Crashlytics, Analytics)
-revenuecat = "8.10.5"      # RevenueCat (Purchases) -> PaywallController
+revenuecat = "9.7.0"       # RevenueCat (Purchases) -> PaywallController. Bumped
+                           # 8.10.5 → 9.7.0 to match Helium's revenue-cat module
+                           # (Helium 4.0.0 depends on RC 9.7.0; existing code
+                           # compiles unchanged against 9.x).
+helium = "4.0.0"           # Helium paywall SDK (com.tryhelium.paywall) + RC bridge
 playReview = "2.0.2"       # Play In-App Review (iOS requestReview parity)
 googleServices = "4.4.2"
 firebaseCrashlyticsPlugin = "3.0.2"
@@ -68,6 +72,8 @@ firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashly
 firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics-ktx" }
 # RevenueCat
 revenuecat = { group = "com.revenuecat.purchases", name = "purchases", version.ref = "revenuecat" }
+helium-core = { group = "com.tryhelium.paywall", name = "core", version.ref = "helium" }
+helium-revenuecat = { group = "com.tryhelium.paywall", name = "revenue-cat", version.ref = "helium" }
 # Play In-App Review
 play-review = { group = "com.google.android.play", name = "review-ktx", version.ref = "playReview" }
 

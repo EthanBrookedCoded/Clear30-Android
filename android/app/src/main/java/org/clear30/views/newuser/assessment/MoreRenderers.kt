@@ -42,6 +42,7 @@ import org.clear30.views.components.SmallText
 import org.clear30.views.components.StretchedButton
 import org.clear30.views.components.VerticalScrollPicker
 import org.clear30.views.components.pressScale
+import org.clear30.views.existinguser.profile.StartDateCalendarPicker
 import org.clear30.views.components.sfSymbol
 import org.clear30.views.theme.Anim
 import org.clear30.views.theme.Clear30Colors
@@ -164,37 +165,25 @@ fun AssessmentDatePicker(
     cancelOption: String?,
     onCompleted: (Instant?) -> Unit,
 ) {
-    val todayUtcMs = remember {
-        // DatePicker works in UTC-midnight millis; anchor "today" the same way.
-        val today = org.clear30.data.model.PlainDate.from(org.clear30.util.now())
-        kotlinx.datetime.LocalDate(today.year, today.month, today.day)
-            .atStartOfDayIn(kotlinx.datetime.TimeZone.UTC).toEpochMilliseconds()
-    }
-    val dayMs = 86_400_000L
-    val minMs = todayUtcMs + question.min * dayMs
-    val maxMs = todayUtcMs + question.max * dayMs
-    val state = rememberDatePickerState(
-        selectableDates = object : SelectableDates {
-            override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis in minMs..maxMs
-        },
-    )
+    val today = remember { org.clear30.data.model.PlainDate.from(org.clear30.util.now()) }
 
     Column(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding)) {
         QuestionCard(question.prompt1, question.prompt2, modifier = Modifier.padding(bottom = Dimens.cardSpacing))
+        // In-app month calendar (J46) — replaces the stock Material DatePicker.
+        // question.min/max are day offsets from today (e.g. -13..+10 for a break
+        // start date: 13 days ago through 10 days from now). The calendar renders
+        // its own confirm ("Next") button, so no separate StretchedButton here.
         Box(Modifier.weight(1f)) {
-            DatePicker(state = state, modifier = Modifier.fillMaxWidth())
-        }
-        StretchedButton("Next", gradient = Clear30Gradients.clear30) {
-            // selectedDateMillis is UTC-midnight of the picked CALENDAR DATE.
-            // Re-anchor it to local midnight — converting the raw instant through
-            // the local zone shifts the date back a day for UTC-negative zones
-            // (picking "Jul 13" at 10pm ET used to store Jul 12).
-            val selected = state.selectedDateMillis?.let { ms ->
-                Instant.fromEpochMilliseconds(ms)
-                    .toLocalDateTime(kotlinx.datetime.TimeZone.UTC).date
-                    .atStartOfDayIn(kotlinx.datetime.TimeZone.currentSystemDefault())
-            }
-            onCompleted(selected)
+            StartDateCalendarPicker(
+                currentStartDate = today,
+                minOffsetDays = question.min,
+                maxOffsetDays = question.max,
+                initialSelection = today,
+                requireChange = false,
+                showClose = false,
+                confirmLabel = { "Next" },
+                onResult = { picked -> onCompleted(picked?.dateObject) },
+            )
         }
         if (cancelOption != null) {
             SmallText(

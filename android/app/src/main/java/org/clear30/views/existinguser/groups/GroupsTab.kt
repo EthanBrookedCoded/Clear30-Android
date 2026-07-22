@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import org.clear30.Clear30Application
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -107,9 +108,14 @@ fun GroupsTab(program: org.clear30.data.model.Program, userInfo: UserInfo) {
         val r = sub as? org.clear30.data.DeepLinkRoute.Group ?: return@LaunchedEffect
         org.clear30.AppState.requestSubRoute(null)
         if (group != null) return@LaunchedEffect
-        busy = true
-        error = controller.join(r.code)
-        busy = false
+        // Run the join on the app scope: clearing pendingSubRoute above re-keys
+        // this LaunchedEffect, which would otherwise cancel the in-flight join RPC
+        // mid-flight (surfacing "The coroutine scope left the composition").
+        org.clear30.Clear30Application.appScope.launch {
+            busy = true
+            error = controller.join(r.code)
+            busy = false
+        }
     }
 
     val g = group
@@ -1013,7 +1019,12 @@ private fun LeaveGroupDialog(busy: Boolean, onDismiss: () -> Unit, onConfirm: ()
 }
 
 private fun shareGroupInvite(context: android.content.Context, group: Clear30Group) {
-    val link = "https://clear30.org/group/${group.id}"
+    // Match iOS's exact invite URL (Clear30Group.swift:267) — the `?group_id=`
+    // QUERY form. iOS's URLManager joins ONLY off the `group_id` param, so the old
+    // `clear30.org/group/<id>` PATH link silently failed for iOS recipients;
+    // Android's own parser accepts both the path and query forms.
+    val nameParam = group.name.orEmpty().replace(" ", "-")
+    val link = "https://clear30.org/join-a-group/?group_id=${group.id}&name=$nameParam"
     val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
         type = "text/plain"
         putExtra(

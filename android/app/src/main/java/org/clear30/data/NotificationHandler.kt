@@ -218,6 +218,77 @@ object NotificationHandler {
         wm().cancelAllWorkByTag(NotificationPostWorker.TAG_CHECK_IN)
     }
 
+    // MARK: - Slipped nudge
+
+    /**
+     * Post-slip ("you smoked") nudge — iOS `NotificationHandlerSlipped.scheduleSlipped`.
+     * Fires only for users currently in an active break who log a smoke, 90 min –
+     * 3 hours after the slip; warm, normalizing copy pointing back into the app
+     * (the Slipped support sheet). Reuses the check-in toggle (free, on by
+     * default) — the slip nudge is part of the same return-to-the-app loop.
+     * A stable unique-work name + notification id means logging another slip
+     * simply re-times the pending nudge rather than stacking.
+     */
+    fun scheduleSlipped(userInfo: UserInfo, program: Program) {
+        val settings = userInfo.notificationSettings ?: return
+        if (!settings.typeEnabled(ToggleSettingsOption.CHECK_IN)) return
+
+        // Only for users currently in an active break.
+        if (program.currentBreak == null) return
+
+        val (title, body) = SLIPPED_COPY.random()
+
+        // iOS `slippedFireDate`: 90 min – 3 hours after the slip.
+        val delayMinutes = (90..180).random().toLong()
+
+        val req = OneTimeWorkRequestBuilder<NotificationPostWorker>()
+            .setInitialDelay(delayMinutes, TimeUnit.MINUTES)
+            .addTag(NotificationPostWorker.TAG_SLIPPED)
+            .setInputData(workDataOf(
+                NotificationPostWorker.KEY_CHANNEL to Clear30Application.CHANNEL_CHECK_IN,
+                NotificationPostWorker.KEY_TITLE to title,
+                NotificationPostWorker.KEY_BODY to body,
+                NotificationPostWorker.KEY_NOTIF_ID to NOTIF_ID_SLIPPED,
+                // iOS taps open the Slipped support sheet; route to the Support
+                // tab (where the Slipped card lives) via the existing deep link.
+                NotificationPostWorker.KEY_DEEP_LINK to "clear30://support",
+            ))
+            .build()
+        wm().enqueueUniqueWork("slipped_nudge", ExistingWorkPolicy.REPLACE, req)
+    }
+
+    /** iOS `NotificationHandler.removePending(type: .slipped)` — a sober check-in cancels the stale nudge. */
+    fun removeSlipped() {
+        wm().cancelAllWorkByTag(NotificationPostWorker.TAG_SLIPPED)
+    }
+
+    /**
+     * iOS `SlippedNotificationCopy.all` (NotificationHandlerSlipped.swift:26-67)
+     * — copy is local for v1, mirroring the Slipped sheet's local copy pools.
+     */
+    private val SLIPPED_COPY: List<Pair<String, String>> = listOf(
+        "Hey 🤍 if you're feeling frustrated, don't" to
+            "You don't have to carry that right now. Come back in, we made something for you.",
+        "So you used 🌱 it happens" to
+            "No need to judge it. See if you can meet this moment with a little kindness. There's something inside for you.",
+        "Today didn't go to plan 🫶" to
+            "That's part of the path. Nothing to fix right now. Come back in, we set something aside for you.",
+        "One of those days, huh 😮‍💨" to
+            "Yeah, those come and go. You're still on the path. There's something in the app for moments like this.",
+        "Hey, about earlier 🤍" to
+            "Whatever came up, you can meet it with awareness. Come back in when you can, we've got something for you.",
+        "Be gentle with yourself 🫶" to
+            "Using once doesn't erase anything. This is a moment to notice, not judge. Come back in when you're ready.",
+        "Hey, come back in 🤍" to
+            "Whatever you're feeling is welcome here. Let's just take the next step. We put something together for you.",
+        "If you're feeling off about using 🌱" to
+            "That feeling will pass too with movement. You don't have to hold onto it. There's something inside for you.",
+        "Be kind to yourself 🤍" to
+            "Nothing is ruined. You're still learning your mind. Come back in when you can, we've got you.",
+        "This is part of the process 🌱" to
+            "Not a setback, just something to understand. Come back in, we set something aside for this moment.",
+    )
+
     // MARK: - Achievement notifications
 
     /**
@@ -291,6 +362,12 @@ object NotificationHandler {
 
     // MARK: - Bulk
 
+    /** iOS `removePending(type: .content)` — drop only the scheduled content pushes
+     *  (used when a subscription lapses; the other categories keep firing). */
+    fun removePendingContent() {
+        wm().cancelAllWorkByTag(NotificationPostWorker.TAG_CONTENT)
+    }
+
     /** iOS `UNUserNotificationCenter.removeAllPendingNotificationRequests()`. */
     fun removePending() {
         wm().cancelAllWorkByTag(NotificationPostWorker.TAG_ABANDONED_ONBOARDING)
@@ -298,6 +375,7 @@ object NotificationHandler {
         wm().cancelAllWorkByTag(NotificationPostWorker.TAG_CHECK_IN)
         wm().cancelAllWorkByTag(NotificationPostWorker.TAG_POP_IN)
         wm().cancelAllWorkByTag(NotificationPostWorker.TAG_HEALTH)
+        wm().cancelAllWorkByTag(NotificationPostWorker.TAG_SLIPPED)
     }
 
     // iOS `maxNotis` — content notifications scheduled per pass.
@@ -308,4 +386,5 @@ object NotificationHandler {
     private const val NOTIF_ID_CHECK_IN = 20_000
     private const val NOTIF_ID_ACHIEVEMENT = 30_000
     private const val NOTIF_ID_HEALTH = 40_000
+    private const val NOTIF_ID_SLIPPED = 50_000
 }

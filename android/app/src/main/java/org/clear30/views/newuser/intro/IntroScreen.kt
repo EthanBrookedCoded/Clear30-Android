@@ -260,7 +260,10 @@ private fun IntroBottomButtons(
         )
 
         if (onSignIn != null) {
-            Row(Modifier.pressScale(onClick = onSignIn).alpha(0.5f)) {
+            Row(
+                Modifier.pressScale(onClick = onSignIn).alpha(0.5f),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 TinyText("Already have an account? ", color = Clear30Colors.text)
                 // Underline run for "Log In".
                 Text(
@@ -519,11 +522,12 @@ private fun TextIconButton(text: String, iconName: String, gradient: Boolean, on
     Row(
         Modifier
             .pressScale(onClick = onClick)
+            .fillMaxWidth()
             .clip(RoundedCornerShape(Dimens.cornerRadius))
             .background(if (gradient) Clear30Gradients.clear30 else Clear30Gradients.white)
             .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.cardSpacing),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+        horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2, Alignment.CenterHorizontally),
     ) {
         Icon(
             sfSymbol(iconName),

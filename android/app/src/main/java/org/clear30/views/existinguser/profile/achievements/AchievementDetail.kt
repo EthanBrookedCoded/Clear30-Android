@@ -78,9 +78,12 @@ fun AchievementReveal(
     onClose: () -> Unit,
 ) {
     if (achievements.isEmpty()) return
-    var index by remember {
-        mutableStateOf(achievements.indexOfFirst { it.key == startKey }.coerceAtLeast(0))
-    }
+    // Track the shown achievement by KEY, not by a fixed index. Marking an
+    // achievement visited re-sorts `achievements` (new-first), so a remembered
+    // index would resolve to a DIFFERENT item after the visit write (I44). The
+    // key is stable; the index is derived from it each recomposition.
+    var currentKey by remember { mutableStateOf(startKey) }
+    val index = achievements.indexOfFirst { it.key == currentKey }.coerceAtLeast(0)
     val current = achievements[index]
     val rarity = current.computedRarity
 
@@ -98,7 +101,7 @@ fun AchievementReveal(
 
     val tilt by rememberDeviceTilt()
 
-    LaunchedEffect(index) {
+    LaunchedEffect(currentKey) {
         // Reset everything for this card.
         showCard = false; showIcon = false; showName = false; showDesc = false; showBadges = false
         shakeRot.snapTo(0f); slam.snapTo(1f); glow.snapTo(0f)
@@ -214,7 +217,13 @@ fun AchievementReveal(
             Box(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding), contentAlignment = Alignment.BottomStart) {
                 if (index > 0) {
                     Box {
-                        IconButton("chevron.left", tint = Color.White) { index-- }
+                        Box(
+                            Modifier.size(40.dp).clip(RoundedCornerShape(20.dp))
+                                .background(Color.White.copy(alpha = 0.25f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            IconButton("chevron.left", tint = Color.White) { currentKey = achievements[index - 1].key }
+                        }
                         if (hasUnvisitedLeft) UnvisitedDot(Modifier.align(Alignment.TopStart).padding(1.dp))
                     }
                 }
@@ -222,7 +231,13 @@ fun AchievementReveal(
             Box(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding), contentAlignment = Alignment.BottomEnd) {
                 if (index < achievements.size - 1) {
                     Box {
-                        IconButton("chevron.right", tint = Color.White) { index++ }
+                        Box(
+                            Modifier.size(40.dp).clip(RoundedCornerShape(20.dp))
+                                .background(Color.White.copy(alpha = 0.25f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            IconButton("chevron.right", tint = Color.White) { currentKey = achievements[index + 1].key }
+                        }
                         if (hasUnvisitedRight) UnvisitedDot(Modifier.align(Alignment.TopEnd).padding(1.dp))
                     }
                 }

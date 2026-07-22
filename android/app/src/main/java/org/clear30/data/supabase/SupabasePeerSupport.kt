@@ -65,7 +65,10 @@ private data class MarkPeerReadParams(@SerialName("p_user_id") val pUserId: Stri
  * `mark_peer_messages_read` function to be reachable via PostgREST.
  */
 suspend fun SupabaseController.markPeerMessagesRead(userID: String) {
-    callFunction(SupabaseFunction("mark_peer_messages_read"), MarkPeerReadParams(userID))
+    // The function lives in the `comms` schema (iOS scopes every peer-support
+    // call with `.schema("comms")`); without the schema it hit public and no-op'd,
+    // so Gerad's unread badge never cleared server-side.
+    callFunction(SupabaseFunction("mark_peer_messages_read"), MarkPeerReadParams(userID), schema = COMMS_SCHEMA)
 }
 
 @Serializable

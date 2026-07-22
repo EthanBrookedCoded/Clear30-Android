@@ -63,66 +63,24 @@ internal fun CreatePostScreen(
     allTags: List<PostTag.Tag>,
     onClose: () -> Unit,
     onSubmit: (title: String, body: String, tagNames: List<String>) -> Unit,
-    onSubmitVideo: (title: String, tagNames: List<String>, video: File, thumbnail: Bitmap?) -> Unit,
 ) {
-    val context = LocalContext.current
     var title by remember { mutableStateOf("") }
     var body by remember { mutableStateOf("") }
-    var selectedTagIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    // iOS CreatePostView.setup(): the current "Day N" tag is auto-attached as a
+    // *selected* tag — visible in the tag row and removable — never during
+    // start-soon (getDayTag returns null then).
+    var selectedTagIds by remember { mutableStateOf(setOfNotNull(allTags.getDayTag(program)?.id)) }
     var showTagPicker by remember { mutableStateOf(false) }
     // iOS forces the community program tag (getProgramTag → communityProgramTagName),
     // which is "Clear30"/"Clear30 Preparation" during a break — not coreProgramName.
     val forcedTag = program.communityProgramTagName
 
-    // Recording state — same system-camera pipeline as JournalSection: allocate a
-    // destination file under filesDir/videos (FileProvider-mapped), capture into
-    // it, then grab a poster frame for the preview/upload.
-    var recordedVideo by remember { mutableStateOf<File?>(null) }
-    var thumbnail by remember { mutableStateOf<Bitmap?>(null) }
-    var pendingVideoId by remember { mutableStateOf<String?>(null) }
-    val videoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CaptureVideo()) { saved ->
-        val id = pendingVideoId
-        pendingVideoId = null
-        val file = id?.let { communityVideoFile(context, it) }
-        if (saved == true && file != null && file.exists() && file.length() > 0) {
-            recordedVideo = file
-            thumbnail = extractVideoThumbnail(context, android.net.Uri.fromFile(file))
-        } else {
-            file?.delete()
-        }
-    }
-
-    fun startRecording() {
-        val id = "community-${System.currentTimeMillis()}"
-        pendingVideoId = id
-        val dest = communityVideoFile(context, id)
-        dest.parentFile?.mkdirs()
-        dest.createNewFile()
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", dest)
-        videoLauncher.launch(uri)
-    }
-
-    val hasVideo = recordedVideo != null
-
     Column(
         Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
         verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             IconButton("xmark", onClick = onClose)
-            Box(
-                Modifier.size(40.dp).clip(CircleShape)
-                    .background(if (hasVideo) Clear30Colors.green else Clear30Colors.opacityGray)
-                    .clickable { startRecording() },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    sfSymbol("video.fill"),
-                    contentDescription = "Record video",
-                    tint = if (hasVideo) Color.White else Clear30Colors.text.copy(alpha = 0.5f),
-                    modifier = Modifier.size(18.dp),
-                )
-            }
         }
 
         // iOS CreatePostView: Heading3Input(placeholder: "Title", returnNewLine: false).
@@ -150,34 +108,13 @@ internal fun CreatePostScreen(
             }
         }
 
-        // Video posts show the captured frame (tap to re-record); text posts show
-        // the description editor.
-        if (hasVideo) {
-            Box(
-                Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(Dimens.cornerRadius))
-                    .background(Clear30Colors.opacityGray).clickable { startRecording() },
-                contentAlignment = Alignment.Center,
-            ) {
-                thumbnail?.let {
-                    Image(it.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                }
-                Box(Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)).padding(14.dp)) {
-                    Icon(sfSymbol("play.fill"), contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
-                }
-            }
-            SmallText("Tap the clip to re-record.", color = Clear30Colors.text.copy(alpha = 0.5f))
-            Box(Modifier.weight(1f))
-        } else {
-            OutlinedTextField(body, { body = it }, placeholder = { Text("Description") }, modifier = Modifier.fillMaxWidth().weight(1f))
-        }
+        OutlinedTextField(body, { body = it }, placeholder = { Text("Description") }, modifier = Modifier.fillMaxWidth().weight(1f))
 
-        val canPost = title.isNotBlank() && (hasVideo || body.isNotBlank())
+        val canPost = title.isNotBlank() && body.isNotBlank()
         if (canPost) {
             DefaultButton("Post", gradient = Clear30Gradients.clear30, modifier = Modifier.fillMaxWidth()) {
                 val names = listOf(forcedTag) + selectedTagIds.mapNotNull { id -> allTags.firstOrNull { it.id == id }?.name }
-                val video = recordedVideo
-                if (video != null) onSubmitVideo(title.trim(), names, video, thumbnail)
-                else onSubmit(title.trim(), body.trim(), names)
+                onSubmit(title.trim(), body.trim(), names)
             }
         }
     }
@@ -192,10 +129,6 @@ internal fun CreatePostScreen(
         )
     }
 }
-
-/** Temp destination for a community recording (FileProvider-mapped `videos/` dir). */
-private fun communityVideoFile(context: android.content.Context, id: String): File =
-    File(File(context.filesDir, "videos"), "$id.mp4")
 
 /** Solid colored tag pill (selected/forced state) with an optional remove "×". */
 @Composable
