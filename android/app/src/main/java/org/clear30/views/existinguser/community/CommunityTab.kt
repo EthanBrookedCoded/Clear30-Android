@@ -136,23 +136,27 @@ fun CommunityTab(program: org.clear30.data.model.Program, userInfo: org.clear30.
     }
 
     // Drain a deep-link to a specific post (clear30://post/<id>). We wait for
-    // the feed to load so we can pick the canonical Post object, but fall back
-    // to a stub if the feed lookup misses (the user might have a link to a
-    // post they aren't in the cached page for).
+    // the feed to load so we can pick the canonical Post object, and fetch the
+    // post directly when it isn't on the cached page.
     val sub by org.clear30.AppState.pendingSubRoute.collectAsStateWithLifecycle()
     LaunchedEffect(sub, posts) {
         val r = sub as? org.clear30.data.DeepLinkRoute.Post ?: return@LaunchedEffect
         val loaded = posts ?: return@LaunchedEffect  // wait for the feed
-        val target = loaded.firstOrNull { it.id == r.id }
-            // Fall back to a stub if the post isn't on the cached feed page;
-            // the detail view will still render title/body once the lookup
-            // network call lands.
-            ?: Post(
-                id = r.id, userId = "", title = "Post",
-                contentType = "text", body = "", createdAt = "",
-            )
-        detail = target
+        val cached = loaded.firstOrNull { it.id == r.id }
+        if (cached != null) {
+            detail = cached
+            org.clear30.AppState.requestSubRoute(null)
+            return@LaunchedEffect
+        }
+        // Not on the cached feed page (a deep link, or an older post): FETCH it.
+        // The previous code substituted a placeholder `Post(userId = "", title =
+        // "Post")` with a comment claiming the detail view would fill it in
+        // later — nothing ever did, so the post rendered permanently as
+        // "anon" / "Post" with an empty body while its comments loaded fine.
         org.clear30.AppState.requestSubRoute(null)
+        SupabaseController.getCommunityPostById(r.id)
+            .onSuccess { detail = it }
+            .onFailure { org.clear30.data.AlertHandler.error(message = "Could not load post.") }
     }
 
     // Owner edit flow (iOS EditPostView sheet) — rendered above the detail so
