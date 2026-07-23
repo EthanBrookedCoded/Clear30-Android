@@ -147,12 +147,11 @@ class AppRootViewModel : ViewModel() {
                 org.clear30.data.updateSchoolData(userInfo)
             }
 
-            // Refresh the paywall-targeting traits each launch for identified
-            // users (iOS ContentView.initHelium re-derives getUserParams — incl.
-            // the assessment-response traits — every cold start; Android pushes
-            // them to the RC attribute store). No-ops without an API key.
+            // Identify RevenueCat before any entitlement lookup or Helium
+            // presentation. This runs after local routing, so an offline identity
+            // refresh can never hold the app on its loading screen.
             if (userInfo.userID.isNotEmpty()) {
-                org.clear30.data.PaywallController.updateUserAttributes(
+                org.clear30.data.PaywallController.signIn(
                     userInfo,
                     org.clear30.data.PaywallController.getUserParams(
                         userInfo,
@@ -178,11 +177,6 @@ class AppRootViewModel : ViewModel() {
 
         // Back-fill schoolId from an already-cached school bundle (iOS ContentView:272).
         if (userInfo.schoolId == null) userInfo.schoolId = userInfo.schoolData?.school_id
-
-        // RevenueCat entitlement sync happens in AllTabs (checkEntitlementChanged →
-        // handleUserPaid / handleUserUnsubscribed), matching iOS
-        // AllTabs.checkSubscription — NOT here, where the network round-trip
-        // would block splash routing.
 
         Clear30Store.save(userInfo)
     }

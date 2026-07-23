@@ -60,6 +60,31 @@ fun Paywall(
     hard: Boolean = true,
     onCompleted: (EntitlementType?) -> Unit,
 ) {
+    // Match iOS onboarding: before rendering the initial paywall, check the
+    // correctly identified RevenueCat user and silently continue if access
+    // already exists. Popup/upsell paywalls intentionally skip this check.
+    var initialEntitlementChecked by remember(userInfo?.userID, popup) {
+        mutableStateOf(popup || userInfo == null)
+    }
+    LaunchedEffect(userInfo?.userID, popup) {
+        if (!popup && userInfo != null) {
+            val entitlement = PaywallController.activeEntitlement(userInfo)
+            if (entitlement != null) {
+                onCompleted(entitlement)
+                return@LaunchedEffect
+            }
+            initialEntitlementChecked = true
+        }
+    }
+    if (!initialEntitlementChecked) {
+        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Spacer(Modifier.weight(1f))
+            CircularProgressIndicator(color = Clear30Colors.accent)
+            Spacer(Modifier.weight(1f))
+        }
+        return
+    }
+
     var fellBack by remember { mutableStateOf(false) }
     if (PaywallController.heliumEnabled() && !fellBack) {
         HeliumPaywall(userInfo, popup, hard, onCompleted, onFallback = { fellBack = true })

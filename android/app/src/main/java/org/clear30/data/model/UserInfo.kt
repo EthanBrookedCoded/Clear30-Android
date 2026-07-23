@@ -114,6 +114,12 @@ class UserInfo(
     fun patch() {
         if (_signUpType == null) _signUpType = SignUpType.PHONE
 
+        // iOS migration parity: old installs persisted only `paid=true`.
+        // Preserve that confirmed access even before RevenueCat/network refresh.
+        if (paid && currentEntitlementType == null) {
+            currentEntitlementType = EntitlementType.DEFAULT
+        }
+
         // Push back first app open by 4 days for legacy users
         if ((completedOnboarding == true) && firstAppOpen.adding(seconds = 5) >= now()) {
             firstAppOpen = firstAppOpen.adding(days = -4)

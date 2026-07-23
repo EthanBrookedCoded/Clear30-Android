@@ -49,23 +49,16 @@ fun AllTabs(
     // (iOS viewModel.activeSheet = .payment(hard:)).
     var paywallSheet by remember { mutableStateOf<Boolean?>(null) }
 
-    // iOS AllTabs.checkSubscription() (run once per load from loadStorage):
-    // force-show the hard paywall for unpaid users, then ask RevenueCat whether
-    // the entitlement drifted and flip the app state accordingly.
+    // Refresh once per load, but only grant newly discovered access. A completed
+    // onboarding user is never re-gated because RevenueCat, Play Billing, the
+    // network, or the backend user row is unavailable.
     androidx.compose.runtime.LaunchedEffect(Unit) {
-        if (!userInfo.isPaid && userInfo.paywallHard) paywallSheet = true
-
         val (didChange, newEntitlement) =
             org.clear30.data.PaywallController.checkEntitlementChanged(userInfo)
-        if (didChange) {
-            if (newEntitlement != null) {
-                handleUserPaid(userInfo, program, newEntitlement)
-                selected = CustomTabBarItem.TODAY // iOS goToRoot()
-                paywallSheet = null
-            } else {
-                handleUserUnsubscribed(userInfo)
-                if (userInfo.paywallHard) paywallSheet = true // iOS checkForceShowPaywall()
-            }
+        if (didChange && newEntitlement != null) {
+            handleUserPaid(userInfo, program, newEntitlement)
+            selected = CustomTabBarItem.TODAY
+            paywallSheet = null
             org.clear30.data.Clear30Store.save(userInfo)
         }
     }
@@ -244,22 +237,6 @@ private fun handleUserPaid(
     userInfo.notificationSettings?.options?.set(org.clear30.data.model.ToggleSettingsOption.CONTENT, true)
     val allMessages = program.contentInfo.values.flatMap { it.messages } + program.schoolMessages
     org.clear30.data.NotificationHandler.scheduleContent(userInfo, allMessages, program)
-}
-
-/**
- * iOS AllTabs.handleUserUnsubscribed — revoke paid-only state: clear the
- * entitlement (+ deprecated `paid` flag), drop scheduled content pushes, turn
- * every notification toggle off, and log it. Caller persists userInfo and
- * re-runs the hard-paywall check.
- */
-private fun handleUserUnsubscribed(userInfo: UserInfo) {
-    userInfo.currentEntitlementType = null
-    userInfo.paid = false
-    org.clear30.data.NotificationHandler.removePendingContent()
-    org.clear30.data.model.ToggleSettingsOption.entries
-        .filter { it.type == org.clear30.data.model.ToggleSettingsOptionType.NOTIFICATIONS }
-        .forEach { userInfo.notificationSettings?.options?.set(it, false) }
-    Logger.logEvent(userInfo.loggingID, LogEventType.unsubscribed)
 }
 
 /** opened-tab analytics events (AllTabs.swift logScreen). */

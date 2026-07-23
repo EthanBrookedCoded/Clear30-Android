@@ -13,22 +13,23 @@ import com.revenuecat.purchases.PurchasesErrorCode
 import com.revenuecat.purchases.PurchasesException
 import com.revenuecat.purchases.awaitCustomerInfo
 import com.revenuecat.purchases.awaitGetProducts
+import com.revenuecat.purchases.awaitLogIn
 import com.revenuecat.purchases.awaitOfferings
 import com.revenuecat.purchases.awaitPurchase
 import com.revenuecat.purchases.awaitRestore
-import com.revenuecat.purchases.awaitSyncPurchases
-import com.revenuecat.purchases.logInWith
 import com.revenuecat.purchases.logOutWith
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import org.clear30.BuildConfig
 import org.clear30.data.model.EntitlementType
 import org.clear30.data.model.ProgramAssessmentResponse
 import org.clear30.data.model.SignUpType
 import org.clear30.data.model.UserInfo
 import org.clear30.data.model.toDictionary
-import org.clear30.util.justDay
 
 /**
  * PaywallController — ported from PaywallController.swift.
@@ -43,6 +44,15 @@ import org.clear30.util.justDay
  * The Swift original is kept for reference until the paywall views are built.
  */
 object PaywallController {
+
+    private const val SUBSCRIPTION_LOOKUP_TIMEOUT_MS = 5_000L
+
+    /**
+     * RevenueCat has process-global identity. Startup and the onboarding paywall
+     * can both try to identify at nearly the same time, so serialize that handoff
+     * before any entitlement lookup or Helium presentation.
+     */
+    private val identityMutex = Mutex()
 
     private val _currentPaywallID = MutableStateFlow<String?>(null)
     val currentPaywallID: StateFlow<String?> = _currentPaywallID.asStateFlow()
@@ -102,39 +112,64 @@ object PaywallController {
      * targeting / paywalls (Swift `signIn` → logIn + attribute setters; the iOS
      * per-field setters fold into the Android `setAttributes(map)`).
      */
-    fun signIn(userInfo: UserInfo, userProperties: Map<String, Any> = emptyMap()) {
-        if (BuildConfig.REVENUECAT_API_KEY.isBlank()) return
+    suspend fun signIn(
+        userInfo: UserInfo,
+        userProperties: Map<String, Any> = emptyMap(),
+    ): Boolean = identityMutex.withLock {
+        if (BuildConfig.REVENUECAT_API_KEY.isBlank() || userInfo.userID.isBlank()) return@withLock false
+
         val purchases = Purchases.sharedInstance
-        val signUpID = userInfo.signUpID
-        val signUpType = userInfo.signUpType
-        purchases.logInWith(
-            userInfo.userID,
-            onError = { },
-            onSuccess = { _, _ ->
+        if (purchases.appUserID != userInfo.userID) {
+            val identified = withTimeoutOrNull(SUBSCRIPTION_LOOKUP_TIMEOUT_MS) {
                 runCatching {
-                    purchases.setDisplayName(userInfo.name)
-                    when (signUpType) {
-                        SignUpType.PHONE -> purchases.setPhoneNumber(signUpID)
-                        // Apple sign-in can hand back a nil/placeholder email for
-                        // returning users — only forward real-looking addresses.
-                        SignUpType.EMAIL, SignUpType.APPLE ->
-                            if (signUpID.contains("@")) purchases.setEmail(signUpID)
-                    }
-                    // Android has no setAmplitudeUserID — the reserved attribute
-                    // key feeds the same RevenueCat → Amplitude integration.
-                    purchases.setAttributes(mapOf("\$amplitudeUserId" to userInfo.loggingID))
-                    AttributionHandler.getAppStackID()?.let {
-                        purchases.setAttributes(mapOf("appStackID" to it))
-                    }
-                }
-            },
-        )
-        // Push the paywall-targeting traits (iOS forwards them to Helium; Android's
-        // trait vehicle is the RC attribute store). Base params guarantee the
-        // standard keys even for a partial caller map; the caller's
-        // userProperties — which carry the assessment-response traits — win.
-        val merged = getUserParams(userInfo).also { it.putAll(userProperties) }
-        updateUserAttributes(userInfo, merged)
+                    purchases.awaitLogIn(userInfo.userID)
+                }.onFailure {
+                    android.util.Log.w(
+                        "SubscriptionState",
+                        "RevenueCat identity failed; preserving local access: ${it.message}",
+                    )
+                }.isSuccess
+            } ?: false
+            if (!identified) {
+                android.util.Log.w(
+                    "SubscriptionState",
+                    "RevenueCat identity unavailable; local routing remains authoritative",
+                )
+            }
+            if (!identified) return@withLock false
+        }
+
+        runCatching {
+            purchases.setDisplayName(userInfo.name)
+            when (userInfo.signUpType) {
+                SignUpType.PHONE -> purchases.setPhoneNumber(userInfo.signUpID)
+                // Apple sign-in can hand back a nil/placeholder email for
+                // returning users — only forward real-looking addresses.
+                SignUpType.EMAIL, SignUpType.APPLE ->
+                    if (userInfo.signUpID.contains("@")) purchases.setEmail(userInfo.signUpID)
+            }
+            // Android has no setAmplitudeUserID — the reserved attribute key
+            // feeds the same RevenueCat → Amplitude integration.
+            purchases.setAttributes(mapOf("\$amplitudeUserId" to userInfo.loggingID))
+            AttributionHandler.getAppStackID()?.let {
+                purchases.setAttributes(mapOf("appStackID" to it))
+            }
+
+            // Base params guarantee the standard keys even for a partial caller
+            // map; assessment-response traits supplied by the caller win.
+            val merged = getUserParams(userInfo).also { it.putAll(userProperties) }
+            updateUserAttributes(userInfo, merged)
+            initHelium(userInfo, merged)
+            android.util.Log.i(
+                "SubscriptionState",
+                "RevenueCat identity ready; matchesStoredUser=${purchases.appUserID == userInfo.userID}",
+            )
+        }.onFailure {
+            // Subscriber attributes are useful for targeting but must not make
+            // an otherwise successful identity handoff fail.
+            android.util.Log.w("SubscriptionState", "Subscriber attributes failed: ${it.message}")
+        }
+        true
     }
 
     fun signOut(context: Context? = null) {
@@ -159,8 +194,8 @@ object PaywallController {
         if (!heliumEnabled()) { onInitialized?.invoke(); return }
         runCatching {
             val identity = com.tryhelium.paywall.core.Helium.identity
-            identity.userId = userInfo.loggingID
-            identity.revenueCatAppUserId = userInfo.userID
+            identity.userId = userInfo.userID
+            identity.revenueCatAppUserId = Purchases.sharedInstance.appUserID
             val merged = getUserParams(userInfo).also { it.putAll(userProperties) }
             identity.setUserTraits(heliumTraits(merged))
         }.onFailure { android.util.Log.w("Paywall", "Helium identify failed: ${it.message}") }
@@ -243,39 +278,57 @@ object PaywallController {
         if (userInfo?.bypassPaidUntil?.let { it > org.clear30.util.now() } == true) {
             return bypassEntitlement ?: userInfo.currentEntitlementType ?: EntitlementType.DEFAULT
         }
+
+        // Never query the anonymous/previous RevenueCat account for a known
+        // Clear30 user. This also closes the cold-start race between AppRoot and
+        // the onboarding paywall.
+        if (userInfo != null && userInfo.userID.isNotBlank() &&
+            Purchases.sharedInstance.appUserID != userInfo.userID
+        ) {
+            val identified = signIn(userInfo, getUserParams(userInfo))
+            if (!identified) return userInfo.currentEntitlementType
+        }
+
         return try {
-            val info = Purchases.sharedInstance.awaitSyncPurchases()
+            // CustomerInfo is RevenueCat's cached subscription snapshot. A normal
+            // launch should not run syncPurchases, which is a restore/migration
+            // operation and can fail solely because Play Billing is unavailable.
+            val info = withTimeoutOrNull(SUBSCRIPTION_LOOKUP_TIMEOUT_MS) {
+                Purchases.sharedInstance.awaitCustomerInfo()
+            } ?: run {
+                android.util.Log.w(
+                    "SubscriptionState",
+                    "Entitlement lookup timed out; preserving local access",
+                )
+                return userInfo?.currentEntitlementType
+            }
             if (userInfo != null) checkTrialStatus(userInfo, info)
-            entitlementFrom(info)
-                ?: entitlementFrom(Purchases.sharedInstance.awaitCustomerInfo())
+            entitlementFrom(info).also {
+                android.util.Log.i(
+                    "SubscriptionState",
+                    "Entitlement refresh active=${it?.rawValue ?: "none"}; " +
+                        "localAccessPreserved=${it == null && userInfo?.isPaid == true}",
+                )
+            }
         } catch (e: Exception) {
             android.util.Log.w("Paywall", "entitlement check failed: ${e.message}")
-            // Preserve a previously confirmed entitlement while offline, but do
-            // not grant paid access merely because a user record exists.
+            // A network or Play Billing failure can never revoke local access.
             userInfo?.currentEntitlementType
         }
     }
 
     /**
-     * iOS `checkEntitlementChanged` — refresh the entitlement from RevenueCat and
-     * report whether it changed. Free-code users always keep their access.
-     * Mutates [userInfo].currentEntitlementType (caller persists).
+     * Refresh RevenueCat access for an existing user. This is intentionally
+     * grant-only: once onboarding is complete, a missing/expired response,
+     * deleted backend row, or offline launch does not kick the user back to a
+     * hard paywall. A newly discovered entitlement is still persisted.
      */
     suspend fun checkEntitlementChanged(userInfo: UserInfo): Pair<Boolean, EntitlementType?> {
         if (userInfo.freeCode != null) return false to null
         if (BuildConfig.REVENUECAT_API_KEY.isBlank()) return false to null
 
-        // Expire a scheduled downgrade (setPaidFalseOn) before comparing.
-        val setPaidFalseOn = userInfo.setPaidFalseOn
-        if (userInfo.currentEntitlementType != null && setPaidFalseOn != null &&
-            setPaidFalseOn.justDay <= org.clear30.util.now().justDay
-        ) {
-            userInfo.currentEntitlementType = null
-            userInfo.setPaidFalseOn = null
-        }
-
         val initial = userInfo.currentEntitlementType
-        val new = activeEntitlement(userInfo)
+        val new = activeEntitlement(userInfo) ?: return false to null
         userInfo.currentEntitlementType = new
         return if (initial == new) false to null else true to new
     }
