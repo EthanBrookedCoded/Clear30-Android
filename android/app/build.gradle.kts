@@ -17,9 +17,11 @@ android {
         // old RN app's Play listing (same package = old users auto-update + access
         // to the old app's on-device data for migration). Play identity is immutable.
         applicationId = "org.clear30.Clear30v1"
-        minSdk = 26
+        // Match the previous production app so upgrading to the native port does
+        // not strand Android 7.0/7.1 users in Play's device catalog.
+        minSdk = 24
         targetSdk = 35
-        versionCode = 21604
+        versionCode = 21605
         versionName = "2.16.1"
         vectorDrawables { useSupportLibrary = true }
 
@@ -85,6 +87,11 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            // Package native symbol tables in the AAB so Play can symbolicate
+            // crashes/ANRs from native dependency code.
+            ndk {
+                debugSymbolLevel = "SYMBOL_TABLE"
+            }
             signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -106,6 +113,11 @@ android {
     }
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+    }
+    lint {
+        // AndroidX Lifecycle's detector is binary-incompatible with this AGP/
+        // Kotlin analysis API and crashes lint before it can run NewApi checks.
+        disable += "NullSafeMutableLiveData"
     }
 }
 

@@ -38,13 +38,22 @@ object Haptics {
         val v = vibrator ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && v.hasAmplitudeControl()) {
             v.vibrate(VibrationEffect.createPredefined(predefined))
-        } else {
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             v.vibrate(VibrationEffect.createOneShot(20, amplitude.coerceIn(1, 255)))
+        } else {
+            @Suppress("DEPRECATION")
+            v.vibrate(20)
         }
     }
 
     private fun pattern(timings: LongArray) {
-        vibrator?.vibrate(VibrationEffect.createWaveform(timings, -1))
+        val v = vibrator ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            v.vibrate(VibrationEffect.createWaveform(timings, -1))
+        } else {
+            @Suppress("DEPRECATION")
+            v.vibrate(timings, -1)
+        }
     }
 
     private const val EFFECT_CLICK = VibrationEffect.EFFECT_CLICK

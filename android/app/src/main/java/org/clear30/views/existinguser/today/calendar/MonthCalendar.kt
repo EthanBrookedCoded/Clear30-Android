@@ -91,7 +91,9 @@ fun MonthCalendar(program: Program, modifier: Modifier = Modifier, onDayTap: ((P
         // Day grid.
         val daysInMonth = anchor.daysInMonth()
         // DayOfWeek.value gives ISO 1..7 (Mon..Sun); shift so Sunday = 0.
-        val leadingBlanks = anchor.dayOfWeek.value % 7
+        // java.time.DayOfWeek.getValue() is API 26; ordinal is API 1 and has
+        // the same Monday-first ordering (0..6).
+        val leadingBlanks = (anchor.dayOfWeek.ordinal + 1) % 7
         val cells = leadingBlanks + daysInMonth
         val rows = (cells + 6) / 7
         var dayCounter = 1

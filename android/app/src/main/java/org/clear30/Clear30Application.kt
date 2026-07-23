@@ -3,6 +3,7 @@ package org.clear30
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.os.Build
 import org.clear30.data.LocalStore
 import org.clear30.data.PaywallController
 import org.clear30.views.theme.Haptics
@@ -72,6 +73,10 @@ class Clear30Application : Application() {
      * shipped channel id; upgraded users would keep the original importance.
      */
     private fun createNotificationChannels() {
+        // Notification channels were added in API 26. The previous production
+        // app supported API 24+, where notifications work without channels.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+
         val manager = getSystemService(NotificationManager::class.java)
         val channels = listOf(
             // DEFAULT (not HIGH) for the fallback channel: most pushes are

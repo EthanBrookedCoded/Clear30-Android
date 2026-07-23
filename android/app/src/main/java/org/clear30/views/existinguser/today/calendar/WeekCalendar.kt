@@ -138,7 +138,9 @@ private fun DayChip(day: Int, sober: Boolean?, isToday: Boolean, onTap: () -> Un
 }
 
 private fun monday(date: LocalDate): LocalDate =
-    date.minus(DatePeriod(days = (date.dayOfWeek.value - 1)))
+    // java.time.DayOfWeek.getValue() is API 26; ordinal is API 1 and already
+    // represents the number of days since Monday.
+    date.minus(DatePeriod(days = date.dayOfWeek.ordinal))
 
 private fun weekRangeLabel(monday: LocalDate): String {
     val sunday = monday.plus(DatePeriod(days = 6))
