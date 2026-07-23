@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.revenuecat.purchases.Offering
 import com.revenuecat.purchases.Package
 import com.revenuecat.purchases.PackageType
@@ -60,6 +61,34 @@ fun Paywall(
     hard: Boolean = true,
     onCompleted: (EntitlementType?) -> Unit,
 ) {
+    val freeAccessGrantVersion by PaywallController.freeAccessGrantVersion.collectAsStateWithLifecycle()
+    val freeCode = userInfo?.freeCode
+    var freeAccessCompleted by remember(userInfo) { mutableStateOf(false) }
+
+    // iOS Paywall observes userInfo.freeCode and completes immediately when it
+    // changes. UserInfo is not Compose-observable on Android, so the controller
+    // version signal supplies that missing live notification.
+    LaunchedEffect(freeAccessGrantVersion, freeCode) {
+        if (userInfo != null && freeCode != null && !freeAccessCompleted) {
+            freeAccessCompleted = true
+            Logger.logEvent(
+                userInfo.loggingID,
+                LogEventType.subscribed,
+                mapOf(LogEventExtraDataType.FREE_CODE to freeCode),
+            )
+            PaywallController.hidePresentedPaywalls()
+            onCompleted(EntitlementType.DEFAULT)
+        }
+    }
+    if (freeCode != null) {
+        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Spacer(Modifier.weight(1f))
+            CircularProgressIndicator(color = Clear30Colors.accent)
+            Spacer(Modifier.weight(1f))
+        }
+        return
+    }
+
     // Match iOS onboarding: before rendering the initial paywall, check the
     // correctly identified RevenueCat user and silently continue if access
     // already exists. Popup/upsell paywalls intentionally skip this check.
@@ -117,18 +146,6 @@ private fun NativePaywall(
 
     LaunchedEffect(reloadAttempt) {
         loading = true
-        // iOS Paywall auto-completes when a free code is present
-        // (HeliumPaywallView.registerFreeCodePayment — logs a free `subscribed`).
-        val freeCode = userInfo?.freeCode
-        if (userInfo != null && freeCode != null) {
-            org.clear30.data.Logger.logEvent(
-                userInfo.loggingID,
-                org.clear30.data.LogEventType.subscribed,
-                mapOf(org.clear30.data.LogEventExtraDataType.FREE_CODE to freeCode),
-            )
-            onCompleted(EntitlementType.DEFAULT)
-            return@LaunchedEffect
-        }
         offering = PaywallController.currentOffering()
         loading = false
         // iOS logs `.openedPaywall` when the paywall renders and stamps

@@ -157,13 +157,34 @@ fun JournalSection(
                         )
                     },
                 ) {
-                    Column {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            SmallText(entry.title.ifBlank { "Untitled" })
-                            Spacer(Modifier.weight(1f))
-                            TinyText(entry.date.dateLabel(), color = Clear30Colors.text.copy(alpha = 0.5f))
+                    Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 3)) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.Top,
+                            horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+                        ) {
+                            // Measure the date first and give the remaining width
+                            // to the title, so long titles wrap/ellipsize instead
+                            // of squeezing the date into a narrow column.
+                            SmallText(
+                                entry.title.ifBlank { "Untitled" },
+                                modifier = Modifier.weight(1f),
+                                maxLines = 2,
+                            )
+                            TinyText(
+                                entry.date.dateLabel(),
+                                color = Clear30Colors.text.copy(alpha = 0.5f),
+                                maxLines = 1,
+                            )
                         }
-                        if (entry.content.isNotBlank()) TinyText(entry.content, maxLines = 3)
+                        if (entry.content.isNotBlank()) {
+                            TinyText(
+                                entry.content,
+                                modifier = Modifier.fillMaxWidth(),
+                                color = Clear30Colors.text.copy(alpha = 0.65f),
+                                maxLines = 3,
+                            )
+                        }
                     }
                 }
             }

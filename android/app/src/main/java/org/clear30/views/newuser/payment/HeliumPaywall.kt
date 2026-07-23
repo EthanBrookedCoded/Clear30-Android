@@ -60,17 +60,6 @@ fun HeliumPaywall(
     val activity = remember { context.findActivity() }
 
     LaunchedEffect(Unit) {
-        // Free-code users skip the paywall entirely (iOS registerFreeCodePayment).
-        val freeCode = userInfo?.freeCode
-        if (userInfo != null && freeCode != null) {
-            Logger.logEvent(
-                userInfo.loggingID,
-                LogEventType.subscribed,
-                mapOf(LogEventExtraDataType.FREE_CODE to freeCode),
-            )
-            onCompleted(EntitlementType.DEFAULT)
-            return@LaunchedEffect
-        }
         if (activity == null) { onFallback(); return@LaunchedEffect }
         presentHeliumPaywall(activity, userInfo, popup, hard, scope, onCompleted, onFallback)
     }

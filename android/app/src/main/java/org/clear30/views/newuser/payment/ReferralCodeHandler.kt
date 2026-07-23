@@ -23,6 +23,7 @@ object ReferralCodeHandler {
         val result = SupabaseController.checkEmail() ?: return
 
         userInfo.freeCode = result.org
+        org.clear30.data.PaywallController.notifyFreeAccessGranted()
 
         result.school_id?.let { schoolID ->
             userInfo.schoolId = schoolID

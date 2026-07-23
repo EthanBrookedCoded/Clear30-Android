@@ -21,6 +21,7 @@ import com.revenuecat.purchases.logOutWith
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
@@ -62,6 +63,25 @@ object PaywallController {
 
     private val _externalTriggerOverride = MutableStateFlow<String?>(null)
     val externalTriggerOverride: StateFlow<String?> = _externalTriggerOverride.asStateFlow()
+
+    /**
+     * UserInfo is a mutable serialized model rather than Compose state. Increment
+     * this whenever a free code is granted so an already-mounted paywall can
+     * react immediately (iOS gets this from SwiftData's observable property).
+     */
+    private val _freeAccessGrantVersion = MutableStateFlow(0L)
+    val freeAccessGrantVersion: StateFlow<Long> = _freeAccessGrantVersion.asStateFlow()
+
+    fun notifyFreeAccessGranted() {
+        _freeAccessGrantVersion.update { it + 1 }
+    }
+
+    /** Close Helium's external Activity before navigating away from the paywall. */
+    fun hidePresentedPaywalls() {
+        if (!heliumEnabled()) return
+        runCatching { com.tryhelium.paywall.core.Helium.hideAllPaywalls() }
+            .onFailure { android.util.Log.w("Paywall", "Helium dismiss failed: ${it.message}") }
+    }
 
     /** iOS sets `currentPaywallID` when a paywall renders and nils it on
      *  disappear (Paywall.onDisappear) — `isHardPaywall` keys off it. */

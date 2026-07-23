@@ -57,6 +57,7 @@ import org.clear30.views.components.Heading3
 import org.clear30.views.components.LoadingIcon
 import org.clear30.views.components.SmallText
 import org.clear30.views.components.TinyText
+import org.clear30.views.components.TinyTextWithLinks
 import org.clear30.views.components.cardStyle
 import org.clear30.views.components.pressScale
 import org.clear30.views.theme.Clear30Colors
@@ -385,7 +386,13 @@ private fun GroupChatMessageRow(
                     .then(if (isUser) Modifier.combinedClickable(onClick = {}, onLongClick = onDelete) else Modifier)
                     .padding(horizontal = Dimens.cardSpacing, vertical = Dimens.cardSpacing * 0.8f),
             ) {
-                TinyText(message, color = if (isUser) Color.White else Clear30Colors.text)
+                TinyTextWithLinks(
+                    text = message,
+                    color = if (isUser) Color.White else Clear30Colors.text,
+                    // Keep links legible on the user's purple gradient while
+                    // matching the Groups/Community accent for other messages.
+                    linkColor = if (isUser) Color.White else Clear30Colors.community1,
+                )
             }
         }
         if (isUser) GroupMemberEmoji(emoji)

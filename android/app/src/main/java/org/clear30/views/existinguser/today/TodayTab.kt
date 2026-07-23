@@ -325,6 +325,13 @@ fun TodayTab(
     val messages = remember(selectedDay, refresh) {
         program.getProgramMessages(selectedDay).sorted
     }
+    // Keep the selected day's journals available to both lesson journal pages
+    // and the message-less day card. Previously this was derived only inside
+    // the feed-item builder, so the empty-message UI could render "New Journal"
+    // but had no way to include entries already written for that day.
+    val selectedDayEntries = remember(selectedDay, refresh) {
+        journalEntries.entries(selectedDay.dateObject).filter { it.isVideo != true }
+    }
     val hasCommunity = communityPosts.isNotEmpty()
     // Full component separation (iOS `buildItems`): every container in a lesson is
     // its own swipe page (and so part of the progress bar), in this exact order —
@@ -334,20 +341,18 @@ fun TodayTab(
     // Community/CatchUp gates and the journal entries — two message-less days
     // produce equal (empty) `messages`, so without it the previous day's
     // today-only pages would leak onto the newly-selected day.
-    val feedItems = remember(messages, hasCommunity, refresh, selectedDay) {
+    val feedItems = remember(messages, hasCommunity, refresh, selectedDay, selectedDayEntries) {
         buildList {
             add(FeedItem.CheckIn)
             // The day's text journals, split once: the ones ANSWERING a lesson
             // prompt belong on that prompt's own page (they replace it, below),
             // everything else is free-form and gets the top card.
-            val dayEntries = journalEntries.entries(selectedDay.dateObject)
-                .filter { it.isVideo != true }
             val dayPrompts = org.clear30.data.model.JournalEntries.getPrompts(messages)
             // Top journal card (iOS buildFeedItems inserts at index min(1, count) —
             // right after the day card, BEFORE the catch-up nudge): the day's
             // free-form entries (title not tied to a lesson prompt).
             if (messages.isNotEmpty()) {
-                val freeEntries = dayEntries.filter {
+                val freeEntries = selectedDayEntries.filter {
                     !org.clear30.data.model.JournalEntries.answersAnyPrompt(it.title, dayPrompts)
                 }
                 if (freeEntries.isNotEmpty()) add(FeedItem.JournalEntriesPage(freeEntries))
@@ -378,9 +383,11 @@ fun TodayTab(
                     add(
                         FeedItem.Journal(
                             prompts = msgPrompts.filter { p ->
-                                dayEntries.none { org.clear30.data.model.JournalEntries.answersPrompt(it.title, p) }
+                                selectedDayEntries.none {
+                                    org.clear30.data.model.JournalEntries.answersPrompt(it.title, p)
+                                }
                             },
-                            entries = dayEntries.filter {
+                            entries = selectedDayEntries.filter {
                                 org.clear30.data.model.JournalEntries.answersAnyPrompt(it.title, msgPrompts)
                             },
                         ),
@@ -565,13 +572,19 @@ fun TodayTab(
                                         },
                                     )
                                 }
-                                // Message-less day (iOS TodayFeedCardRouter:218-227):
-                                // a "New Journal" card fills the stretch space instead.
+                                // Message-less day (iOS TodayFeedCardRouter):
+                                // one horizontal journal carousel fills the
+                                // stretch space with this day's existing entries
+                                // and a trailing "New Journal" card.
                                 if (messages.isEmpty()) {
                                     Box(Modifier.fillMaxWidth().weight(1f)) {
-                                        JournalPromptsFeedCard(prompts = emptyList()) {
-                                            creatingJournalSeed = ""
-                                        }
+                                        JournalFeedCard(
+                                            prompts = emptyList(),
+                                            entries = selectedDayEntries,
+                                            includeNewEntry = true,
+                                            onJournal = { creatingJournalSeed = it },
+                                            onOpen = { editingJournalEntry = it },
+                                        )
                                     }
                                 }
                             }
@@ -1222,4 +1235,3 @@ private fun monthSlide(forward: Boolean): androidx.compose.animation.ContentTran
     } else {
         (slideInHorizontally { -it } + fadeIn()) togetherWith (slideOutHorizontally { it } + fadeOut())
     }
-

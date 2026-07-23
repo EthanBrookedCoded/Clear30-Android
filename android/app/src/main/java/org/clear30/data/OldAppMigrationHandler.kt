@@ -42,6 +42,7 @@ object OldAppMigrationHandler {
             .getOrDefault(false)
         if (isLegacy) {
             userInfo.freeCode = FREE_CODE
+            PaywallController.notifyFreeAccessGranted()
             userInfo.setCacheBool(WELCOME_KEY, true)
             android.util.Log.i("OldAppMigration", "legacy old-app user detected → free access granted")
         }

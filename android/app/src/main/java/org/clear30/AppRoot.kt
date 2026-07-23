@@ -97,6 +97,7 @@ fun AppRoot(viewModel: AppRootViewModel = viewModel()) {
                             "Enjoy full access along with content from ${schoolData.long_name}.",
                         )
                         org.clear30.data.Clear30Store.save(userInfo)
+                        org.clear30.data.PaywallController.notifyFreeAccessGranted()
                         if (!userId.isNullOrEmpty()) {
                             org.clear30.data.Logger.logEvent(
                                 userId,
@@ -123,6 +124,7 @@ fun AppRoot(viewModel: AppRootViewModel = viewModel()) {
                     if (org.clear30.data.supabase.SupabaseController.checkCode(route.code)) {
                         userInfo.freeCode = route.code
                         org.clear30.data.Clear30Store.save(userInfo)
+                        org.clear30.data.PaywallController.notifyFreeAccessGranted()
                         org.clear30.data.AlertHandler.info(
                             "Success",
                             "You've unlocked Clear30 for free!\nNote: this does not cancel your subscription automatically.",
@@ -193,4 +195,3 @@ fun AppRoot(viewModel: AppRootViewModel = viewModel()) {
         org.clear30.views.components.AppOverlays()
     }
 }
-

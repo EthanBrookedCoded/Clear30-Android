@@ -99,7 +99,10 @@ fun ReferralSlide(
                     // code; a free code unlocks the app, a group code offers the
                     // group join.
                     val result = SupabaseController.checkReferralCodeJson(trimmed)
-                    if (result?.is_free == true) userInfo.freeCode = trimmed
+                    if (result?.is_free == true) {
+                        userInfo.freeCode = trimmed
+                        org.clear30.data.PaywallController.notifyFreeAccessGranted()
+                    }
                     Clear30Store.save(userInfo)
                     // iOS re-inits Helium with fresh getUserParams so the
                     // referral_code trait reaches paywall targeting; Android

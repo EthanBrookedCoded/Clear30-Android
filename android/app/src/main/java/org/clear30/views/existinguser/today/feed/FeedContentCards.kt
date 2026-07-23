@@ -1040,14 +1040,18 @@ internal fun JournalEntryFeedCard(entry: JournalEntry, glow: Brush? = null, onOp
 internal fun JournalFeedCard(
     prompts: List<String>,
     entries: List<JournalEntry>,
+    includeNewEntry: Boolean = false,
     glow: Brush? = null,
     onJournal: (String) -> Unit = {},
     onOpen: (JournalEntry) -> Unit = {},
 ) {
-    val showPrompts = prompts.isNotEmpty() || entries.isEmpty()
-    val pageCount = entries.size + if (showPrompts) 1 else 0
+    val showNewEntry = includeNewEntry || prompts.isNotEmpty() || entries.isEmpty()
+    // iOS JournalFeedView puts an unanswered prompt first, but on a day with no
+    // prompts it appends "New Journal" after that day's existing entries.
+    val newEntryFirst = prompts.isNotEmpty() || entries.isEmpty()
+    val pageCount = entries.size + if (showNewEntry) 1 else 0
     if (pageCount <= 1) {
-        if (showPrompts) JournalPromptsFeedCard(prompts, glow = glow, onJournal = onJournal)
+        if (showNewEntry) JournalPromptsFeedCard(prompts, glow = glow, onJournal = onJournal)
         else JournalEntryFeedCard(entries[0], glow = glow) { onOpen(entries[0]) }
         return
     }
@@ -1064,10 +1068,12 @@ internal fun JournalFeedCard(
             ),
             pageSpacing = Dimens.cardSpacing,
         ) { page ->
-            val entryIndex = if (showPrompts) page - 1 else page
-            if (entryIndex < 0) {
+            val isNewEntryPage = showNewEntry &&
+                ((newEntryFirst && page == 0) || (!newEntryFirst && page == pageCount - 1))
+            if (isNewEntryPage) {
                 JournalPromptsFeedCard(prompts, glow = glow, onJournal = onJournal)
             } else {
+                val entryIndex = if (showNewEntry && newEntryFirst) page - 1 else page
                 JournalEntryFeedCard(entries[entryIndex], glow = glow) { onOpen(entries[entryIndex]) }
             }
         }

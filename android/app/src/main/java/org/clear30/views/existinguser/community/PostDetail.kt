@@ -52,6 +52,7 @@ import org.clear30.views.components.Heading3
 import org.clear30.views.components.IconButton
 import org.clear30.views.components.MultiLineOffWhiteInput
 import org.clear30.views.components.SmallText
+import org.clear30.views.components.SmallTextWithLinks
 import org.clear30.views.components.TinyText
 import org.clear30.views.components.pressScale
 import org.clear30.views.components.sfSymbol
@@ -162,7 +163,13 @@ fun PostDetail(
                 }
             }
             if (post.body.isNotBlank()) {
-                item { SmallText(post.body, color = Clear30Colors.text.copy(alpha = 0.75f)) }
+                item {
+                    SmallTextWithLinks(
+                        post.body,
+                        color = Clear30Colors.text.copy(alpha = 0.75f),
+                        linkColor = Clear30Colors.community1,
+                    )
+                }
             }
             // Reactions on the LEFT, stats (comments + views) on the RIGHT.
             item {
@@ -310,7 +317,7 @@ private fun CommentCard(c: Comment, depth: Int = 0, onReply: () -> Unit = {}) {
                 SmallText(it.displayName, color = Clear30Colors.text.copy(alpha = 0.5f))
             }
         }
-        SmallText(c.body)
+        SmallTextWithLinks(c.body, linkColor = Clear30Colors.community1)
         TinyText("Reply", modifier = Modifier.pressScale(onClick = onReply), color = Clear30Colors.text.copy(alpha = 0.5f))
     }
 }

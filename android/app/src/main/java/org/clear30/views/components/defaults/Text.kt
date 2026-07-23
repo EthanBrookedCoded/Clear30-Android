@@ -1,5 +1,6 @@
 package org.clear30.views.components
 
+import android.util.Patterns
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -87,8 +88,131 @@ private fun sized(
 @Composable fun SmallText(text: String, modifier: Modifier = Modifier, color: Color = Color.Unspecified, maxLines: Int = Int.MAX_VALUE, textAlign: TextAlign? = null) =
     sized(text, 15.5.sp, FontWeight.Normal, modifier, color, maxLines, textAlign)
 
+private data class DetectedTextLink(
+    val start: Int,
+    val endExclusive: Int,
+    val label: String,
+    val url: String,
+)
+
+private fun normalizedWebUrl(raw: String): String? {
+    val value = raw.trim()
+    if (value.isEmpty()) return null
+    return when {
+        value.startsWith("https://", ignoreCase = true) ||
+            value.startsWith("http://", ignoreCase = true) -> value
+        Patterns.WEB_URL.matcher(value).matches() -> "https://$value"
+        else -> null
+    }
+}
+
+/**
+ * User-authored text with automatically detected web links. Supports pasted
+ * http(s) URLs, www/plain domains, and Markdown-style `[label](url)` links
+ * without interpreting any other Markdown in community posts or comments.
+ */
+fun textWithLinks(
+    text: String,
+    linkColor: Color = Clear30Colors.accent,
+): AnnotatedString {
+    val markdownLinks = Regex("""\[([^\]\n]+)]\(([^)\s]+)\)""")
+        .findAll(text)
+        .mapNotNull { match ->
+            normalizedWebUrl(match.groupValues[2])?.let { url ->
+                DetectedTextLink(
+                    start = match.range.first,
+                    endExclusive = match.range.last + 1,
+                    label = match.groupValues[1],
+                    url = url,
+                )
+            }
+        }
+        .toList()
+
+    val detected = markdownLinks.toMutableList()
+    val matcher = Patterns.WEB_URL.matcher(text)
+    while (matcher.find()) {
+        val start = matcher.start()
+        if (start > 0 && text[start - 1] == '@') continue
+        if (markdownLinks.any { start < it.endExclusive && matcher.end() > it.start }) continue
+
+        var end = matcher.end()
+        while (end > start && text[end - 1] in ".,!?;:") end--
+        while (end > start && text[end - 1] == ')' &&
+            text.substring(start, end).count { it == ')' } >
+            text.substring(start, end).count { it == '(' }
+        ) {
+            end--
+        }
+        if (end <= start) continue
+
+        val label = text.substring(start, end)
+        normalizedWebUrl(label)?.let { url ->
+            detected += DetectedTextLink(start, end, label, url)
+        }
+    }
+
+    val linkStyle = TextLinkStyles(
+        style = SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline),
+    )
+    return buildAnnotatedString {
+        var cursor = 0
+        detected.sortedBy { it.start }.forEach { link ->
+            if (link.start < cursor) return@forEach
+            append(text.substring(cursor, link.start))
+            withLink(LinkAnnotation.Url(link.url, linkStyle)) { append(link.label) }
+            cursor = link.endExclusive
+        }
+        if (cursor < text.length) append(text.substring(cursor))
+    }
+}
+
+@Composable
+fun SmallTextWithLinks(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = Color.Unspecified,
+    linkColor: Color = Clear30Colors.accent,
+    maxLines: Int = Int.MAX_VALUE,
+    textAlign: TextAlign? = null,
+) = Text(
+    textWithLinks(text, linkColor),
+    modifier = modifier,
+    color = color,
+    fontFamily = Lexend,
+    fontWeight = FontWeight.Normal,
+    fontSize = 15.5.sp,
+    lineHeight = 15.5.sp * LINE_HEIGHT_RATIO,
+    maxLines = maxLines,
+    overflow = TextOverflow.Ellipsis,
+    textAlign = textAlign,
+    style = ClearTextStyle,
+)
+
 @Composable fun TinyText(text: String, modifier: Modifier = Modifier, color: Color = Color.Unspecified, maxLines: Int = Int.MAX_VALUE, textAlign: TextAlign? = null) =
     sized(text, 14.sp, FontWeight.Normal, modifier, color, maxLines, textAlign)
+
+@Composable
+fun TinyTextWithLinks(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = Color.Unspecified,
+    linkColor: Color = Clear30Colors.accent,
+    maxLines: Int = Int.MAX_VALUE,
+    textAlign: TextAlign? = null,
+) = Text(
+    textWithLinks(text, linkColor),
+    modifier = modifier,
+    color = color,
+    fontFamily = Lexend,
+    fontWeight = FontWeight.Normal,
+    fontSize = 14.sp,
+    lineHeight = 14.sp * LINE_HEIGHT_RATIO,
+    maxLines = maxLines,
+    overflow = TextOverflow.Ellipsis,
+    textAlign = textAlign,
+    style = ClearTextStyle,
+)
 
 @Composable fun MiniText(text: String, modifier: Modifier = Modifier, color: Color = Color.Unspecified) =
     sized(text, 10.sp, FontWeight.Normal, modifier, color, Int.MAX_VALUE)
