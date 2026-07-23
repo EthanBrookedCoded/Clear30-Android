@@ -8,10 +8,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -215,8 +218,9 @@ private fun TipSectionView(section: SymptomTipSection) {
 @Composable
 private fun RedditMini(title: String, url: String, onClick: () -> Unit) {
     val sub = url.substringAfter("/r/", "").substringBefore("/").let { if (it.isNotBlank()) "r/$it" else "Reddit" }
-    Clear30Card(modifier = Modifier.fillMaxWidth().pressScale { onClick() }) {
-        Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+    // fillMaxSize: stretch to the row height set by TwoColumnGrid so both cards match.
+    Clear30Card(modifier = Modifier.fillMaxSize().pressScale { onClick() }) {
+        Column(Modifier.fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 4)) {
                 Box(Modifier.size(18.dp).clip(CircleShape).background(Clear30Colors.reddit1), contentAlignment = Alignment.Center) {
                     Icon(sfSymbol("person.2.fill"), null, tint = Color.White, modifier = Modifier.size(11.dp))
@@ -230,13 +234,17 @@ private fun RedditMini(title: String, url: String, onClick: () -> Unit) {
 
 @Composable
 private fun ClaireMini(title: String, onStartChat: () -> Unit) {
-    Clear30Card(modifier = Modifier.fillMaxWidth().pressScale { onStartChat() }) {
-        Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+    // fillMaxSize: stretch to the row height set by TwoColumnGrid so both cards match.
+    Clear30Card(modifier = Modifier.fillMaxSize().pressScale { onStartChat() }) {
+        Column(Modifier.fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 4)) {
                 Icon(sfSymbol("sparkles"), null, tint = Clear30Colors.claire1, modifier = Modifier.size(14.dp))
                 TinyText("Claire", color = Clear30Colors.text.copy(alpha = 0.5f))
             }
             SmallText(title, maxLines = 4)
+            // Pin "Start chat" to the bottom of the (possibly stretched) card —
+            // iOS `Spacer()` above the pill in `PromptCard`.
+            Spacer(Modifier.weight(1f))
             Row(
                 Modifier.clip(RoundedCornerShape(99.dp)).background(Clear30Colors.opacityGray)
                     .padding(horizontal = Dimens.chipHorizontalPadding, vertical = Dimens.chipVerticalPadding),
@@ -264,13 +272,21 @@ private fun ShowMoreRow(showingAll: Boolean, onToggle: () -> Unit) {
     }
 }
 
-/** Lays [items] into a 2-column grid (last odd cell left blank). */
+/**
+ * Lays [items] into a 2-column grid (last odd cell left blank). The row is sized
+ * to its tallest cell (`IntrinsicSize.Min`) and both cells fill that height, so
+ * the two cards in a row always match — iOS `GridView(columns: 2)`, same
+ * technique as the school/library grids.
+ */
 @Composable
 private fun <T> TwoColumnGrid(items: List<T>, item: @Composable (T) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
         items.chunked(2).forEach { rowItems ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-                rowItems.forEach { Box(Modifier.weight(1f)) { item(it) } }
+            Row(
+                Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+            ) {
+                rowItems.forEach { Box(Modifier.weight(1f).fillMaxHeight()) { item(it) } }
                 if (rowItems.size == 1) Spacer(Modifier.weight(1f))
             }
         }

@@ -1,19 +1,18 @@
 package org.clear30.views.existinguser.support
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -21,7 +20,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -34,7 +32,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -179,11 +176,21 @@ fun PeerSupportChat(userInfo: UserInfo, onBack: () -> Unit) {
     }
 
     Box(Modifier.fillMaxSize()) {
+        // Bottom inset = `imePadding()` ONLY (same as AiChatScreen / DrFredChat):
+        // the chat renders inside AllTabs' Scaffold content, and the Scaffold's
+        // bottom bar (CustomTabBar) already applies
+        // `windowInsetsPadding(WindowInsets.navigationBars)` — the
+        // `navigationBarsPadding()` that used to sit here counted the gesture bar
+        // twice and floated the composer above the tab bar. Consuming that inset
+        // (the host spent it) stops `imePadding()` re-adding it with the keyboard up.
         Column(
-            Modifier.fillMaxSize().navigationBarsPadding().imePadding().padding(
-                horizontal = Dimens.horizontalPadding,
-                vertical = Dimens.headingTopPadding,
-            ),
+            Modifier.fillMaxSize()
+                .consumeWindowInsets(WindowInsets.navigationBars)
+                .imePadding()
+                .padding(
+                    horizontal = Dimens.horizontalPadding,
+                    vertical = Dimens.headingTopPadding,
+                ),
         ) {
             // Header
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {

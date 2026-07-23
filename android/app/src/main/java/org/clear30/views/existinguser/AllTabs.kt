@@ -119,6 +119,21 @@ fun AllTabs(
                 }
             }
         }
+        // One-time welcome for migrated old-app (beta) users. Free access was
+        // already granted at onboarding (OldAppMigrationHandler); this tells them
+        // their beta data didn't carry over. Shown once, then cleared.
+        runCatching {
+            if (userInfo.getCachedBool(org.clear30.data.OldAppMigrationHandler.WELCOME_KEY)) {
+                userInfo.setCacheBool(org.clear30.data.OldAppMigrationHandler.WELCOME_KEY, false)
+                org.clear30.data.Clear30Store.save(userInfo)
+                org.clear30.data.AlertHandler.info(
+                    "Welcome back! 🎉",
+                    "Thanks for testing the Clear30 beta! This is the full app.\n\n" +
+                        "Unfortunately your data from the beta couldn't be carried over — but you have " +
+                        "full access, completely free. Enjoy!",
+                )
+            }
+        }
     }
 
     // The day-30 "breakdown 📦" deep link opens the post-assessment when one is
@@ -205,6 +220,7 @@ fun AllTabs(
                 program = program,
                 currentBreak = lastBreak,
                 experimentController = experimentController,
+                journalEntries = journalEntries,
                 completion = { showPostAssessment = false },
             )
         } ?: run { showPostAssessment = false }

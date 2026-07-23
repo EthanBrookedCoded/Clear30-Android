@@ -215,13 +215,18 @@ fun CheckInSheet(
                         )
                         staticReward = org.clear30.data.CheckInRewardStaticGenerator.generate(userInfo, program, selectedDay)
                         rewardSober = program.dayInfo[selectedDay]?.sober
-                        // iOS `handleCheckedIn` generates + shows the reward for
-                        // WHATEVER day was checked in — there is no isToday gate
-                        // (CheckInFullscreen.swift:189-241). The forced-yesterday
-                        // flow is the most common one, so gating it here silently
-                        // swallowed its reward moment. Only show it when a reward
-                        // actually exists (iOS skips straight past an empty one).
-                        if (staticReward != null || variableReward != null) phase = "reward" else onDismiss()
+                        // TODAY only gets the reward screen (Thatcher, W89 —
+                        // DELIBERATE iOS divergence: iOS `handleCheckedIn` has no
+                        // isToday gate and rewards whatever day was checked in,
+                        // CheckInFullscreen.swift:189-241). Catch-up check-ins for
+                        // a previous day log silently and close. Still skip the
+                        // screen when there's no reward to show (iOS
+                        // CheckInFullscreen.swift:224-231).
+                        if (isToday && (staticReward != null || variableReward != null)) {
+                            phase = "reward"
+                        } else {
+                            onDismiss()
+                        }
                     }
 
                     Spacer(Modifier.weight(1f))

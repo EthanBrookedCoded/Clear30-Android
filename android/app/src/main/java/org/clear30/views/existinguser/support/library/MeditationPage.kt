@@ -1,5 +1,6 @@
 package org.clear30.views.existinguser.support
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -32,6 +33,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -47,6 +49,7 @@ import org.clear30.views.components.Heading3
 import org.clear30.views.components.IconButton
 import org.clear30.views.components.TinyText
 import org.clear30.views.components.sfSymbol
+import org.clear30.views.theme.Anim
 import org.clear30.views.theme.Clear30Colors
 import org.clear30.views.theme.Clear30Gradients
 import org.clear30.views.theme.Dimens
@@ -83,11 +86,11 @@ fun MeditationPage(meditation: ProgramMeditation, program: Program, onDismiss: (
     }
 }
 
-/** The inline (feed-card) variant — same player, left-aligned, full-width scrubber. */
+/** The inline (feed-card) variant — same player, centered, card-width scrubber. */
 @Composable
 internal fun MeditationPageInline(meditation: ProgramMeditation, program: Program) {
     // iOS MeditationPage(inlineType: .horizontal): centered on the PLAIN feed
-    // card — gradient play disc + gradient full-width bar (T11).
+    // card — gradient play disc + gradient bar inset by horizontalPadding (T11).
     MeditationPlayerCore(meditation, program, centered = true, inline = true)
 }
 
@@ -117,7 +120,13 @@ private fun MeditationPlayerCore(
     var durationMs by remember(meditation.url) {
         mutableStateOf(if (ownsPlayer()) player.duration.coerceAtLeast(0L) else 0L)
     }
-    var everPlayed by remember { mutableStateOf(false) }
+    // iOS `AudioPlayerViewModel.audioSessionSetup` — true once THIS meditation has
+    // ACTUALLY started playing (not merely been selected). Re-entering a card
+    // whose track the shared player already owns (playing, or paused part-way
+    // through) counts as started, so the scrubber doesn't hide itself again.
+    var everPlayed by remember(meditation.url) {
+        mutableStateOf(ownsPlayer() && (player.isPlaying || player.currentPosition > 0L))
+    }
 
     DisposableEffect(meditation.url) {
         val listener = object : Player.Listener {
@@ -213,14 +222,30 @@ private fun MeditationPlayerCore(
                 modifier = Modifier.size(30.dp),
             )
         }
+        // iOS `.opacity(viewModel.audioSessionSetup ? 1 : 0)` + `.animation(
+        // defaultAnimation)` (MeditationPage.swift:69-71): no bar until playback
+        // has actually begun — faded, not removed, so the card doesn't jump.
+        val scrubberAlpha by animateFloatAsState(
+            targetValue = if (everPlayed) 1f else 0f,
+            animationSpec = Anim.default(),
+            label = "scrubberAlpha",
+        )
         MeditationScrubber(
             positionMs = positionMs,
             durationMs = durationMs,
             textColor = textColor,
             fill = if (onGradient) null else Clear30Gradients.meditation,
             // iOS `.frame(maxWidth: inline ? nil : 250)` — the feed card's bar
-            // spans the card; the full-screen sheet caps at 250.
-            modifier = if (inline) Modifier.fillMaxWidth() else Modifier.widthIn(max = 250.dp),
+            // spans the card; the full-screen sheet caps at 250. The inline bar
+            // is inset like iOS `.padding(.horizontal, horizontalPadding)`
+            // (MeditationPage.swift:77) so it doesn't run card-edge to card-edge.
+            modifier = (
+                if (inline) {
+                    Modifier.fillMaxWidth().padding(horizontal = Dimens.horizontalPadding)
+                } else {
+                    Modifier.widthIn(max = 250.dp)
+                }
+                ).alpha(scrubberAlpha),
             onSeek = { fraction ->
                 // Only seek when this card's track is the loaded one — a drag on
                 // an idle card must not scrub whatever else is playing.

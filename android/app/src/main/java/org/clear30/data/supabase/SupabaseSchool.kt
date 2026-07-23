@@ -86,6 +86,20 @@ suspend fun SupabaseController.checkEmail(): SupabaseEmailCheckResults? =
 @Serializable
 private data class ReferralCodeParams(val input_code: String)
 
+/**
+ * Validate a promo code from a referral deep link (Swift `checkCode` →
+ * `payment_check_code`, public schema). Valid = the code row exists in
+ * `payment.promo_codes`; the function also increments its `uses` counter.
+ * Distinct from [checkReferralCodeJson] (`payment.referral_codes`), which
+ * backs the manual onboarding entry and inserts unknown codes as non-free.
+ */
+suspend fun SupabaseController.checkCode(code: String): Boolean =
+    callFunction(
+        SupabaseFunction.checkCode,
+        ReferralCodeParams(code),
+        Boolean::class.java,
+    ).first ?: false
+
 /** Validate an onboarding referral code (Swift `checkReferralCodeJson`). */
 suspend fun SupabaseController.checkReferralCodeJson(code: String): SupabaseReferralCodeResults? =
     callFunction(

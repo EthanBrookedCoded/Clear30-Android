@@ -1184,10 +1184,12 @@ fixing the whole ladder rather than patching pieces.)*
   health-setback math), and a never-checked-in user (fresh install + restore) got
   no catch-up at all since the ≥2 threshold reads this list. Now scans the whole
   program like iOS `datesWithoutCheckIn`.
-- [x] **P2 — Forced-yesterday check-in never showed its reward.** Android gated
-  the reward screen on `isToday`; iOS has no such gate — it rewards whatever day
-  was checked in. Also now skips the reward screen when there is no reward
-  (iOS CheckInFullscreen.swift:224-231), which fixes the empty-reward screen.
+- [x] **P2 — Reward screen shown when there is no reward** (iOS
+  CheckInFullscreen.swift:224-231) — now skipped, fixing the empty reward screen.
+  NOTE: this bullet originally ALSO removed the `isToday` gate so the
+  forced-yesterday flow got its reward (iOS has no such gate). **Thatcher
+  reversed that in W89** — non-today check-ins must NOT show a reward. The
+  today-only gate is back and is a deliberate iOS divergence.
 - [x] **P2 — The yesterday guard consumed today's auto-present slot** (one shared
   `autoCheckInShownOn`), so completing a forced yesterday check-in swallowed
   today's. Split into `forcedYesterdayShownOn` + `autoCheckInShownOn`.
@@ -1252,6 +1254,150 @@ anywhere (iOS never reads `currentBreak` in the ladder), future days never
 checkable, timezone/day-boundary handling, sheet step order + undo, slide-to-
 confirm mechanics, `handleMultiCheckIn` semantics, both reward generators, the
 slipped-nudge gate + window + copy, health-setback math, and the wire format.
+
+- [x] **W87b · P2 — Community post from the Today feed: open in place + the
+  "anon / Post" placeholder.** (Thatcher, 2026-07-22)
+  (a) Tapping a post in the feed carousel fired a `DeepLinkRoute.Post` AND
+  `requestTab("COMMUNITY")`, yanking the user out of the feed. iOS just sets
+  `activeSheet = .communityPostDetail` and shows it over the current tab
+  (TodayFeedCommunity.swift:73-75). Now opens in place in a
+  `Clear30FullScreenCover` on the Today tab; back returns to the same feed page.
+  (`PostDetail` is built as a full screen with its own back chevron and ime /
+  navbar padding, so a cover fits it better than a bottom sheet — iOS uses
+  `.sheet`; deliberate, noted.) Edit from here hands off to the Community tab.
+  (b) **The "anon / Post" bug**: `CommunityTab`'s deep-link drain substituted a
+  placeholder `Post(userId = "", title = "Post", body = "")` when the post wasn't
+  on the cached feed page, with a comment claiming the detail view would fill it
+  in later — nothing ever did. `UserDirectory.lookup("")` returns "anon"
+  (UserDirectory.kt:52), so the post rendered permanently as anon/"Post" with an
+  empty body while its comments (fetched by id) loaded fine. Now fetches the real
+  post via `getCommunityPostById`, with an error alert on failure.
+  (c) `PostDetail` now also primes the POST author in `UserDirectory` (it only
+  primed commenters), so a post opened directly — feed carousel or deep link,
+  neither of which goes through the feed's batch priming — resolves its author
+  instead of showing the cold-miss "User #abc123" placeholder.
+  VERIFIED on-emulator: opens in place showing "Alex" + real title/body/tags and
+  both comment authors; back returns to the same feed card.
+
+### 1a-xii. Wave 19 — Thatcher's UI/UX batch (2026-07-22)
+
+- [x] **W88 · Ten-item polish batch** (4 parallel agents on disjoint files + 2 done inline):
+  1. **Slice game circles animate in.** iOS `SliceGame.swift:277,508` appends the
+     target inside `withAnimation(.spring(response: 0.26, damping: 0.7))` with a
+     `.scale(0.5) + .opacity` transition — matched exactly. Each orb is wrapped in
+     `key(t.id)` so it animates independently on spawn and survivors keep state
+     across the engine's `clear()/addAll(survivors)`. Engine, hit-testing,
+     lifetimes and scoring untouched.
+  2. **2-up resource cards stretch to equal height.** `SymptomDetailScreen`'s
+     `TwoColumnGrid` and `AllPromptsScreen`'s `PromptGrid` now use
+     `height(IntrinsicSize.Min)` + `fillMaxHeight()` cells, with the Claire
+     "Start chat" pill bottom-pinned via `Spacer(weight(1f))`. (`ResourcesScreen`
+     + `LibraryRails` were already correct — rails are 1-up.)
+  3. **Feedback monster card rebuilt.** Ported the iOS `BrowseButton`
+     (Support.swift:559-635) the card is supposed to use: art sized by WIDTH with
+     aspect preserved (was a 72dp square for 446x268 art → rendered 72x43 floating
+     in dead space), `bottomImage` path drops the card padding so the cutout sits
+     flush to the bottom edge, title bottom-leading with `maxLines = 2`.
+     `FeedbackConfigCard` now honors the previously-dead `card_bottom_image` field
+     and iOS's `defaultImageWidth = 40`. Send + link buttons → `TextIconButton`.
+  4. **Journal prompt vs entry — TWO root causes.** (a) The prompt page never knew
+     about answered entries: iOS renders it through `JournalFeedView` with
+     `.onlyJournalsWithPrompts` (TodayFeedViews.swift:1133-1140) where matching
+     entries REPLACE the prompt card; Android had no such path. (b) **Matching
+     never matched**: `TextEntryEditor` saves `title.trim()` but the live prompt
+     data isn't trimmed — 174 of 427 `journal_prompts` rows (41%) carry trailing
+     whitespace — so a prompt-seeded entry never equalled its prompt and was
+     classified free-form, producing the extra top-of-feed card. Added
+     `JournalEntries.answersPrompt/answersAnyPrompt` (trim + ignoreCase) shared by
+     both feeds, and a `JournalFeedCard` port. Also: MessageDetail now saves new
+     entries under the MESSAGE's day (iOS `newJournalEntry(date:)`) instead of
+     `now()`, without which journaling on a caught-up past message filed under
+     today and could never replace the prompt.
+  5. **Bottom-pinned card footers.** Root cause was two weighted siblings — the
+     body had `weight(1f, fill = false)` AND a trailing `Spacer(weight(1f))`, so
+     leftover height split 50/50 and the footer floated mid-card. Fixed in
+     `RedditFeedCard`, `JournalEntryFeedCard`, `GuidesFeedCard`; audited every
+     other card in FeedContentCards.kt (the rest were already correct).
+  6. **Removed the share-your-experience page** from the Today community carousel
+     (deliberate iOS divergence — the feed-end card carries the CTA).
+  7. **Achievement detail nav buttons span the full width** (`Row` + `weight(1f)`
+     each). Ends now dim-and-disable like iOS `navButtons` instead of vanishing,
+     so the pair always fills the row; the whole pill is tappable now, not just
+     the 20dp icon.
+  8. Covered by (5).
+  9. **MessageDetail header**: topic title centered above the progress bar.
+  10. **Previous Breaks removed** — card, page overlay and
+      `previousbreaks/PreviousBreaksSection.kt` deleted.
+
+  Flagged, NOT changed: `CommunityCarousel.DayPostCard`'s body is unbounded so a
+  very long post could still push its footer off; `TodayTab`'s message-less-day
+  card still shows a bare empty prompt card where iOS uses
+  `.allJournalsAndPrompts`; answered-entry titles render raw `**markdown**`
+  (matching is whitespace-insensitive, not markdown-insensitive, and titles carry
+  the same markdown so they still match).
+
+### 1a-xiii. Wave 20 — Thatcher's second UI batch (2026-07-22)
+
+*(Implemented without on-device verification at Thatcher's request — build-verified only.)*
+
+- [x] **W89 · Batch** (5 parallel agents on disjoint files + 1 inline):
+  1. **Confetti rendered as a single blob** in the three slip activities (plan /
+     why / community). Root cause: `ConfettiOverlay` computes
+     `radius = minOf(w, h) * 0.9f`, and those call sites passed
+     `Modifier.fillMaxWidth()` inside `SlippedSheet`'s unbounded
+     `verticalScroll` Column — height resolved to the min constraint (0), so
+     radius, every velocity and gravity were all 0 and all 100 rects drew at one
+     point (the `y > h + 60` cull didn't even remove them). Call sites → 
+     `matchParentSize()`; the component now derives its radius from whichever
+     dimension is real with a floor, so it can't collapse again. Other six call
+     sites audited — all bounded, unchanged.
+  2. **Chat/comment composers floated too high** (Gerad, Dr Fred, Claire, and the
+     community comment row; Claire's agree/disagree too). Root cause is the W81
+     rule on the BOTTOM edge: `AllTabs`' Scaffold bottom padding already includes
+     the nav-bar inset (CustomTabBar applies
+     `windowInsetsPadding(navigationBars)` itself) and M3 1.3.1's Scaffold does
+     NOT consume insets for its content — so each screen's
+     `navigationBarsPadding()` counted the gesture bar twice, and the chained
+     `imePadding()` stacked it again with the keyboard up. Swapped for
+     `consumeWindowInsets(WindowInsets.navigationBars)`, keeping `imePadding()`
+     so the composer still clears the IME.
+  3/8. **Two more shadow clips — both VERTICAL edges.** Compose only inflates a
+     scroll container's clip on the CROSS axis, so a vertical scroller is tight
+     top/bottom: the community Activity lists sliced the first/last card's
+     shadow (insets lived on the parent Column, outside the clip → moved to
+     `contentPadding`), and Group Settings' name card sat flush at the scroll's
+     top edge (padding moved after `.verticalScroll(...)`).
+  5. **No reward for a non-today check-in** (Thatcher). REVERSES the W85 bullet
+     that removed the `isToday` gate for iOS parity — iOS rewards whatever day
+     was logged (CheckInFullscreen.swift:189-241). Recorded as a deliberate
+     divergence; the empty-reward skip from W85 stays.
+  6. **Topic card emoji+title now centered as a pair on 2 lines.** iOS
+     `ProgramMessageTopicCard` is an `HStack` and SwiftUI HStacks HUG a wrapped
+     `Text`; a Compose `Text` takes the full offered width the moment it wraps,
+     so the Row grew to card width and pinned the emoji left. Replaced with a
+     custom `Layout` that measures the title's hug width (binary search on
+     `minIntrinsicHeight`) and places the pair as one centered unit.
+  7. **Meditation scrubber hidden until playback** — gated on `everPlayed`, the
+     port of iOS `audioSessionSetup` (`.opacity(audioSessionSetup ? 1 : 0)`,
+     MeditationPage.swift:69-71), seeded from the shared controller so
+     re-entering a mid-playback card doesn't re-hide it. Faded via `alpha` so the
+     space stays reserved and the card doesn't jump. Bar inset by
+     `Dimens.horizontalPadding` (iOS MeditationPage.swift:77). NOTE: the scrubber
+     lives in `MeditationPage.kt` (`MeditationPlayerCore`), shared by the feed
+     card AND the full-screen sheet — so the sheet hides its bar until play too,
+     which is iOS's behavior for both.
+  10. **Health timeline no longer scrolls the new item to the top** — removed the
+      `rememberLazyListState(initialFirstVisibleItemIndex)` anchoring (the old
+      "W2" behavior). Reveal animation + confetti untouched.
+  11. **Achievement gyro removed** — the SensorManager tilt listener is gone,
+      replaced by a finger-drag tilt (`detectDragGestures` → the same
+      pitch/roll pair, clamped to the previous ±35°) that springs back to
+      neutral on release. rotationX/Y, cameraDistance, parallax and shine are
+      unchanged, so it looks identical. Drag is on the card only; close and nav
+      buttons are later siblings so they still hit-test above it.
+
+  Flagged: the meditation gate is shared with the full-screen sheet (revert to
+  inline-only if the sheet should keep showing its bar immediately).
 
 ### 1a-ix. Helium paywall SDK integration (2026-07-22)
 
@@ -1490,6 +1636,16 @@ feature ideas, health-step notification copy, test-school messages/activities),
 - **Q23 (W73):** Custom weekly-spend ≥$100 dream-outcome math — mirrored the
   iOS `prefix(2)` truncation quirk ("100" → $10/wk) per "iOS is the behavior
   spec"; both platforms would need changing together to use the full amount.
+- **Q24 (free-unlock deep link):** The `?code=` deep-link branch (AppRoot) was
+  a misport — it called `check_referral_code_json` (`payment.referral_codes`,
+  which INSERTs unknown codes as non-free), so referral-site promo codes never
+  unlocked the app. Re-pointed to iOS's actual path (`ReferralCodeHandler.
+  handleURL` → `payment_check_code` / `payment.promo_codes`): guarded on
+  `freeCode == null`, sets `freeCode` + iOS success/"not active" alerts +
+  `opened_from_link(title=referral)`. The group-join-by-referral-code behavior
+  the old branch had is NOT an iOS deep-link behavior (it belongs to manual
+  onboarding entry, ReferralSlide) and was removed; group joins via link use
+  `clear30://group/<code>` / `?group_id=` as before.
 
 ## 6. Out of scope (per Thatcher, 2026-07-13)
 

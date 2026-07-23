@@ -409,13 +409,16 @@ internal fun GuidesFeedCard(msg: ProgramMessage, glow: Brush? = null) {
                     Heading3(guide.title)
                     // Guides carry real markdown (headers/bullets/links) — render
                     // it instead of showing the raw syntax (iOS SmallTextMarkdown).
-                    org.clear30.views.components.SmallTextMarkdownBlocks(
-                        guide.body,
-                        color = Clear30Colors.text.copy(alpha = 0.5f),
-                        modifier = Modifier.weight(1f, fill = false),
-                        maxLines = 12,
-                    )
-                    Spacer(Modifier.weight(1f))
+                    // The body owns ALL the leftover height so the hint stays at
+                    // the card's foot: weighting the body AND a trailing Spacer
+                    // split that space in two, floating the hint mid-card.
+                    Column(Modifier.fillMaxWidth().weight(1f)) {
+                        org.clear30.views.components.SmallTextMarkdownBlocks(
+                            guide.body,
+                            color = Clear30Colors.text.copy(alpha = 0.5f),
+                            maxLines = 12,
+                        )
+                    }
                     TinyText("Tap to see more", color = Clear30Colors.text.copy(alpha = 0.5f))
                 }
             }
@@ -490,6 +493,10 @@ internal fun VisitedNode(visited: Boolean, gradient: Brush) {
  * gradient heading (+ visited node), and the inline MeditationPage player
  * centered in the stretched space (iOS wraps it in Spacers). The gradient
  * lives on the play disc / progress fill, not the card background.
+ *
+ * The player's scrubber stays hidden (faded out, but holding its space so the
+ * card doesn't jump) until this meditation has actually started playing, and is
+ * inset by `horizontalPadding` — see [org.clear30.views.existinguser.support.MeditationPageInline].
  */
 @Composable
 internal fun MeditationFeedCard(
@@ -548,17 +555,20 @@ internal fun RedditFeedCard(res: ProgramResource, userInfo: UserInfo, glow: Brus
             val t = thread
             Heading3(t?.post?.title ?: res.title)
             val preview = t?.post?.body?.let { redditInlinePreview(it) }.orEmpty()
-            if (preview.isNotBlank()) {
-                SmallText(
-                    preview,
-                    color = Clear30Colors.text.copy(alpha = 0.5f),
-                    modifier = Modifier.weight(1f, fill = false),
-                    maxLines = 12,
-                )
+            // The preview owns ALL the leftover height so the stats row below is
+            // pinned to the card's foot: weighting the preview AND a trailing
+            // Spacer split that space in two, floating the row mid-card.
+            Column(Modifier.fillMaxWidth().weight(1f)) {
+                if (preview.isNotBlank()) {
+                    SmallText(
+                        preview,
+                        color = Clear30Colors.text.copy(alpha = 0.5f),
+                        maxLines = 12,
+                    )
+                }
             }
             // Bottom row: stats (upvotes + comments) bottom-LEFT, "Tap to see more"
             // bottom-RIGHT — always, regardless of preview length.
-            Spacer(Modifier.weight(1f))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 t?.post?.let { post ->
                     Row(
@@ -997,15 +1007,18 @@ internal fun JournalEntryFeedCard(entry: JournalEntry, glow: Brush? = null, onOp
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
             FeedCardHeading("Journal Entry", Clear30Gradients.journals)
             Heading3(entry.title)
-            SmallText(
-                entry.content,
-                color = Clear30Colors.text.copy(alpha = 0.5f),
-                // Cap long entries so the fixed-height page keeps "Tap to see
-                // more" visible instead of the body clipping over it.
-                modifier = Modifier.weight(1f, fill = false),
-                maxLines = 12,
-            )
-            Spacer(Modifier.weight(1f))
+            // The body owns ALL the leftover height so "Tap to see more" is
+            // pinned to the card's foot: weighting the body AND a trailing
+            // Spacer split that space in two, floating the hint mid-card.
+            Column(Modifier.fillMaxWidth().weight(1f)) {
+                SmallText(
+                    entry.content,
+                    color = Clear30Colors.text.copy(alpha = 0.5f),
+                    // Cap long entries so the fixed-height page keeps "Tap to see
+                    // more" visible instead of the body clipping over it.
+                    maxLines = 12,
+                )
+            }
             TinyText(
                 "Tap to see more",
                 modifier = Modifier.align(Alignment.CenterHorizontally),
@@ -1015,25 +1028,51 @@ internal fun JournalEntryFeedCard(entry: JournalEntry, glow: Brush? = null, onOp
     }
 }
 
-/** One feed page holding the day's journal entries as a snapping carousel
- *  (iOS `JournalFeedView` with multiple items). */
+/**
+ * One journal feed page — iOS `JournalFeedView` (TodayFeedViews.swift:1109-1150):
+ * a horizontal sub-feed of the day's journal ENTRIES plus the "New Journal"
+ * card. A journal that ANSWERS a prompt REPLACES that prompt, so callers pass
+ * only the still-unanswered [prompts] alongside the [entries]; the "New
+ * Journal" card leads (iOS inserts it at index 0 while prompts remain) and is
+ * shown alone when nothing has been written yet.
+ */
 @Composable
-internal fun JournalEntriesFeedCard(entries: List<JournalEntry>, glow: Brush? = null, onOpen: (JournalEntry) -> Unit) {
-    if (entries.size == 1) {
-        JournalEntryFeedCard(entries[0], glow = glow) { onOpen(entries[0]) }
+internal fun JournalFeedCard(
+    prompts: List<String>,
+    entries: List<JournalEntry>,
+    glow: Brush? = null,
+    onJournal: (String) -> Unit = {},
+    onOpen: (JournalEntry) -> Unit = {},
+) {
+    val showPrompts = prompts.isNotEmpty() || entries.isEmpty()
+    val pageCount = entries.size + if (showPrompts) 1 else 0
+    if (pageCount <= 1) {
+        if (showPrompts) JournalPromptsFeedCard(prompts, glow = glow, onJournal = onJournal)
+        else JournalEntryFeedCard(entries[0], glow = glow) { onOpen(entries[0]) }
         return
     }
     Column(Modifier.fillMaxSize()) {
-        val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { entries.size })
+        val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { pageCount })
         androidx.compose.foundation.pager.HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxWidth().weight(1f),
+            // Same as the guides pager: the inner pager clips at the feed page's
+            // width, cutting the cards' soft shadows — bleed + re-pad (iOS
+            // scrollShadowFix pattern).
+            modifier = Modifier.fillMaxWidth().weight(1f).scrollShadowBleed(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                horizontal = Dimens.scrollShadowFix,
+            ),
             pageSpacing = Dimens.cardSpacing,
         ) { page ->
-            JournalEntryFeedCard(entries[page], glow = glow) { onOpen(entries[page]) }
+            val entryIndex = if (showPrompts) page - 1 else page
+            if (entryIndex < 0) {
+                JournalPromptsFeedCard(prompts, glow = glow, onJournal = onJournal)
+            } else {
+                JournalEntryFeedCard(entries[entryIndex], glow = glow) { onOpen(entries[entryIndex]) }
+            }
         }
         PagerDots(
-            count = entries.size,
+            count = pageCount,
             current = pagerState.currentPage,
             modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = Dimens.cardSpacing / 2),
         )

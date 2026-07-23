@@ -48,11 +48,13 @@ You can list multiple apps/fingerprints — keep the debug entry for testing.
 ## URL formats the app understands
 
 `clear30://<kind>[/<tail>][?query]` or `https://clear30.org/<kind>[/<tail>][?query]`.
-Query params (`school`, `code`) are honored on **any** URL, checked first.
+Query params (`school`, `group_id`, `code`) are honored on **any** URL, checked
+first in that order to match iOS. This includes the production landing page's
+`clear30://?group_id=ABC` Join button.
 
 | Link | Action |
 |---|---|
-| `…/group?group_id=ABC` (or `…/group/ABC`) | Groups tab → **join group ABC** |
+| `…/?group_id=ABC` · `…/group?group_id=ABC` · `…/group/ABC` | Groups tab → **join group ABC** |
 | `…/?school=<id>` | Unlock app + school content |
 | `…/?code=<code>` | Referral: unlock (if free) + join group if the code carries one |
 | `…/post/<id>` | Community → open post |

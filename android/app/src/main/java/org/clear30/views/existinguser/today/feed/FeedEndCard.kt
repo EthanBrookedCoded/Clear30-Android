@@ -9,12 +9,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -28,6 +26,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.delay
@@ -183,14 +184,7 @@ internal fun TopicProgressCard(
                     .then(if (stretch) Modifier.weight(1f) else Modifier.padding(vertical = Dimens.cardSpacing / 2)),
                 contentAlignment = Alignment.Center,
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
-                    modifier = Modifier.padding(horizontal = Dimens.cardSpacing),
-                ) {
-                    emoji?.let { Heading2(it) }
-                    Heading3(title)
-                }
+                EmojiTitle(emoji, title, Modifier.padding(horizontal = Dimens.cardSpacing))
             }
             when {
                 progress == null -> onContinue?.let { TopicCardButton("Dive In", "arrow.down", it) }
@@ -213,6 +207,56 @@ internal fun TopicProgressCard(
                     onContinue?.let { TopicCardButton("Continue", "arrow.down", it) }
                 }
             }
+        }
+    }
+}
+
+/**
+ * The emoji + title pair, centered as ONE unit — iOS `ProgramMessageTopicCard`'s
+ * `HStack(spacing: cardSpacing / 2) { Heading2(emoji); Heading3(title) }`
+ * (CheckInFullscreen.swift:819-827).
+ *
+ * SwiftUI's HStack hugs a wrapped `Text`, but a Compose `Text` takes the FULL
+ * width it is offered the moment it wraps. A plain centered Row therefore looks
+ * centered on a 1-line title and falls apart on a 2-line one: the Row grows to
+ * the card's width, pinning the emoji to the left edge with the title
+ * left-aligned beside it. So we first shrink the title to its longest line —
+ * the narrowest width that still lays it out in the same number of lines — then
+ * center emoji + title together inside that, with the emoji vertically centered
+ * against the whole (1- or 2-line) text block like iOS.
+ */
+@Composable
+private fun EmojiTitle(emoji: String?, title: String, modifier: Modifier = Modifier) {
+    Layout(
+        modifier = modifier,
+        content = {
+            emoji?.let { Heading2(it) }
+            // Centered so the SHORT line of a wrapped title sits under the long
+            // one instead of hanging off its left edge.
+            Heading3(title, textAlign = TextAlign.Center)
+        },
+    ) { measurables, constraints ->
+        val emojiMeasurable = if (measurables.size > 1) measurables.first() else null
+        val titleMeasurable = measurables.last()
+        val gap = if (emojiMeasurable != null) (Dimens.cardSpacing / 2).roundToPx() else 0
+        val emojiPlaceable = emojiMeasurable?.measure(Constraints())
+        val titleMaxWidth = (constraints.maxWidth - (emojiPlaceable?.width ?: 0) - gap).coerceAtLeast(0)
+        // Binary search the hug width: text height only ever grows as the width
+        // shrinks, so the smallest width with the full-width height is the width
+        // of the title's longest line (and breaks the lines evenly, like iOS).
+        val wrappedHeight = titleMeasurable.minIntrinsicHeight(titleMaxWidth)
+        var low = 0
+        var high = titleMaxWidth
+        while (low < high) {
+            val mid = (low + high) / 2
+            if (titleMeasurable.minIntrinsicHeight(mid) <= wrappedHeight) high = mid else low = mid + 1
+        }
+        val titlePlaceable = titleMeasurable.measure(Constraints(maxWidth = low))
+        val width = ((emojiPlaceable?.width ?: 0) + gap + titlePlaceable.width).coerceAtMost(constraints.maxWidth)
+        val height = maxOf(emojiPlaceable?.height ?: 0, titlePlaceable.height)
+        layout(width, height) {
+            emojiPlaceable?.placeRelative(0, (height - emojiPlaceable.height) / 2)
+            titlePlaceable.placeRelative((emojiPlaceable?.width ?: 0) + gap, (height - titlePlaceable.height) / 2)
         }
     }
 }

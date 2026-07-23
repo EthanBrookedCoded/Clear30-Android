@@ -31,10 +31,10 @@ import org.clear30.data.model.RemoteFeedbackConfig
 import org.clear30.data.model.UserInfo
 import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.submitTextFeedback
-import org.clear30.views.components.DefaultButton
 import org.clear30.views.components.Heading2
 import org.clear30.views.components.IconButton
 import org.clear30.views.components.SmallText
+import org.clear30.views.components.TextIconButton
 import org.clear30.views.theme.Clear30Colors
 import org.clear30.views.theme.Clear30Gradients
 import org.clear30.views.theme.Dimens
@@ -132,7 +132,7 @@ fun FeedbackScreen(
             if (link != null && !forceFreeForm) {
                 // Link mode (iOS GenericSubmitFeedback.openUrl): _USERID_ substitution,
                 // or the id appended as ?user_id=.
-                DefaultButton(config.linkButtonText ?: "Submit Feedback", gradient = Clear30Gradients.clear30, modifier = Modifier.fillMaxWidth()) {
+                TextIconButton(config.linkButtonText ?: "Submit Feedback", icon = "link", gradient = Clear30Gradients.clear30) {
                     val url = if (link.contains(USER_ID_PLACEHOLDER)) {
                         link.replace(USER_ID_PLACEHOLDER, userInfo.userID)
                     } else {
@@ -148,9 +148,16 @@ fun FeedbackScreen(
                     onBack()
                 }
             } else {
-                DefaultButton("Send", gradient = Clear30Gradients.clear30, modifier = Modifier.fillMaxWidth()) {
+                // iOS sends through ChatComposeMessageView's arrow button; here the
+                // composer is a plain field, so the send control is the standard
+                // TextIconButton (same arrow.up glyph as the Claire composer).
+                TextIconButton(
+                    text = if (sending) "Sending…" else "Send",
+                    icon = "arrow.up",
+                    gradient = Clear30Gradients.clear30,
+                ) {
                     val t = text.trim()
-                    if (t.isEmpty() || sending) return@DefaultButton
+                    if (t.isEmpty() || sending) return@TextIconButton
                     sending = true
                     error = null
                     scope.launch {

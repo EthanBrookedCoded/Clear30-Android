@@ -237,6 +237,13 @@ enum class LogEventExtraDataType(val rawValue: String) {
 }
 
 object Logger {
+    /**
+     * Master on/off for ALL event logging (the Supabase `events` insert AND the
+     * Firebase Analytics forward). Everything funnels through [logEvent], so
+     * `false` here disables every event app-wide. Flip back to `true` to re-enable.
+     */
+    private val ENABLED = false
+
     private val scope = CoroutineScope(Dispatchers.IO)
 
     fun logEvent(
@@ -244,6 +251,7 @@ object Logger {
         event: LogEventType,
         extraData: Map<LogEventExtraDataType, String>? = null,
     ) {
+        if (!ENABLED) return
         val extra = extraData?.entries?.associate { it.key.rawValue to it.value }
         scope.launch {
             val supabaseEvent = LogEvent(user_id = loggingID, event = event.rawValue, extra_data = extra)

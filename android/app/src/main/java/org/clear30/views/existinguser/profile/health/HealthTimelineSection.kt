@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -250,19 +249,9 @@ private fun HealthTimelineList(
     onReveal: () -> Unit,
     onConfetti: () -> Unit,
 ) {
-    // Index of the current step's card: after the future cards (each card+link)
-    // or after the single placeholder+link pair.
-    val itemsBeforeCurrent =
-        if (displayedNextSteps.isNotEmpty()) displayedNextSteps.size * 2
-        else if (healthProgress.nextStepDate != null) 2 else 0
-    // W2 (Thatcher): the current card should simply BE at the top on open — no
-    // visible jump/scroll. Initializing the list state (instead of scrolling in
-    // a LaunchedEffect) renders it top-anchored from the first frame; the faded
-    // future cards are still reachable by scrolling up.
-    val listState = rememberLazyListState(
-        initialFirstVisibleItemIndex = if (previousAndCurrentSteps.isNotEmpty()) itemsBeforeCurrent else 0,
-    )
-
+    // W3 (Thatcher): no scroll anchoring on the newly-unlocked step — the list
+    // just opens at its natural top (the future/placeholder cards first). The
+    // new card still pops in with confetti where it sits.
     LaunchedEffect(Unit) {
         if (highlightCurrent && !showCurrentStep) {
             onReveal()
@@ -272,7 +261,6 @@ private fun HealthTimelineList(
     }
 
     LazyColumn(
-        state = listState,
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = Dimens.headingTopPadding),

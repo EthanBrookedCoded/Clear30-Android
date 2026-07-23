@@ -25,8 +25,10 @@ sealed interface DeepLinkRoute {
     data class Group(val code: String) : DeepLinkRoute
     /** `?school=<id>` on ANY inbound URL — unlocks the app + school content (iOS URLManager.swift:52-72). */
     data class School(val schoolID: String) : DeepLinkRoute
-    /** `?code=<code>` on ANY inbound URL — referral code (iOS ReferralCodeHandler.handleURL):
-     *  unlocks the app (is_free) and/or joins a group if the code carries one. */
+    /** `?code=<code>` on ANY inbound URL — free-unlock promo link from the
+     *  referral site (iOS ReferralCodeHandler.handleURL): validated against
+     *  `payment.promo_codes` (`payment_check_code`); any existing code gifts
+     *  the app (`userInfo.freeCode`). */
     data class Referral(val code: String) : DeepLinkRoute
     data class Meditation(val url: String) : DeepLinkRoute
     /** The all-messages library on the Support tab (feed-end "All Messages" CTA). */
@@ -66,10 +68,16 @@ object URLManager {
         val kind = if (host == "clear30.org") segments.firstOrNull()?.lowercase().orEmpty() else host
         val tail = if (host == "clear30.org") segments.drop(1) else segments
 
-        // School unlock rides on ANY inbound URL as a query param — checked
-        // before the kind dispatch, like iOS checks it before group_id.
+        // These payloads ride on ANY inbound URL as query params. Keep the
+        // iOS URLManager precedence: school first, then group_id, then code.
         uri.getQueryParameter("school")?.takeIf { it.isNotBlank() }?.let {
             return DeepLinkRoute.School(it)
+        }
+        // The production join page opens `clear30://?group_id=<id>`, with no
+        // route host. iOS reads group_id directly from URLComponents queryItems,
+        // so Android must do the same instead of requiring `clear30://group`.
+        uri.getQueryParameter("group_id")?.takeIf { it.isNotBlank() }?.let {
+            return DeepLinkRoute.Group(it)
         }
         // Referral code (iOS ReferralCodeHandler.handleURL reads `?code=`).
         uri.getQueryParameter("code")?.takeIf { it.isNotBlank() }?.let {

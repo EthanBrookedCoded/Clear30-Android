@@ -101,13 +101,17 @@ fun AllPromptsScreen(program: Program, onBack: () -> Unit, onOpenPrompt: (Progra
     }
 }
 
-/** 2-column grid of prompt cards (iOS `GridView(columns: 2)`). */
+/**
+ * 2-column grid of prompt cards (iOS `GridView(columns: 2)`). The row takes the
+ * height of its tallest card (`IntrinsicSize.Min`) and both cards fill it, so a
+ * short prompt next to a long one stretches to match.
+ */
 @Composable
 private fun PromptGrid(prompts: List<ProgramClairePrompt>, onOpen: (ProgramClairePrompt) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
         prompts.chunked(2).forEach { rowItems ->
             Row(
-                Modifier.fillMaxWidth().height(IntrinsicSize.Max),
+                Modifier.fillMaxWidth().height(IntrinsicSize.Min),
                 horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
             ) {
                 rowItems.forEach { prompt ->
@@ -122,13 +126,17 @@ private fun PromptGrid(prompts: List<ProgramClairePrompt>, onOpen: (ProgramClair
 /** One prompt card (iOS `PromptCard`): sparkles + "Claire", title, "Start chat" pill. */
 @Composable
 private fun PromptCard(prompt: ProgramClairePrompt, onClick: () -> Unit) {
-    Clear30Card(modifier = Modifier.fillMaxWidth().pressScale { onClick() }) {
-        Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+    // fillMaxSize: stretch to the row height set by PromptGrid so both cards match.
+    Clear30Card(modifier = Modifier.fillMaxSize().pressScale { onClick() }) {
+        Column(Modifier.fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 4)) {
                 Icon(sfSymbol("sparkles"), null, tint = Clear30Colors.claire1, modifier = Modifier.size(14.dp))
                 TinyText("Claire", color = Clear30Colors.text.copy(alpha = 0.5f))
             }
             SmallText(prompt.title, maxLines = 4)
+            // Pin "Start chat" to the bottom of the (possibly stretched) card —
+            // iOS `Spacer()` above the pill in `PromptCard`.
+            Spacer(Modifier.weight(1f))
             Row(
                 Modifier.clip(RoundedCornerShape(99.dp)).background(Clear30Colors.opacityGray)
                     .padding(horizontal = Dimens.chipHorizontalPadding, vertical = Dimens.chipVerticalPadding),

@@ -69,6 +69,7 @@ fun PostAssessment(
     program: Program,
     currentBreak: ProgramBreak,
     experimentController: ExperimentController,
+    journalEntries: org.clear30.data.model.JournalEntries? = null,
     completion: () -> Unit,
 ) {
     var showBookingSheet by remember { mutableStateOf(false) }
@@ -76,6 +77,10 @@ fun PostAssessment(
         PostAssessmentViewModel(userInfo, program, currentBreak, experimentController) {
             completion()
         }
+    }
+    // iOS onDisappear: open the booking sheet when interested.
+    val onFlowDone = {
+        if (vm.showCoachReferralAfter) showBookingSheet = true else vm.completion()
     }
 
     Clear30FullScreenCover(
@@ -86,10 +91,7 @@ fun PostAssessment(
             val index = vm.currentIndex
 
             if (index >= vm.slides.size) {
-                PostAssessmentLoadingView(vm) {
-                    // iOS onDisappear: open the booking sheet when interested.
-                    if (vm.showCoachReferralAfter) showBookingSheet = true else vm.completion()
-                }
+                PostAssessmentLoadingView(vm, onDone = onFlowDone)
                 return@Box
             }
 
@@ -102,13 +104,16 @@ fun PostAssessment(
                     Box(Modifier.align(Alignment.Center).fillMaxWidth(0.6f).alpha(if (index > 0) 1f else 0f)) {
                         InfiniteProgressBar(currentProgress = index, maxEstimate = vm.slides.size + 3, height = 10.dp)
                     }
+                    // Hidden on the first slide and while the terminal submit runs
+                    // (iOS `disableAllButtons: viewModel.assessmentDone`).
+                    val backEnabled = index > 0 && !vm.assessmentDone
                     IconButton(
                         "chevron.backward",
                         height = 28.dp,
                         padding = 0.dp,
-                        modifier = Modifier.align(Alignment.CenterStart).alpha(if (index > 0) 1f else 0f),
+                        modifier = Modifier.align(Alignment.CenterStart).alpha(if (backEnabled) 1f else 0f),
                     ) {
-                        if (index > 0) {
+                        if (backEnabled) {
                             Haptics.lightImpact()
                             vm.currentIndex = index - 1
                         }
@@ -133,7 +138,7 @@ fun PostAssessment(
                         },
                         label = "postAssessmentSlide",
                     ) { i ->
-                        PostAssessmentSlide(vm, i)
+                        PostAssessmentSlide(vm, i, journalEntries, onFlowDone)
                     }
                 }
             }
@@ -152,7 +157,12 @@ fun PostAssessment(
 }
 
 @Composable
-private fun PostAssessmentSlide(vm: PostAssessmentViewModel, index: Int) {
+private fun PostAssessmentSlide(
+    vm: PostAssessmentViewModel,
+    index: Int,
+    journalEntries: org.clear30.data.model.JournalEntries?,
+    onFlowDone: () -> Unit,
+) {
     when (val slide = vm.slides[index]) {
         is AssessmentSlide.Question -> AssessmentQuestionView(slide.question) { result ->
             val prompt = slide.question.strippedPrompt
@@ -181,6 +191,7 @@ private fun PostAssessmentSlide(vm: PostAssessmentViewModel, index: Int) {
             )
             AssessmentInfoDataID.postAssessmentBreakdown -> PostAssessmentBreakdown(
                 vm = vm,
+                journalEntries = journalEntries,
                 buttonText = slide.data.primaryButtonText,
                 onNext = { vm.handleSlideCompletion(slide, index) },
             )
@@ -199,6 +210,13 @@ private fun PostAssessmentSlide(vm: PostAssessmentViewModel, index: Int) {
             AssessmentInfoDataID.postAssessmentInterview -> PostAssessmentInterview(
                 title = slide.data.title,
                 onNext = { vm.handleSlideCompletion(slide, index) },
+            )
+            // Terminal slide: iOS renders AccountSetupView here (PostAssessment.swift:84-93)
+            // — submit + resumeCore run on THIS slide, not after paging past it. Falling
+            // through to the generic info slide rendered a blank page with a Next button.
+            AssessmentInfoDataID.postAssessmentLoading -> PostAssessmentLoadingView(
+                vm = vm,
+                onDone = onFlowDone,
             )
             else -> AssessmentInfoSlide(
                 data = slide.data,
@@ -223,7 +241,12 @@ private fun PostAssessmentLoadingView(vm: PostAssessmentViewModel, onDone: () ->
         val error = vm.handleAssessmentDone()
         if (error != null) {
             AlertHandler.error(message = error)
-            vm.currentIndex = (vm.slides.size - 1).coerceAtLeast(0)
+            // Step back PAST the loading slide (this view) to the last question,
+            // so answering again re-enters the flow — iOS resetTrigger.
+            vm.currentIndex = (vm.slides.indexOfFirst {
+                (it as? AssessmentSlide.Information)?.data?.id ==
+                    org.clear30.data.model.AssessmentInfoDataID.postAssessmentLoading
+            } - 1).coerceAtLeast(0)
         } else {
             done = true
         }

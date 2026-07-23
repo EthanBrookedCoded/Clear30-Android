@@ -909,8 +909,16 @@ private fun GroupSettingsTab(
         }
     }
 
+    // The scroll clip is tight on the TOP/BOTTOM edges (a vertical scrollable
+    // only inflates its clip sideways), and this Column started flush with the
+    // "Group name" card, so that card's softShadow — drawn OUTSIDE its layout
+    // bounds — was sliced off along the top. The parent's Spacer sits OUTSIDE
+    // the clip and can't help, so the inset has to live INSIDE the scroll:
+    // .padding AFTER .verticalScroll (iOS scrollShadowFix pattern).
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+        Modifier.fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = Dimens.headingTopPadding),
         verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
     ) {
         // iOS GroupSettings.swift:58-64: a settings card with a borderless,

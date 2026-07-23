@@ -14,8 +14,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -86,7 +88,22 @@ fun AiChatScreen(
         if (count > 0) listState.animateScrollToItem(count - 1)
     }
 
-    Column(Modifier.fillMaxSize().navigationBarsPadding().imePadding().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding)) {
+    // Bottom inset = `imePadding()` ONLY (W81 rule, applied to the bottom edge):
+    // this renders inside AllTabs' Scaffold content, whose bottom padding is the
+    // tab bar — and CustomTabBar already applies
+    // `windowInsetsPadding(WindowInsets.navigationBars)` itself. A
+    // `navigationBarsPadding()` here therefore counted the gesture bar a second
+    // time and floated the composer ~a nav bar above the tab bar. Consuming the
+    // navigation-bar inset (the host spent it) also keeps `imePadding()` honest:
+    // with the keyboard up the composer rises by the keyboard height, not
+    // keyboard + gesture bar. Inside Clear30FullScreenCover (Today → Claire) the
+    // dialog's decor fits the system windows, so both resolve to 0 there.
+    Column(
+        Modifier.fillMaxSize()
+            .consumeWindowInsets(WindowInsets.navigationBars)
+            .imePadding()
+            .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
             IconButton("chevron.backward", onClick = onBack)
             if (avatarRes != null) {

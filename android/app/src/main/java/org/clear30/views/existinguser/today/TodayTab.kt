@@ -150,6 +150,10 @@ fun TodayTab(
     var creatingJournalSeed by remember { mutableStateOf<String?>(null) }
     // Claire opened in-place from a today-feed prompt card (G27) — stays on TODAY.
     var claireOverlay by remember { mutableStateOf<String?>(null) }
+    // A community post opened from the feed carousel — shown IN PLACE (iOS
+    // `viewModel.activeSheet = .communityPostDetail`, TodayFeedCommunity.swift:73-75),
+    // not by switching to the Community tab.
+    var communityPostOverlay by remember { mutableStateOf<Post?>(null) }
     var editingJournalEntry by remember { mutableStateOf<org.clear30.data.model.JournalEntry?>(null) }
     // Drop feed state saved on a previous calendar day, so a process that
     // lives overnight doesn't silently restore yesterday's selected day/page.
@@ -333,13 +337,19 @@ fun TodayTab(
     val feedItems = remember(messages, hasCommunity, refresh, selectedDay) {
         buildList {
             add(FeedItem.CheckIn)
+            // The day's text journals, split once: the ones ANSWERING a lesson
+            // prompt belong on that prompt's own page (they replace it, below),
+            // everything else is free-form and gets the top card.
+            val dayEntries = journalEntries.entries(selectedDay.dateObject)
+                .filter { it.isVideo != true }
+            val dayPrompts = org.clear30.data.model.JournalEntries.getPrompts(messages)
             // Top journal card (iOS buildFeedItems inserts at index min(1, count) —
             // right after the day card, BEFORE the catch-up nudge): the day's
             // free-form entries (title not tied to a lesson prompt).
             if (messages.isNotEmpty()) {
-                val prompts = org.clear30.data.model.JournalEntries.getPrompts(messages)
-                val freeEntries = journalEntries.entries(selectedDay.dateObject)
-                    .filter { it.isVideo != true && it.title !in prompts }
+                val freeEntries = dayEntries.filter {
+                    !org.clear30.data.model.JournalEntries.answersAnyPrompt(it.title, dayPrompts)
+                }
                 if (freeEntries.isNotEmpty()) add(FeedItem.JournalEntriesPage(freeEntries))
             }
             // Catch-up nudge (iOS buildFeedItems:171-177): today only, active
@@ -360,7 +370,22 @@ fun TodayTab(
                 m.youTubes.forEach { add(FeedItem.YouTube(it)) }
                 m.clairePrompts.forEach { add(FeedItem.Claire(it)) }
                 m.memberPerks?.forEach { add(FeedItem.Perk(it)) }
-                m.journalPrompts?.takeIf { it.isNotEmpty() }?.let { add(FeedItem.Journal(it)) }
+                // Journal page: an entry whose title answers one of the lesson's
+                // prompts REPLACES that prompt here (iOS JournalFeedView,
+                // TodayFeedViews.swift:1133-1140) — only the prompts still
+                // unanswered keep a "New Journal" card.
+                m.journalPrompts?.takeIf { it.isNotEmpty() }?.let { msgPrompts ->
+                    add(
+                        FeedItem.Journal(
+                            prompts = msgPrompts.filter { p ->
+                                dayEntries.none { org.clear30.data.model.JournalEntries.answersPrompt(it.title, p) }
+                            },
+                            entries = dayEntries.filter {
+                                org.clear30.data.model.JournalEntries.answersAnyPrompt(it.title, msgPrompts)
+                            },
+                        ),
+                    )
+                }
             }
             // iOS TodayFeedViewModel appends a feedEnd celebration after the day's
             // messages, with community inserted BEFORE it (insertCommunityPosts,
@@ -564,7 +589,8 @@ fun TodayTab(
                                     scope.launch { Clear30Store.save(userInfo) }
                                 },
                             )
-                            is FeedItem.JournalEntriesPage -> JournalEntriesFeedCard(
+                            is FeedItem.JournalEntriesPage -> JournalFeedCard(
+                                prompts = emptyList(),
                                 entries = item.entries,
                                 glow = glow?.let { Clear30Gradients.journals },
                                 onOpen = { editingJournalEntry = it },
@@ -594,7 +620,13 @@ fun TodayTab(
                                 onOpenClaire = { claireOverlay = it },
                             )
                             is FeedItem.Perk -> MemberPerkFeedCard(item.perk, glow = glow?.let { Clear30Gradients.supplements }, onOpenWeb = { webUrl = it })
-                            is FeedItem.Journal -> JournalPromptsFeedCard(item.prompts, glow = glow?.let { Clear30Gradients.journals }, onJournal = { creatingJournalSeed = it })
+                            is FeedItem.Journal -> JournalFeedCard(
+                                prompts = item.prompts,
+                                entries = item.entries,
+                                glow = glow?.let { Clear30Gradients.journals },
+                                onJournal = { creatingJournalSeed = it },
+                                onOpen = { editingJournalEntry = it },
+                            )
                             FeedItem.FeedEnd -> FeedEndCelebration(
                                 message = messages.firstOrNull(),
                                 focused = page == pagerState.settledPage,
@@ -621,11 +653,7 @@ fun TodayTab(
                             )
                             FeedItem.Community -> CommunityCarouselCard(
                                 posts = communityPosts,
-                                onOpenCommunity = { org.clear30.AppState.requestTab("COMMUNITY") },
-                                onOpenPost = { post ->
-                                    org.clear30.AppState.requestSubRoute(org.clear30.data.DeepLinkRoute.Post(post.id))
-                                    org.clear30.AppState.requestTab("COMMUNITY")
-                                },
+                                onOpenPost = { post -> communityPostOverlay = post },
                             )
                             null -> {}
                         }
@@ -677,6 +705,29 @@ fun TodayTab(
                 // scrim tap, no close control, no swipe. The only exit is the
                 // slide-to-confirm (CheckInViewModel.swift:166-172).
                 onDismiss = { showMultiCheckIn = false; refresh++ },
+            )
+        }
+    }
+
+    // Community post detail, in place over the feed. PostDetail is built as a
+    // full screen (own back chevron, ime/navbar padding), so it goes in a cover
+    // rather than a bottom sheet — same treatment as the Claire and message
+    // overlays. Editing is rare from here and continues in the Community tab.
+    communityPostOverlay?.let { post ->
+        org.clear30.views.components.Clear30FullScreenCover(
+            onDismiss = { communityPostOverlay = null },
+            statusBarPadding = true,
+        ) {
+            org.clear30.views.existinguser.community.PostDetail(
+                post = post,
+                userInfo = userInfo,
+                onBack = { communityPostOverlay = null },
+                onEdit = { editing ->
+                    communityPostOverlay = null
+                    org.clear30.AppState.requestSubRoute(org.clear30.data.DeepLinkRoute.Post(editing.id))
+                    org.clear30.AppState.requestTab("COMMUNITY")
+                },
+                onDeleted = { communityPostOverlay = null },
             )
         }
     }
@@ -1099,7 +1150,11 @@ private sealed interface FeedItem {
     data class YouTube(val res: org.clear30.data.model.ProgramResource) : FeedItem
     data class Claire(val prompt: org.clear30.data.model.ProgramClairePrompt) : FeedItem
     data class Perk(val perk: org.clear30.data.model.ProgramMemberPerk) : FeedItem
-    data class Journal(val prompts: List<String>) : FeedItem
+    /** Prompts still unanswered + the entries that answered the rest (iOS JournalFeedView). */
+    data class Journal(
+        val prompts: List<String>,
+        val entries: List<org.clear30.data.model.JournalEntry>,
+    ) : FeedItem
     data object FeedEnd : FeedItem
     data object Community : FeedItem
 }

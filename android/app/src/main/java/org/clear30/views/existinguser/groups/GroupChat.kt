@@ -8,8 +8,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -224,7 +228,14 @@ fun GroupChat(group: Clear30Group, userInfo: UserInfo, controller: GroupControll
             Spacer(Modifier.weight(1f))
         }
 
-        else -> Column(Modifier.fillMaxSize()) {
+        // Match the app's other chat screens: AllTabs/CustomTabBar already
+        // spends the navigation-bar inset, while imePadding keeps the composer
+        // directly above the software keyboard when it opens.
+        else -> Column(
+            Modifier.fillMaxSize()
+                .consumeWindowInsets(WindowInsets.navigationBars)
+                .imePadding(),
+        ) {
             if (ordered.isEmpty()) {
                 // iOS empty state (GroupChat.swift:45-53).
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {

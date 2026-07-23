@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.clear30.data.LogEventType
@@ -526,32 +527,93 @@ private fun LibraryRow(title: String, icon: String, onClick: () -> Unit) {
 }
 
 /**
+ * BrowseButton (Support.swift:559-635) — the Help & Feedback card shape: title
+ * pinned to the BOTTOM-leading corner, artwork trailing, both sized off a single
+ * gradient card.
+ *
+ * [bottomImage] is the iOS switch for "cutoff" artwork (a flat-bottomed asset
+ * like `feedback_monster_*_cutoff`): the card drops its own inner padding so the
+ * art sits FLUSH on the card's bottom edge and the title carries the padding
+ * instead. Otherwise the card keeps its padding and the art floats in the
+ * top-right over a [BROWSE_IMAGE_SPACING] gap, which is what gives the card its
+ * height (iOS `spacing: 40`).
+ *
+ * The art is sized by WIDTH with its aspect ratio preserved (iOS
+ * `.aspectRatio(contentMode: .fit).frame(width:)`) — a square `size()` squashed
+ * the 446x268 monster art. The title takes `weight(1f)` so it can never wrap
+ * underneath the art.
+ */
+@Composable
+private fun BrowseButton(
+    title: String,
+    gradient: Brush,
+    onClick: () -> Unit,
+    imageWidth: Dp = BROWSE_IMAGE_WIDTH,
+    bottomImage: Boolean = false,
+    symbol: String? = null,
+    imageRes: Int = 0,
+) {
+    Clear30Card(
+        modifier = Modifier.fillMaxWidth().pressScale { onClick() },
+        gradient = gradient,
+        padding = !bottomImage,
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+            SmallText(
+                title,
+                color = Color.White,
+                maxLines = 2,
+                modifier = Modifier.weight(1f)
+                    // Unpadded card — the title supplies the inset itself. 16dp
+                    // matches cardStyle's own inner padding.
+                    .then(if (bottomImage) Modifier.padding(16.dp) else Modifier),
+            )
+            val artModifier = Modifier
+                .padding(
+                    start = Dimens.cardSpacing,
+                    end = if (bottomImage) 16.dp else 0.dp,
+                    bottom = if (bottomImage) 0.dp else BROWSE_IMAGE_SPACING,
+                )
+                .width(imageWidth)
+            when {
+                // iOS masks a white rect with the symbol (`fillImage`) — a tinted Icon here.
+                symbol != null -> Icon(sfSymbol(symbol), null, tint = Color.White, modifier = artModifier.height(imageWidth))
+                imageRes != 0 -> androidx.compose.foundation.Image(
+                    painter = androidx.compose.ui.res.painterResource(imageRes),
+                    contentDescription = null,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                    modifier = artModifier,
+                )
+            }
+        }
+    }
+}
+
+/** iOS BrowseButton `defaultImageWidth` / `spacing`. */
+private val BROWSE_IMAGE_WIDTH = 40.dp
+private val BROWSE_IMAGE_SPACING = Dimens.cardSpacing * 3
+
+/**
  * Config-driven feedback card (iOS BrowseButton over RemoteFeedbackConfig):
  * remote card title + image — an SF symbol when `card_image_is_symbol`, else an
  * app asset referenced by its iOS name (e.g. "Feedback Monster Hungry Cutoff" →
- * feedback_monster_hungry_cutoff).
+ * feedback_monster_hungry_cutoff), bottom-flush when `card_bottom_image`.
  */
 @Composable
 private fun FeedbackConfigCard(config: RemoteFeedbackConfig, gradient: Brush, onClick: () -> Unit) {
     val context = LocalContext.current
-    Clear30Card(modifier = Modifier.fillMaxWidth().pressScale { onClick() }, gradient = gradient) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            SmallText(config.cardTitle, color = Color.White, modifier = Modifier.weight(1f))
-            if (config.cardImageIsSymbol) {
-                Icon(sfSymbol(config.cardImage), null, tint = Color.White, modifier = Modifier.size(40.dp))
-            } else {
-                val resId = remember(config.cardImage) { drawableByAssetName(context, config.cardImage) }
-                if (resId != 0) {
-                    androidx.compose.foundation.Image(
-                        painter = androidx.compose.ui.res.painterResource(resId),
-                        contentDescription = null,
-                        contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                        modifier = Modifier.size((config.cardImageWidth ?: 72.0).dp),
-                    )
-                }
-            }
-        }
+    val resId = remember(config.cardImage, config.cardImageIsSymbol) {
+        if (config.cardImageIsSymbol) 0 else drawableByAssetName(context, config.cardImage)
     }
+    BrowseButton(
+        title = config.cardTitle,
+        gradient = gradient,
+        onClick = onClick,
+        imageWidth = config.cardImageWidth?.dp ?: BROWSE_IMAGE_WIDTH,
+        bottomImage = config.cardBottomImage == true,
+        symbol = config.cardImage.takeIf { config.cardImageIsSymbol },
+        imageRes = resId,
+    )
 }
 
 /** iOS imageset name → Android drawable id ("Feedback Monster Full" → feedback_monster_full). */
@@ -564,28 +626,27 @@ private fun drawableByAssetName(context: android.content.Context, name: String):
 /**
  * Feedback Monster card. Unfed = ORANGE with the sad/hungry monster (nobody fed
  * it — decision §17-Q10); fed = yellow/journals with the full monster.
+ *
+ * Both assets are "cutoff" art (flat-bottomed, 446x268 / 423x268), so this is a
+ * `bottomImage` BrowseButton: the monster sits flush on the card's bottom edge
+ * as if climbing out of it, instead of floating in a squashed 72dp square.
  */
 @Composable
 private fun FeedbackMonsterCard(gaveFeedback: Boolean, onClick: () -> Unit) {
-    Clear30Card(
-        modifier = Modifier.fillMaxWidth().pressScale { onClick() },
+    BrowseButton(
+        title = if (gaveFeedback) "The Feedback Monster\nis full — thank you! 💛" else "The Feedback Monster\nis hungry — feed it!",
         gradient = if (gaveFeedback) Clear30Gradients.journals else Clear30Gradients.reddit,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            SmallText(
-                if (gaveFeedback) "The Feedback Monster\nis full — thank you! 💛" else "The Feedback Monster\nis hungry — feed it!",
-                color = Color.White,
-                modifier = Modifier.weight(1f),
-            )
-            androidx.compose.foundation.Image(
-                painter = androidx.compose.ui.res.painterResource(
-                    if (gaveFeedback) org.clear30.R.drawable.feedback_monster_full_cutoff else org.clear30.R.drawable.feedback_monster_hungry_cutoff,
-                ),
-                contentDescription = null,
-                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                modifier = Modifier.size(72.dp),
-            )
-        }
-    }
+        onClick = onClick,
+        imageWidth = MONSTER_IMAGE_WIDTH,
+        bottomImage = true,
+        imageRes = if (gaveFeedback) {
+            org.clear30.R.drawable.feedback_monster_full_cutoff
+        } else {
+            org.clear30.R.drawable.feedback_monster_hungry_cutoff
+        },
+    )
 }
+
+/** Monster art width — the ~1.6:1 cutoff art lands at ~72dp tall, matching the 2-line title block. */
+private val MONSTER_IMAGE_WIDTH = 120.dp
 

@@ -28,6 +28,11 @@ import kotlin.random.Random
  *
  * Fire-and-forget: drop it into a full-screen overlay; it plays once for
  * [durationMillis] then holds the final (faded) frame. The host removes it.
+ *
+ * Give it a real drawing area — inside a bounded parent the default modifier is
+ * enough, otherwise overlay a sized box with
+ * `Box { content; ConfettiOverlay(Modifier.matchParentSize()) }`. `fillMaxWidth()`
+ * under a scrolling (unbounded-height) parent leaves the canvas zero-height.
  */
 @Composable
 fun ConfettiOverlay(
@@ -58,8 +63,14 @@ fun ConfettiOverlay(
     Canvas(modifier.fillMaxSize()) {
         val w = size.width
         val h = size.height
-        val radius = minOf(w, h) * 0.9f
-        val origin = Offset(w / 2f, h * 0.55f)
+        // A caller can hand the canvas a degenerate box — e.g. `fillMaxWidth()`
+        // under an unbounded-height parent (a scrolling column) collapses the
+        // height to 0. Fall back to whichever dimension is real, with a floor,
+        // so the burst still spreads instead of piling every piece on one point.
+        val span = if (w > 0f && h > 0f) minOf(w, h) else maxOf(w, h)
+        val radius = (span * 0.9f).coerceAtLeast(MIN_RADIUS_PX)
+        val origin = Offset(if (w > 0f) w / 2f else radius, if (h > 0f) h * 0.55f else radius * 0.55f)
+        val bottom = maxOf(h, radius)                                  // cull line
         val time = progress.value * (durationMillis / 1000f)          // seconds elapsed
         val gravity = radius * 1.7f                                    // px/s²
         // Fade the whole burst out over the final 30% of its life.
@@ -70,7 +81,7 @@ fun ConfettiOverlay(
             val vy = -sin(p.angle) * p.speed * radius
             val x = origin.x + p.spread * radius * 0.25f + vx * time
             val y = origin.y + vy * time + 0.5f * gravity * time * time
-            if (y > h + 60f) return@forEach
+            if (y > bottom + 60f) return@forEach
             rotate(degrees = p.startRotation + p.rotationSpeed * time, pivot = Offset(x, y)) {
                 drawRect(
                     color = p.color.copy(alpha = fade),
@@ -81,6 +92,9 @@ fun ConfettiOverlay(
         }
     }
 }
+
+/** Smallest burst radius, so a degenerate canvas still throws a real spray (iOS radius 200). */
+private const val MIN_RADIUS_PX = 200f
 
 private data class ConfettiParticle(
     val color: Color,

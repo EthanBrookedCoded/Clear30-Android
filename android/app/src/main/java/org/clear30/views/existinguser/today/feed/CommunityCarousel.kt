@@ -39,20 +39,21 @@ import org.clear30.views.theme.Dimens
 /**
  * CommunityCarouselCard — ported from iOS `TodayFeedCommunity.swift` (DayPostCommunity).
  * A feed card with a horizontal carousel of recent community posts and a "share your
- * experience" CTA. Tapping a post deep-links into the Community tab's detail; the CTA
- * (and "See all") switch to the Community tab.
+ * experience" CTA. Tapping a post opens it in place on the Today tab.
  */
 @Composable
 fun CommunityCarouselCard(
     posts: List<Post>,
-    onOpenCommunity: () -> Unit,
     onOpenPost: (Post) -> Unit,
 ) {
     // iOS DayPostCommunity (TodayFeedCommunity.swift): a FULL-PAGE-height
     // horizontal pager — one full card per post ("Community Responses" heading,
-    // title, dim body, footer pinned by a Spacer) plus a trailing
-    // share-your-experience page (W12).
-    val pageCount = posts.size + 1
+    // title, dim body, footer pinned by a Spacer).
+    //
+    // The trailing share-your-experience page (iOS CreateDayPostView, ported in
+    // W12) is REMOVED per Thatcher — deliberate iOS divergence. The feed-end
+    // card already carries an "Enter the Community" CTA.
+    val pageCount = posts.size
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { pageCount })
     Column(Modifier.fillMaxSize()) {
         androidx.compose.foundation.pager.HorizontalPager(
@@ -66,11 +67,7 @@ fun CommunityCarouselCard(
             ),
             pageSpacing = Dimens.cardSpacing,
         ) { page ->
-            if (page < posts.size) {
-                DayPostCard(posts[page]) { onOpenPost(posts[page]) }
-            } else {
-                CreateDayPostCard(onOpenCommunity)
-            }
+            DayPostCard(posts[page]) { onOpenPost(posts[page]) }
         }
         if (pageCount > 1) {
             // Page dots like the other carousels (iOS FeedView pageDots).
@@ -109,39 +106,6 @@ private fun DayPostCard(post: Post, onClick: () -> Unit) {
                 Icon(sfSymbol("chart.bar.fill"), null, tint = Clear30Colors.text.copy(alpha = 0.25f), modifier = Modifier.size(12.dp))
                 Spacer(Modifier.size(Dimens.cardSpacing / 4))
                 TinyText("${post.viewCount}", color = Clear30Colors.text.copy(alpha = 0.25f))
-            }
-        }
-    }
-}
-
-/** Trailing share-your-experience page (iOS `CreateDayPostView`). */
-@Composable
-private fun CreateDayPostCard(onOpenCommunity: () -> Unit) {
-    Clear30Card(modifier = Modifier.fillMaxSize()) {
-        // Text at the TOP, a text+icon button pinned at the BOTTOM (not a filled
-        // button) — mirrors the reddit/journal card affordance.
-        Column(
-            Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
-        ) {
-            Heading3("Share your experience")
-            SmallText(
-                "Your story could help someone today.",
-                color = Clear30Colors.text.copy(alpha = 0.5f),
-            )
-            Spacer(Modifier.weight(1f))
-            Row(
-                Modifier.fillMaxWidth().pressScale { onOpenCommunity() },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TinyText("Enter the Community", color = Clear30Colors.text.copy(alpha = 0.5f))
-                Spacer(Modifier.weight(1f))
-                Icon(
-                    sfSymbol("arrow.right"),
-                    contentDescription = null,
-                    tint = Clear30Colors.text.copy(alpha = 0.5f),
-                    modifier = Modifier.size(14.dp),
-                )
             }
         }
     }

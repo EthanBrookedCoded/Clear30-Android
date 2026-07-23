@@ -66,9 +66,8 @@ import kotlin.random.Random
  * (GradientProgressBar / SegmentedProgressBar / InfiniteProgressBar /
  * ProgressBar). Tracks use `clear30OpacityGray`; fills use the brand gradient.
  *
- * (Two screens — NormativeFeedbackView and PreviousBreaksSection — still define
- * their own private `ProgressBar`; those can be migrated onto [ProgressBar] here
- * in a later cleanup pass.)
+ * (NormativeFeedbackView still defines its own private `ProgressBar`; it can be
+ * migrated onto [ProgressBar] here in a later cleanup pass.)
  */
 
 /**

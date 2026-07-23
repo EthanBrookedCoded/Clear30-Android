@@ -254,7 +254,9 @@ private fun SlipPlanActivity(activity: SlipActivity, userInfo: UserInfo) {
             }
         }
 
-        if (confetti > 0) key(confetti) { ConfettiOverlay(Modifier.fillMaxWidth(), count = 100) }
+        // matchParentSize, not fillMaxWidth: the sheet scrolls, so an unbounded
+        // height would collapse the canvas to zero and pile the burst on a point.
+        if (confetti > 0) key(confetti) { ConfettiOverlay(Modifier.matchParentSize(), count = 100) }
     }
 
     if (showPrevious) {
@@ -437,7 +439,9 @@ private fun SlipWhyActivity(activity: SlipActivity, userInfo: UserInfo) {
             }
         }
 
-        if (confetti > 0) key(confetti) { ConfettiOverlay(Modifier.fillMaxWidth(), count = 100) }
+        // matchParentSize, not fillMaxWidth: the sheet scrolls, so an unbounded
+        // height would collapse the canvas to zero and pile the burst on a point.
+        if (confetti > 0) key(confetti) { ConfettiOverlay(Modifier.matchParentSize(), count = 100) }
     }
 }
 
@@ -570,6 +574,8 @@ private fun SlipCommunityActivity(activity: SlipActivity, userInfo: UserInfo, pr
             }
         }
 
-        if (confetti > 0) key(confetti) { ConfettiOverlay(Modifier.fillMaxWidth(), count = 100) }
+        // matchParentSize, not fillMaxWidth: the sheet scrolls, so an unbounded
+        // height would collapse the canvas to zero and pile the burst on a point.
+        if (confetti > 0) key(confetti) { ConfettiOverlay(Modifier.matchParentSize(), count = 100) }
     }
 }

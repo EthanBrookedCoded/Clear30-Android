@@ -57,5 +57,22 @@ class JournalEntries(
         /** Flattened journal prompts across the given messages. */
         fun getPrompts(messages: List<ProgramMessage>): List<String> =
             messages.mapNotNull { it.journalPrompts }.filter { it.isNotEmpty() }.flatten()
+
+        /**
+         * Whether an entry [title] ANSWERS [prompt] (iOS matches raw:
+         * `journalEntries.contains { $0.title == prompt }`, TodayFeedViews.swift:1131).
+         *
+         * We compare on trimmed/case-insensitive text because a raw `==` never
+         * matched in practice: ~40% of the live `journal_prompts` values carry
+         * trailing whitespace while `TextEntryEditor` trims the title it saves,
+         * so an answered prompt kept its "New Journal" card AND its entry fell
+         * into the free-form top-of-feed card.
+         */
+        fun answersPrompt(title: String, prompt: String): Boolean =
+            title.trim().equals(prompt.trim(), ignoreCase = true)
+
+        /** Whether an entry [title] answers ANY of [prompts]. */
+        fun answersAnyPrompt(title: String, prompts: List<String>): Boolean =
+            prompts.any { answersPrompt(title, it) }
     }
 }

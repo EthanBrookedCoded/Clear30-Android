@@ -34,13 +34,24 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.clear30.R
 import org.clear30.data.model.AssessmentInfoData
 import org.clear30.data.model.AssessmentQuestionID
+import org.clear30.data.model.BreakReasonType
+import org.clear30.data.model.JournalEntries
 import org.clear30.data.model.PostAssessmentQuestions
 import org.clear30.data.model.UserInfo
+import org.clear30.data.model.getSingleOption
+import org.clear30.util.adding
+import org.clear30.util.daysTo
+import org.clear30.views.components.DefaultText
+import org.clear30.views.components.GridView
+import org.clear30.views.components.HighlightedTextFormat
+import org.clear30.views.components.SmallTextHighlighted
+import org.clear30.views.existinguser.support.shortMonthDateWithSuffix
 import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.logCoachReferralEvent
 import org.clear30.views.components.scrollShadowBleed
@@ -165,51 +176,93 @@ internal fun PostAssessmentIntro(vm: PostAssessmentViewModel, buttonText: String
     }
 }
 
-// MARK: - Breakdown (stats + goals)
+// MARK: - Breakdown (iOS `PreviousBreak(inPostAssessment: true)`)
 
+/**
+ * The break breakdown — iOS renders `PreviousBreak(previousBreak: currentBreak,
+ * inPostAssessment: true)` here: Basics card → break reasons → progress (break
+ * card + snake calendar) → improvements → in-break journal entries. The iOS
+ * "See coin!" button (3D coin) is not ported, and "Rate Us!" is skipped until
+ * the Play Store listing exists.
+ */
 @Composable
-internal fun PostAssessmentBreakdown(vm: PostAssessmentViewModel, buttonText: String, onNext: () -> Unit) {
+internal fun PostAssessmentBreakdown(
+    vm: PostAssessmentViewModel,
+    journalEntries: JournalEntries?,
+    buttonText: String,
+    onNext: () -> Unit,
+) {
     val b = vm.currentBreak
-    val program = vm.program
-    val numDaysSober = program.numDaysSober(b)
-    val numDaysCheckedIn = program.numDaysCheckedIn(b)
-    val delta = program.getDeltaSmokingFrequency(b)
-    val moneySaved = program.getTotalMoneySavedOverBreak(b)
-    val goals = b.getMultiAssessmentResponses(AssessmentQuestionID.BREAK_REASON.raw)
+    var openJournal by remember { mutableStateOf<org.clear30.data.model.JournalEntry?>(null) }
 
     Column(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding)) {
         Column(
-            // Same scrollShadowFix treatment: the breakdown stat cards keep
-            // their soft shadows at the scroll edges.
+            // scrollShadowFix treatment: the cards keep their soft shadows at
+            // the scroll edges.
             Modifier.weight(1f).fillMaxWidth()
                 .scrollShadowBleed()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = Dimens.scrollShadowFix),
-            verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
         ) {
-            Heading3("${b.name} breakdown 📦")
+            // iOS postAssessmentHeading
+            Heading3(b.name, Modifier.padding(bottom = Dimens.cardSpacing))
 
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-                BreakdownStat("Days clear", "$numDaysSober", Modifier.weight(1f))
-                BreakdownStat("Check-ins", "$numDaysCheckedIn", Modifier.weight(1f))
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-                if (delta != null) BreakdownStat("Less smoking", "$delta%", Modifier.weight(1f))
-                if (moneySaved != null) BreakdownStat("Saved", "$$moneySaved", Modifier.weight(1f))
-                if (delta == null && moneySaved == null) Spacer(Modifier.weight(1f))
+            // ── Basics ──
+            BreakdownSectionLabel("Basics")
+            BreakdownBasicsCard(b)
+            Spacer(Modifier.height(Dimens.cardSpacing * 2))
+
+            // ── Break reasons ──
+            val reasons = b.getMultiAssessmentResponses(AssessmentQuestionID.BREAK_REASON.raw)
+            if (reasons.isNotEmpty()) {
+                BreakdownSectionLabel("Break reasons")
+                GridView(data = reasons, columns = 2, spacing = Dimens.cardSpacing) { reason ->
+                    val display = BreakReasonType.entries.firstOrNull { it.rawValue == reason }?.displayText ?: reason
+                    BreakdownChip(display)
+                }
+                Spacer(Modifier.height(Dimens.cardSpacing))
             }
 
-            if (goals.isNotEmpty()) {
-                SmallText("Your goals", color = Clear30Colors.text.copy(alpha = 0.5f))
-                goals.forEach { goal ->
-                    Box(
-                        Modifier.fillMaxWidth().cardStyle(
-                            color = Clear30Colors.button,
-                            shadowColor = androidx.compose.ui.graphics.Color.Transparent,
-                            outlineGradient = Clear30Gradients.clear30,
-                            outlineOpacity = 0.5f,
-                        ),
-                    ) { SmallText(goal) }
+            // ── Progress ──
+            BreakdownSectionLabel("Progress")
+            BreakdownBreakCard(b)
+            Spacer(Modifier.height(Dimens.cardSpacing))
+            ProfileSnakeCalendar(height = 275.dp, program = vm.program, programBreak = b)
+            Spacer(Modifier.height(Dimens.cardSpacing * 2))
+
+            // ── Improvements (post-assessment goal answers Yes/Somewhat) ──
+            val improvements = b.postAssessmentResponses.mapNotNull { response ->
+                val reasonRaw = response.question.strippedPrompt
+                    .removeSuffix("-Met")
+                    .replace("_", " ")
+                val reason = BreakReasonType.entries.firstOrNull { it.rawValue == reasonRaw } ?: return@mapNotNull null
+                val answer = response.getSingleOption() ?: return@mapNotNull null
+                if (answer == "Yes" || answer == "Somewhat") reason.asNoun else null
+            }
+            if (improvements.isNotEmpty()) {
+                BreakdownSectionLabel("Improvements")
+                GridView(data = improvements, columns = 2, spacing = Dimens.cardSpacing) { improvement ->
+                    BreakdownChip(improvement)
+                }
+                Spacer(Modifier.height(Dimens.cardSpacing))
+            }
+
+            // ── Your thoughts (journal entries written during the break) ──
+            val journals = journalEntries?.entries.orEmpty()
+                .filter { it.isVideo != true && b.startDate <= it.date && it.date <= b.endDate }
+                .sortedByDescending { it.date }
+            if (journals.isNotEmpty()) {
+                BreakdownSectionLabel("Your thoughts")
+                GridView(data = journals, columns = 2, spacing = Dimens.cardSpacing) { journal ->
+                    Clear30Card(modifier = Modifier.fillMaxWidth().pressScale { openJournal = journal }) {
+                        Column {
+                            SmallText(journal.title.ifBlank { "Untitled" }, maxLines = 2)
+                            TinyText(
+                                "Day ${b.startDate.daysTo(journal.date)}",
+                                color = Clear30Colors.text.copy(alpha = 0.5f),
+                            )
+                        }
+                    }
                 }
             }
             Spacer(Modifier.height(Dimens.cardSpacing))
@@ -220,15 +273,150 @@ internal fun PostAssessmentBreakdown(vm: PostAssessmentViewModel, buttonText: St
             modifier = Modifier.padding(vertical = Dimens.cardSpacing),
         ) { onNext() }
     }
+
+    // Read-only view of a tapped journal entry (iOS opens the TextEntry sheet).
+    openJournal?.let { entry ->
+        Clear30Sheet(onDismiss = { openJournal = null }) {
+            Column(
+                Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2),
+            ) {
+                Heading3(entry.title.ifBlank { "Untitled" })
+                SmallText(entry.content, color = Clear30Colors.text.copy(alpha = 0.75f))
+            }
+        }
+    }
 }
 
 @Composable
-private fun BreakdownStat(title: String, value: String, modifier: Modifier = Modifier) {
-    Clear30Card(modifier = modifier) {
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Heading3(value)
-            TinyText(title, color = Clear30Colors.text.copy(alpha = 0.5f))
+private fun BreakdownSectionLabel(text: String) {
+    SmallText(
+        text,
+        Modifier.padding(bottom = Dimens.cardSpacing / 2),
+        color = Clear30Colors.text.copy(alpha = 0.5f),
+    )
+}
+
+/** Outlined goal/improvement chip (iOS disabled `SelectableButton`). */
+@Composable
+private fun BreakdownChip(text: String) {
+    Box(
+        Modifier.fillMaxWidth().cardStyle(
+            color = Clear30Colors.button,
+            shadowColor = Color.Transparent,
+            outlineGradient = Clear30Gradients.clear30,
+            outlineOpacity = 0.5f,
+        ),
+        contentAlignment = Alignment.Center,
+    ) { SmallText(text, textAlign = TextAlign.Center) }
+}
+
+/** iOS `PreviousBreakBasicsCard` — dates + commitment + help/harm + goal on the gradient. */
+@Composable
+private fun BreakdownBasicsCard(b: org.clear30.data.model.ProgramBreak) {
+    Clear30Card(modifier = Modifier.fillMaxWidth(), gradient = Clear30Gradients.clear30) {
+        Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+            ) {
+                DefaultText(b.startDate.adding(days = 1).shortMonthDateWithSuffix(), color = Color.White)
+                androidx.compose.material3.Icon(
+                    org.clear30.views.components.sfSymbol("arrow.forward"),
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.5f),
+                    modifier = Modifier.size(17.dp),
+                )
+                DefaultText(b.endDate.adding(days = -1).shortMonthDateWithSuffix(), color = Color.White)
+            }
+
+            val commitment = b.getAssessmentResponse(AssessmentQuestionID.COMMITMENT.raw)?.let { response ->
+                val i = response.responses.firstOrNull() ?: return@let null
+                if (response.question.options.size == 3) {
+                    when (i) { 0 -> "high ↗️"; 1 -> "medium ➡️"; else -> "low ↘️" }
+                } else {
+                    when (i) { 0 -> "extreme 🔥"; 1 -> "high ↗️"; 2 -> "medium ➡️"; 3 -> "a little ↘️"; else -> "low ↘️" }
+                }
+            }
+            if (commitment != null) BasicsLine("Commitment ", commitment)
+
+            b.getAssessmentResponse(AssessmentQuestionID.HELP_HARM.raw)?.responses?.firstOrNull()?.let { i ->
+                BasicsLine(
+                    "Weed is ",
+                    when (i) {
+                        0 -> "harming 😖"
+                        1 -> "somewhat harming 🙁"
+                        2 -> "helping and harming 😐"
+                        3 -> "somewhat helping 🙂"
+                        else -> "helping 😁"
+                    },
+                )
+            }
+
+            b.getAssessmentResponse(AssessmentQuestionID.THEN_WHAT.raw)?.responses?.firstOrNull()?.let { i ->
+                BasicsLine(
+                    "Goal ",
+                    when (i) {
+                        0 -> "weed free ❌"
+                        1 -> "use less / differently 📉"
+                        2 -> "use the same ➖"
+                        else -> "not sure ❓"
+                    },
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun BasicsLine(label: String, value: String) {
+    SmallTextHighlighted(
+        formats = listOf(
+            HighlightedTextFormat(label, highlighted = false),
+            HighlightedTextFormat(value, highlighted = true),
+        ),
+        nonHighlightColor = Color.White.copy(alpha = 0.5f),
+        highlightBrush = androidx.compose.ui.graphics.SolidColor(Color.White),
+        highlightBold = false,
+    )
+}
+
+/** iOS `ProgramCard(programBreakOverride:, showInfo: false)` — static break card. */
+@Composable
+private fun BreakdownBreakCard(b: org.clear30.data.model.ProgramBreak) {
+    Clear30Card(modifier = Modifier.fillMaxWidth(), gradient = Clear30Gradients.clear30) {
+        Column(verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
+            SmallText(b.name)
+            b.breakDescription?.let { SmallText(it, color = Color.White.copy(alpha = 0.5f)) }
+            Row(horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
+                val day = b.currentBreakDay
+                val dayValid = day <= b.type.raw
+                if (dayValid) BreakdownBadge("Day $day", gradientBackground = false)
+                BreakdownBadge(
+                    "${b.startDate.adding(days = 1).shortMonthDateWithSuffix()} to " +
+                        b.endDate.adding(days = -1).shortMonthDateWithSuffix(),
+                    gradientBackground = dayValid,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BreakdownBadge(text: String, gradientBackground: Boolean) {
+    Box(
+        Modifier
+            .cardStyle(
+                color = Color.White,
+                gradient = if (gradientBackground) Clear30Gradients.clear30 else null,
+                outlineGradient = if (gradientBackground) Clear30Gradients.white else Clear30Gradients.clear30,
+                outlineWidth = 2.dp,
+                outlineOpacity = 0.5f,
+                padding = false,
+            )
+            .padding(horizontal = Dimens.chipHorizontalPadding, vertical = Dimens.chipVerticalPadding),
+    ) {
+        TinyText(text, color = if (gradientBackground) Color.White else Color.Black)
     }
 }
 

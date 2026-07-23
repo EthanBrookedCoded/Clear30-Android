@@ -15,7 +15,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import org.clear30.data.getMessages
-import org.clear30.data.supabase.checkReferralCodeJson
+import org.clear30.data.supabase.checkCode
 import org.clear30.data.supabase.getSchoolData
 import org.clear30.views.newuser.AllNewUser
 import org.clear30.views.existinguser.AllTabs
@@ -111,20 +111,31 @@ fun AppRoot(viewModel: AppRootViewModel = viewModel()) {
                 }
             }
             is org.clear30.data.DeepLinkRoute.Referral -> {
-                // iOS ReferralCodeHandler.handleURL: validate the code, unlock the
-                // app if it's a free code, and join the group it carries (if any).
+                // Free-unlock promo link (iOS URLManager.swift:108-117 →
+                // ReferralCodeHandler.handleURL): only for users not already
+                // free, validate against payment.promo_codes via
+                // `payment_check_code` and gift the app on success. The
+                // referral_codes lookup + group join belongs to the manual
+                // onboarding entry (ReferralSlide), not this link.
                 val userInfo = (state as? AppRootState.ExistingUser)?.userInfo
                     ?: (state as? AppRootState.NewUser)?.userInfo
-                if (userInfo != null) {
-                    val result = org.clear30.data.supabase.SupabaseController.checkReferralCodeJson(route.code)
-                    if (result?.is_free == true) {
+                if (userInfo != null && userInfo.freeCode == null) {
+                    if (org.clear30.data.supabase.SupabaseController.checkCode(route.code)) {
                         userInfo.freeCode = route.code
                         org.clear30.data.Clear30Store.save(userInfo)
+                        org.clear30.data.AlertHandler.info(
+                            "Success",
+                            "You've unlocked Clear30 for free!\nNote: this does not cancel your subscription automatically.",
+                        )
+                    } else {
+                        org.clear30.data.AlertHandler.info("Error", "Referral code is not active.")
                     }
-                    val groupId = result?.group_id
-                    if (!groupId.isNullOrBlank()) {
-                        AppState.requestTab("GROUPS")
-                        AppState.requestSubRoute(org.clear30.data.DeepLinkRoute.Group(groupId))
+                    if (!userId.isNullOrEmpty()) {
+                        org.clear30.data.Logger.logEvent(
+                            userId,
+                            org.clear30.data.LogEventType.openedFromLink,
+                            mapOf(org.clear30.data.LogEventExtraDataType.TITLE to "referral"),
+                        )
                     }
                 }
             }

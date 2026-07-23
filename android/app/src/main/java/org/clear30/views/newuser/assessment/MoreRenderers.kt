@@ -245,11 +245,12 @@ fun AssessmentNumber(
             onSelectedIndexChange = { selectedIndex = it },
             startAtBottom = reversed,
             modifier = Modifier
+                .align(Alignment.CenterHorizontally)
                 .size(200.dp)
                 .clip(RoundedCornerShape(Dimens.cornerRadius))
-                // iOS uses clear30OpacityGray @ 0.5 (a faint gray well); 0.25 is
-                // the closest allowed raw alpha to that very-light fill.
-                .background(Clear30Colors.opacityGray.copy(alpha = 0.25f)),
+                // iOS: clear30OpacityGray (black @ 0.1) at 0.5 opacity — a very
+                // faint well. Halve the token's own alpha rather than replacing it.
+                .background(Clear30Colors.opacityGray.copy(alpha = Clear30Colors.opacityGray.alpha * 0.5f)),
         ) { index ->
             Clear30Card {
                 SmallTextGradient(daysText(daysType, index, additionalItems))

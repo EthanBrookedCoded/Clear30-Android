@@ -86,7 +86,6 @@ fun ProfileTab(
 ) {
     var showSettings by remember { mutableStateOf(false) }
     var showJournal by remember { mutableStateOf(false) }
-    var showPreviousBreaks by remember { mutableStateOf(false) }
     var showNewBreak by remember { mutableStateOf(false) }
     // Hidden dev tool (K52): 10 taps on the name opens the timeline shifter.
     var showDevSheet by remember { mutableStateOf(false) }
@@ -196,11 +195,12 @@ fun ProfileTab(
             } else {
                 ProfileCalendar(program)
             }
-            // iOS: if a started break has computable savings, show Days + Money saved
-            // with a full-width New Break button below; otherwise Days + New Break.
-            val lastBreak = program.lastBreak
-            val moneySaved = lastBreak?.takeIf { it.startDate <= now() }
-                ?.let { program.getTotalMoneySavedOverBreak(it) }
+            // Money saved is shown only DURING a break (deliberate iOS divergence,
+            // Thatcher 2026-07-22): iOS lifeLayout also shows it from lastBreak, but
+            // the calculation rests on that break's per-break assessment answers,
+            // which say nothing about post-break spending — so in Life it's hidden.
+            val moneySaved = calendarBreak?.takeIf { it.startDate <= now() }
+                ?.let { program.getTotalMoneySavedOverBreak(it) ?: 0 }
             // "Days without weed" is break-scoped in the break layout (iOS
             // Profile.swift:148 numDaysSober(programBreak:)): day 0 / pre-break sober
             // check-ins don't count, so it reads 0 on the first day of a fresh break.
@@ -233,14 +233,11 @@ fun ProfileTab(
             ProfileBreakOptions(program, userInfo, revision = refresh) { refresh++ }
             }
 
-            // ===== Journal & Previous Breaks (each opens its own full page) =====
+            // ===== Journal (opens its own full page) =====
+            // "Previous Breaks" removed per Thatcher (deliberate iOS divergence):
+            // the card, its page overlay and PreviousBreaksSection.kt are gone.
             BrowseButton("Journal", "book.closed.fill", Clear30Gradients.journals) {
                 showJournal = true
-            }
-            if (userInfo.mode != AppMode.ADOLESCENT) {
-                BrowseButton("Previous Breaks", "archivebox.fill", Clear30Gradients.symptomCard) {
-                    showPreviousBreaks = true
-                }
             }
         }
 
@@ -260,9 +257,6 @@ fun ProfileTab(
         }
         PageOverlay(showJournal) {
             JournalSection(journalEntries, userInfo, program) { showJournal = false }
-        }
-        PageOverlay(showPreviousBreaks) {
-            PreviousBreaksSection(program) { showPreviousBreaks = false }
         }
         // Health card tap → that category's timeline detail (iOS pushes
         // NavigationDestination.healthProgressTimeline(healthProgress:)).

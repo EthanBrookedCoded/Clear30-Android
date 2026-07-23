@@ -308,8 +308,21 @@ internal fun ActivityScreen(
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding), verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing)) {
+    // Both Activity lists are scroll containers, so they clip at their own
+    // bounds — and `softShadow` draws OUTSIDE the card's layout bounds. The
+    // horizontal edges were already handled (scrollShadowBleed + horizontal
+    // contentPadding); the VERTICAL edges were still clipping: the list started
+    // flush under the PillPicker and ended flush at the Column's bottom inset,
+    // so the first card's top shadow and the last card's bottom shadow were cut
+    // at the list bounds. Fix: the Column no longer spaces or pads around the
+    // lists at all — each list owns those insets as vertical contentPadding, so
+    // they sit INSIDE the clip (iOS scrollShadowFix pattern).
+    Column(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding).padding(top = Dimens.headingTopPadding)) {
+        Row(
+            Modifier.padding(bottom = Dimens.cardSpacing),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+        ) {
             IconButton("chevron.backward", onClick = onBack)
             Heading3("Activity", color = Clear30Colors.text.copy(alpha = 0.5f))
         }
@@ -318,15 +331,25 @@ internal fun ActivityScreen(
         when (mode) {
             ActivityMode.NOTIFICATIONS -> {
                 if (notificationsLoading) {
-                    androidx.compose.material3.CircularProgressIndicator()
+                    androidx.compose.material3.CircularProgressIndicator(Modifier.padding(top = Dimens.cardSpacing))
                 } else if (notifications.isEmpty()) {
-                    SmallText("No activity, yet...", color = Clear30Colors.text.copy(alpha = 0.5f))
+                    SmallText(
+                        "No activity, yet...",
+                        modifier = Modifier.padding(top = Dimens.cardSpacing),
+                        color = Clear30Colors.text.copy(alpha = 0.5f),
+                    )
                 } else {
                     LazyColumn(
                         // Widen the clip past the parent's 25dp inset + re-pad via
-                        // contentPadding so card shadows aren't cut at the edges.
+                        // contentPadding so card shadows aren't cut at the sides;
+                        // the vertical contentPadding does the same for the first
+                        // card's top shadow and the last card's bottom shadow,
+                        // which the list bounds were clipping.
                         modifier = Modifier.scrollShadowBleed(),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = Dimens.scrollShadowFix),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            horizontal = Dimens.scrollShadowFix,
+                            vertical = Dimens.scrollShadowFix,
+                        ),
                         verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
                     ) {
                         items(notifications, key = { it.id }) { activity ->
@@ -343,13 +366,23 @@ internal fun ActivityScreen(
             }
             ActivityMode.MY_POSTS -> {
                 if (myPostsLoading) {
-                    androidx.compose.material3.CircularProgressIndicator()
+                    androidx.compose.material3.CircularProgressIndicator(Modifier.padding(top = Dimens.cardSpacing))
                 } else if (myPosts.isEmpty()) {
-                    SmallText("No posts, yet...", color = Clear30Colors.text.copy(alpha = 0.5f))
+                    SmallText(
+                        "No posts, yet...",
+                        modifier = Modifier.padding(top = Dimens.cardSpacing),
+                        color = Clear30Colors.text.copy(alpha = 0.5f),
+                    )
                 } else {
                     LazyColumn(
+                        // Same as Notifications: horizontal bleed for the side
+                        // shadows, vertical contentPadding for the first/last
+                        // card's top/bottom shadow (clipped at the list bounds).
                         modifier = Modifier.scrollShadowBleed(),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = Dimens.scrollShadowFix),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            horizontal = Dimens.scrollShadowFix,
+                            vertical = Dimens.scrollShadowFix,
+                        ),
                         verticalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
                     ) {
                         items(myPosts, key = { it.id }) { post ->

@@ -1,21 +1,20 @@
 package org.clear30.views.existinguser.profile.achievements
 
-import android.content.Context
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector2D
+import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,33 +25,34 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.clear30.data.model.AchievementDefinition
 import org.clear30.views.components.Heading3
 import org.clear30.views.components.IconButton
 import org.clear30.views.components.SmallText
+import org.clear30.views.components.pressScale
 import org.clear30.views.components.sfSymbol
+import org.clear30.views.theme.Anim
 import org.clear30.views.theme.Clear30Colors
 import org.clear30.views.theme.Dimens
 import kotlin.math.atan2
@@ -62,12 +62,16 @@ import kotlin.random.Random
 
 /**
  * AchievementReveal — full-screen reward popup (port of AchievementDetail.swift +
- * ParallaxCard.swift). A blurred rarity-color glow behind a gyroscope-driven 3D
- * parallax card (device tilt → rotationX/rotationY + a moving shine), then the
+ * ParallaxCard.swift). A blurred rarity-color glow behind a drag-driven 3D
+ * parallax card (finger drag → rotationX/rotationY + a moving shine), then the
  * achievement icon, name, description, and stats. First-view achievements play
  * the unlock sequence: scale-in → shake (glow builds) → slam + confetti →
  * staggered text reveal. Already-seen ones show everything immediately. Left/right
  * chevrons page through the earned carousel.
+ *
+ * Divergence noted: iOS ParallaxCard drives the tilt from CMDeviceMotion. W3
+ * (Thatcher): no gyro on Android — the tilt only follows a finger drag on the
+ * card itself and springs back to neutral on release.
  */
 @Composable
 fun AchievementReveal(
@@ -99,12 +103,14 @@ fun AchievementReveal(
     var showBadges by remember { mutableStateOf(false) }
     var confetti by remember { mutableStateOf(0) }
 
-    val tilt by rememberDeviceTilt()
+    // Parallax tilt (pitch, roll) in degrees, driven by dragging on the card.
+    val tilt = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+    val tiltScope = rememberCoroutineScope()
 
     LaunchedEffect(currentKey) {
         // Reset everything for this card.
         showCard = false; showIcon = false; showName = false; showDesc = false; showBadges = false
-        shakeRot.snapTo(0f); slam.snapTo(1f); glow.snapTo(0f)
+        shakeRot.snapTo(0f); slam.snapTo(1f); glow.snapTo(0f); tilt.snapTo(Offset.Zero)
 
         val firstView = !isVisited(current.key)
         onVisited(current.key)
@@ -173,15 +179,17 @@ fun AchievementReveal(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            // Parallax card.
+            // Parallax card. The drag sits on the card box only, so the close
+            // button and the full-width carousel pills keep their taps.
             Box(contentAlignment = Alignment.Center) {
                 Box(
                     Modifier
                         .width(cardWidth).height(cardHeight)
-                        .graphicsLayerCard(tilt, cardScale, slam, shakeRot, showCard, density),
+                        .tiltDrag(tilt, tiltScope)
+                        .graphicsLayerCard(tilt.value, cardScale, slam, shakeRot, showCard, density),
                     contentAlignment = Alignment.Center,
                 ) {
-                    ParallaxCardContent(current, tilt, showIcon, insetWidth, insetHeight, iconSize)
+                    ParallaxCardContent(current, tilt.value, showIcon, insetWidth, insetHeight, iconSize)
                 }
                 ConfettiBurst(confetti, Modifier.size(360.dp))
             }
@@ -209,37 +217,37 @@ fun AchievementReveal(
             }
         }
 
-        // Carousel chevrons. A glowing white dot above a chevron flags unvisited
-        // achievements in that direction (AchievementDetail.swift navButtons).
+        // Carousel chevrons — one bottom row of two stretched translucent pills,
+        // each taking half the width (AchievementDetail.swift navButtons is an
+        // HStack of two full-width TextIconButtons). At the ends the pill dims and
+        // stops responding instead of disappearing (iOS `.opacity` + `.disabled`).
+        // A glowing white dot above a chevron flags unvisited achievements in that
+        // direction.
         if (achievements.size > 1) {
             val hasUnvisitedLeft = (0 until index).any { !isVisited(achievements[it].key) }
             val hasUnvisitedRight = (index + 1 until achievements.size).any { !isVisited(achievements[it].key) }
-            Box(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding), contentAlignment = Alignment.BottomStart) {
-                if (index > 0) {
-                    Box {
-                        Box(
-                            Modifier.size(40.dp).clip(RoundedCornerShape(20.dp))
-                                .background(Color.White.copy(alpha = 0.25f)),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            IconButton("chevron.left", tint = Color.White) { currentKey = achievements[index - 1].key }
-                        }
-                        if (hasUnvisitedLeft) UnvisitedDot(Modifier.align(Alignment.TopStart).padding(1.dp))
-                    }
-                }
-            }
-            Box(Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding), contentAlignment = Alignment.BottomEnd) {
-                if (index < achievements.size - 1) {
-                    Box {
-                        Box(
-                            Modifier.size(40.dp).clip(RoundedCornerShape(20.dp))
-                                .background(Color.White.copy(alpha = 0.25f)),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            IconButton("chevron.right", tint = Color.White) { currentKey = achievements[index + 1].key }
-                        }
-                        if (hasUnvisitedRight) UnvisitedDot(Modifier.align(Alignment.TopEnd).padding(1.dp))
-                    }
+            Box(
+                Modifier.fillMaxSize().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
+                contentAlignment = Alignment.BottomCenter,
+            ) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing),
+                ) {
+                    NavChevron(
+                        icon = "chevron.left",
+                        enabled = index > 0,
+                        showDot = hasUnvisitedLeft,
+                        dotAlignment = Alignment.TopStart,
+                        modifier = Modifier.weight(1f),
+                    ) { currentKey = achievements[index - 1].key }
+                    NavChevron(
+                        icon = "chevron.right",
+                        enabled = index < achievements.size - 1,
+                        showDot = hasUnvisitedRight,
+                        dotAlignment = Alignment.TopEnd,
+                        modifier = Modifier.weight(1f),
+                    ) { currentKey = achievements[index + 1].key }
                 }
             }
         }
@@ -291,6 +299,37 @@ private fun ParallaxCardContent(
 
         // Moving shine.
         ShineOverlay(tilt, corner)
+    }
+}
+
+/**
+ * One carousel nav pill — a stretched translucent chevron button (the caller
+ * hands it `Modifier.weight(1f)` so the pair spans the row edge to edge). The
+ * whole pill is the tap target, with the standard `pressScale` shrink + haptic;
+ * disabled ends dim and swallow the tap.
+ */
+@Composable
+private fun NavChevron(
+    icon: String,
+    enabled: Boolean,
+    showDot: Boolean,
+    dotAlignment: Alignment,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Box(modifier) {
+        Box(
+            Modifier
+                .fillMaxWidth().height(40.dp)
+                .graphicsAlpha(if (enabled) 1f else 0.25f)
+                .pressScale(haptic = enabled) { if (enabled) onClick() }
+                .clip(RoundedCornerShape(20.dp))
+                .background(Color.White.copy(alpha = 0.25f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(sfSymbol(icon), contentDescription = icon, tint = Color.White, modifier = Modifier.size(20.dp))
+        }
+        if (showDot) UnvisitedDot(Modifier.align(dotAlignment).padding(1.dp))
     }
 }
 
@@ -409,35 +448,32 @@ private fun Modifier.graphicsLayerCard(
 }
 
 /**
- * Device tilt (pitch, roll) in degrees, baseline-relative + low-pass smoothed,
- * clamped to ±[maxRotation]. Mirrors ParallaxCard's CMDeviceMotion attitude via
- * the accelerometer gravity vector.
+ * Finger-drag tilt: dragging across the card feeds the same (pitch, roll) pair
+ * the gyro used to — x → rotationX, y → rotationY, clamped to ±[maxRotation] —
+ * so the parallax layers and the shine behave exactly as before. Releasing
+ * springs back to neutral with the shared `Anim.spring()`.
  */
-@Composable
-private fun rememberDeviceTilt(maxRotation: Float = 35f, sensitivity: Float = 0.5f): State<Offset> {
-    val context = LocalContext.current
-    val state = remember { mutableStateOf(Offset.Zero) }
-    DisposableEffect(Unit) {
-        val sm = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
-        val sensor = sm?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        var baseline: Offset? = null
-        var smoothed = Offset.Zero
-        val listener = object : SensorEventListener {
-            override fun onSensorChanged(e: SensorEvent) {
-                val gx = e.values[0]; val gy = e.values[1]; val gz = e.values[2]
-                val pitch = Math.toDegrees(atan2(gy.toDouble(), gz.toDouble())).toFloat()
-                val roll = Math.toDegrees(atan2(gx.toDouble(), gz.toDouble())).toFloat()
-                val raw = Offset(pitch, roll)
-                val base = baseline ?: raw.also { baseline = it }
-                val rel = Offset((raw.x - base.x) * sensitivity, (raw.y - base.y) * sensitivity)
-                val clamped = Offset(rel.x.coerceIn(-maxRotation, maxRotation), rel.y.coerceIn(-maxRotation, maxRotation))
-                smoothed = lerp(smoothed, clamped, 0.15f)
-                state.value = smoothed
-            }
-            override fun onAccuracyChanged(s: Sensor?, accuracy: Int) {}
-        }
-        if (sensor != null) sm.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_GAME)
-        onDispose { sm?.unregisterListener(listener) }
+private fun Modifier.tiltDrag(
+    tilt: Animatable<Offset, AnimationVector2D>,
+    scope: CoroutineScope,
+    maxRotation: Float = 35f,
+    degreesPerDp: Float = 0.35f,
+): Modifier = this.pointerInput(Unit) {
+    // Drag arrives in px; 100dp of travel ≈ the full ±35° swing.
+    val degreesPerPx = degreesPerDp / density
+    var accumulated = Offset.Zero
+    val settle = { scope.launch { tilt.animateTo(Offset.Zero, Anim.spring()) } }
+    detectDragGestures(
+        onDragStart = { accumulated = tilt.value },
+        onDragEnd = { settle() },
+        onDragCancel = { settle() },
+    ) { change, drag ->
+        change.consume()
+        accumulated = Offset(
+            (accumulated.x - drag.y * degreesPerPx).coerceIn(-maxRotation, maxRotation),
+            (accumulated.y + drag.x * degreesPerPx).coerceIn(-maxRotation, maxRotation),
+        )
+        val target = accumulated
+        scope.launch { tilt.snapTo(target) }
     }
-    return state
 }

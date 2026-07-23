@@ -6,9 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -79,10 +77,17 @@ private fun ClaireChatCore(onBack: () -> Unit, userInfo: UserInfo, program: Prog
 /** One-time Claire consent screen — port of iOS `AllClaire.agreement`. */
 @Composable
 private fun ClaireAgreement(userInfo: UserInfo, onBack: () -> Unit, onAgree: () -> Unit) {
+    // No system-bar padding here: the consent screen renders inside AllTabs'
+    // Scaffold content, which is already inset below the status bar and above the
+    // tab bar (CustomTabBar applies the navigation-bar inset itself) — exactly the
+    // W81 double-inset. The old `statusBarsPadding().navigationBarsPadding()`
+    // pushed the header down and lifted the Back/Agree row a gesture bar off the
+    // bottom, so the consent screen didn't line up with the chat it leads into
+    // (AiChatScreen pads neither). From the Today feed it's hosted in a
+    // Clear30FullScreenCover, a Dialog whose decor fits the system windows, so
+    // both were no-ops there anyway.
     Column(
         Modifier.fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
             .padding(horizontal = Dimens.horizontalPadding),
     ) {
         Row(

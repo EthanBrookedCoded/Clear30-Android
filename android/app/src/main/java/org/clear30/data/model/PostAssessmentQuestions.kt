@@ -90,10 +90,12 @@ object PostAssessmentQuestions {
 
     // ─────────── Info slides (custom views dispatched by id in the host) ───────────
 
+    // iOS uses "See ${currentBreak.name} breakdown"; shortened per Thatcher
+    // (2026-07-22) — the break name made the button wordy.
     fun introSlide(currentBreak: ProgramBreak) = AssessmentInfoData(
         id = AssessmentInfoDataID.postAssessmentWelcome,
         title = "", subtitle = "", body = "",
-        primaryButtonText = "See ${currentBreak.name} breakdown",
+        primaryButtonText = "See breakdown",
     )
 
     val interviewSlide = AssessmentInfoData(

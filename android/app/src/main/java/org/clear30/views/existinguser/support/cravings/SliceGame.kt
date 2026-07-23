@@ -1,6 +1,7 @@
 package org.clear30.views.existinguser.support
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -23,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -40,6 +42,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
@@ -310,25 +313,29 @@ private fun SliceArena(engine: SliceEngine, density: androidx.compose.ui.unit.De
             }
         },
     ) {
-        // Targets.
+        // Targets. `key(t.id)` ties each orb's composition state to ITS target, so
+        // the entrance below plays once per spawn and survivors keep their state
+        // when the tick loop rebuilds the list after an expiry.
         engine.targets.forEach { t ->
-            val sizeDp = with(density) { (t.radius * 2f).toDp() }
-            Box(
-                Modifier.offset { IntOffset((t.x - t.radius).roundToInt(), (t.y - t.radius).roundToInt()) }
-                    .size(sizeDp).clip(CircleShape)
-                    .background(if (t.craving) Clear30Gradients.red else Clear30Gradients.clear30)
-                    .border(3.dp, Color.White.copy(alpha = 0.75f), CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (t.drawable != null) {
-                    androidx.compose.foundation.Image(
-                        painter = androidx.compose.ui.res.painterResource(t.drawable),
-                        contentDescription = null,
-                        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.White),
-                        modifier = Modifier.size(with(density) { t.radius.toDp() }),
-                    )
-                } else if (t.emoji != null) {
-                    Heading2(t.emoji)
+            key(t.id) {
+                val sizeDp = with(density) { (t.radius * 2f).toDp() }
+                Box(
+                    Modifier.offset { IntOffset((t.x - t.radius).roundToInt(), (t.y - t.radius).roundToInt()) }
+                        .size(sizeDp).spawnEntrance().clip(CircleShape)
+                        .background(if (t.craving) Clear30Gradients.red else Clear30Gradients.clear30)
+                        .border(3.dp, Color.White.copy(alpha = 0.75f), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (t.drawable != null) {
+                        androidx.compose.foundation.Image(
+                            painter = androidx.compose.ui.res.painterResource(t.drawable),
+                            contentDescription = null,
+                            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.White),
+                            modifier = Modifier.size(with(density) { t.radius.toDp() }),
+                        )
+                    } else if (t.emoji != null) {
+                        Heading2(t.emoji)
+                    }
                 }
             }
         }
@@ -349,6 +356,37 @@ private fun SliceArena(engine: SliceEngine, density: androidx.compose.ui.unit.De
                 )
             }
         }
+    }
+}
+
+/**
+ * Entrance for a freshly spawned orb — spring scale-up from 0.5 + fade-in, so
+ * targets grow onto the board instead of popping. Matches SliceGame.swift, which
+ * appends inside `withAnimation(.spring(response: 0.26, dampingFraction: 0.7))`
+ * with `.transition(.scale(scale: 0.5).combined(with: .opacity))` on the target.
+ *
+ * Presentation only: hit-testing runs in the engine against the target's stored
+ * position/radius, and `graphicsLayer` doesn't touch layout — so an orb is
+ * tappable, with its full hit area, from the frame it spawns.
+ *
+ * The layer is dropped once the spring settles: a board with nothing invalidating
+ * it can otherwise leave an orb behind a stale graphics layer (bug E15).
+ */
+@Composable
+private fun Modifier.spawnEntrance(): Modifier {
+    val progress = remember { Animatable(0f) }
+    var settled by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        // SwiftUI response 0.26 → stiffness = (2π / 0.26)² ≈ 584.
+        progress.animateTo(1f, spring(dampingRatio = 0.7f, stiffness = 584f))
+        settled = true
+    }
+    if (settled) return this
+    return this.graphicsLayer {
+        val s = 0.5f + progress.value * 0.5f
+        scaleX = s
+        scaleY = s
+        alpha = progress.value.coerceIn(0f, 1f)
     }
 }
 

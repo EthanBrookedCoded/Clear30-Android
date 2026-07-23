@@ -45,7 +45,6 @@ import org.clear30.data.model.ProgramResource
 import org.clear30.data.model.UserInfo
 import org.clear30.data.supabase.SupabaseController
 import org.clear30.data.supabase.updateContentInfo
-import org.clear30.util.now
 import org.clear30.views.components.Clear30Card
 import org.clear30.views.components.ElectricProgressBar
 import org.clear30.views.components.IconButton
@@ -102,6 +101,11 @@ fun MessageDetail(
     var webUrl by remember { mutableStateOf<String?>(null) }
     var redditUrl by remember { mutableStateOf<String?>(null) }
     var creatingJournalSeed by remember { mutableStateOf<String?>(null) }
+    var editingJournalEntry by remember { mutableStateOf<JournalEntry?>(null) }
+    // Journal entries are mutated in place, so the journal page needs a revision
+    // to re-derive its answered/unanswered split after a save (same pattern as
+    // TodayTab's `refresh`).
+    var journalRevision by remember { mutableStateOf(0) }
 
     LaunchedEffect(messages) {
         val unvisited = messages.filter { !it.visited }
@@ -141,7 +145,9 @@ fun MessageDetail(
                 // longer surfaced — only reddit threads and YouTube videos (G34).
                 m.memberPerks?.forEach { add(ViewerPage.Perk(it)) }
                 m.clairePrompts.forEach { add(ViewerPage.Claire(it)) }
-                m.journalPrompts?.takeIf { it.isNotEmpty() }?.let { add(ViewerPage.Journal(it)) }
+                m.journalPrompts?.takeIf { it.isNotEmpty() }?.let {
+                    add(ViewerPage.Journal(it, PlainDate.from(m.unlockOn)))
+                }
             }
             add(ViewerPage.FeedEnd)
         }
@@ -179,7 +185,12 @@ fun MessageDetail(
                         Modifier.fillMaxWidth().clickable { scope.launch { pagerState.animateScrollToPage(0) } },
                         verticalArrangement = Arrangement.Center,
                     ) {
-                        SmallText(listOfNotNull(message.topicEmoji, message.topicTitle).joinToString(" "), maxLines = 1)
+                        // Title centered above the progress bar (Thatcher).
+                        SmallText(
+                            listOfNotNull(message.topicEmoji, message.topicTitle).joinToString(" "),
+                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                            maxLines = 1,
+                        )
                         Spacer(Modifier.size(Dimens.cardSpacing))
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.cardSpacing / 2)) {
                             Box(Modifier.weight(1f)) {
@@ -243,7 +254,27 @@ fun MessageDetail(
                     is ViewerPage.YouTube -> YouTubeFeedCard(item.res, userInfo, glow = glow?.let { Clear30Gradients.youtube }, focused = focused, onOpenWeb = { webUrl = it })
                     is ViewerPage.Perk -> MemberPerkFeedCard(item.perk, glow = glow?.let { Clear30Gradients.supplements }, onOpenWeb = { webUrl = it })
                     is ViewerPage.Claire -> ClairePromptFeedCard(item.prompt, userInfo, glow = glow?.let { Clear30Gradients.claire }, focused = focused)
-                    is ViewerPage.Journal -> JournalPromptsFeedCard(item.prompts, glow = glow?.let { Clear30Gradients.journals }, onJournal = { creatingJournalSeed = it })
+                    is ViewerPage.Journal -> {
+                        // An entry whose title answers one of this lesson's prompts
+                        // REPLACES that prompt here (iOS JournalFeedView,
+                        // TodayFeedViews.swift:1133-1140) — only the still-unanswered
+                        // prompts keep a "New Journal" card. `journalRevision` is read
+                        // so a save from this very card re-derives the split.
+                        val dayEntries = remember(item, journalRevision, journalEntries) {
+                            journalEntries?.entries(item.date.dateObject)
+                                ?.filter { it.isVideo != true }
+                                .orEmpty()
+                        }
+                        JournalFeedCard(
+                            prompts = item.prompts.filter { p ->
+                                dayEntries.none { JournalEntries.answersPrompt(it.title, p) }
+                            },
+                            entries = dayEntries.filter { JournalEntries.answersAnyPrompt(it.title, item.prompts) },
+                            glow = glow?.let { Clear30Gradients.journals },
+                            onJournal = { creatingJournalSeed = it },
+                            onOpen = { editingJournalEntry = it },
+                        )
+                    }
                     ViewerPage.FeedEnd -> FeedEndCelebration(
                         message = message,
                         focused = focused,
@@ -273,7 +304,11 @@ fun MessageDetail(
             onClose = { title, body ->
                 if (title.isNotBlank() && body.isNotBlank()) {
                     journalEntries?.let { je ->
-                        je.entries.add(JournalEntry(title = title, content = body, date = now()))
+                        // Dated to the MESSAGE's day, not now (iOS
+                        // `newJournalEntry(date:)` uses the journal item's date) —
+                        // otherwise an answered prompt on a caught-up day never
+                        // finds its entry and keeps showing the prompt card.
+                        je.entries.add(JournalEntry(title = title, content = body, date = contentDay.dateObject))
                         scope.launch { Clear30Store.save(je) }
                         Logger.logEvent(
                             userInfo.loggingID,
@@ -283,6 +318,22 @@ fun MessageDetail(
                     }
                 }
                 creatingJournalSeed = null
+                journalRevision++
+            },
+        )
+    }
+    // Existing entry → the same editor, writing back in place (as TodayTab does).
+    editingJournalEntry?.let { entry ->
+        org.clear30.views.existinguser.profile.TextEntryEditor(
+            initialTitle = entry.title,
+            initialContent = entry.content,
+            alreadyShared = entry.communityPostId != null,
+            onClose = { title, body ->
+                entry.title = title
+                entry.content = body
+                journalEntries?.let { je -> scope.launch { Clear30Store.save(je) } }
+                editingJournalEntry = null
+                journalRevision++
             },
         )
     }
@@ -301,7 +352,8 @@ private sealed interface ViewerPage {
     data class YouTube(val res: ProgramResource) : ViewerPage
     data class Perk(val perk: ProgramMemberPerk) : ViewerPage
     data class Claire(val prompt: ProgramClairePrompt) : ViewerPage
-    data class Journal(val prompts: List<String>) : ViewerPage
+    /** iOS `.journal(prompts:date:)` — the date scopes which entries answer them. */
+    data class Journal(val prompts: List<String>, val date: PlainDate) : ViewerPage
     data object FeedEnd : ViewerPage
 }
 

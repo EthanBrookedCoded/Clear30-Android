@@ -8,15 +8,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -83,15 +84,34 @@ fun PostDetail(
     LaunchedEffect(post.id) {
         // Count this open as a view (community.increment_view_count).
         SupabaseController.incrementCommunityPostView(post.id)
+        // Prime the POST's author too, not just the commenters': a post opened
+        // directly (Today feed carousel, deep link) never went through the feed's
+        // batch priming, so its author would otherwise render as the cold-miss
+        // "User #abc123" placeholder until some other screen flushed.
+        org.clear30.data.UserDirectory.lookup(post.userId)
         SupabaseController.getPostComments(post.id).onSuccess { fetched ->
             comments.clear()
             comments.addAll(fetched)
             fetched.forEach { c -> c.userId?.let { org.clear30.data.UserDirectory.lookup(it) } }
-            org.clear30.data.UserDirectory.flush()
         }
+        org.clear30.data.UserDirectory.flush()
     }
 
-    Column(Modifier.fillMaxSize().navigationBarsPadding().imePadding().padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding)) {
+    // Bottom inset = `imePadding()` ONLY (same rule as the chat screens; W81 for
+    // the top edge): from the Community tab this renders inside AllTabs' Scaffold
+    // content, whose bottom padding is the tab bar — and CustomTabBar already
+    // applies `windowInsetsPadding(WindowInsets.navigationBars)`. The
+    // `navigationBarsPadding()` that used to sit here counted the gesture bar a
+    // second time, floating the comment row above the tab bar. Consuming that
+    // inset (the host spent it) also stops `imePadding()` stacking it when the
+    // keyboard opens. In the Today-feed overlay the cover is a Dialog whose decor
+    // fits the system windows, so both resolve to 0 there.
+    Column(
+        Modifier.fillMaxSize()
+            .consumeWindowInsets(WindowInsets.navigationBars)
+            .imePadding()
+            .padding(horizontal = Dimens.horizontalPadding, vertical = Dimens.headingTopPadding),
+    ) {
         // Top bar: back chevron (left) + overflow menu (right). Title moves BELOW,
         // under the emoji+user row (F20; iOS PostDetailView order).
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
