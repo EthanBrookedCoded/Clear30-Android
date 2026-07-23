@@ -17,12 +17,8 @@ import androidx.compose.ui.platform.LocalContext
 import com.tryhelium.paywall.core.Helium
 import com.tryhelium.paywall.core.HeliumPresentationStyle
 import com.tryhelium.paywall.core.PaywallPresentationConfig
-import com.tryhelium.paywall.core.event.HeliumEvent
-import com.tryhelium.paywall.core.event.HeliumEventListener
-import com.tryhelium.paywall.core.event.PaywallDismissed
+import com.tryhelium.paywall.core.event.PaywallEventHandlers
 import com.tryhelium.paywall.core.event.PaywallWebViewRendered
-import com.tryhelium.paywall.core.event.PurchaseRestored
-import com.tryhelium.paywall.core.event.PurchaseSucceeded
 import com.tryhelium.paywall.revenuecat.RevenueCatDelegate
 import com.tryhelium.paywall.ui.PaywallNotShownReason
 import kotlinx.coroutines.CoroutineScope
@@ -110,47 +106,43 @@ private fun presentHeliumPaywall(
 
     // Resolve the active entitlement (RevenueCat has it post-purchase/restore) and
     // finish onboarding — iOS handlePaid → completed(entitlement).
-    val complete: (Boolean) -> Unit = { restored ->
+    val complete: () -> Unit = {
         scope.launch {
             val entitlement = PaywallController.activeEntitlement(userInfo) ?: EntitlementType.DEFAULT
             userInfo?.let {
-                val extra = buildMap {
-                    put(LogEventExtraDataType.POPUP, "$popup")
-                    if (restored) put(LogEventExtraDataType.EXTRA, "restored")
-                }
-                Logger.logEvent(it.loggingID, LogEventType.subscribed, extra)
+                Logger.logEvent(
+                    it.loggingID,
+                    LogEventType.subscribed,
+                    mapOf(LogEventExtraDataType.POPUP to "$popup"),
+                )
             }
             onCompleted(entitlement)
         }
     }
 
-    val listener = object : HeliumEventListener {
-        override fun onHeliumEvent(event: HeliumEvent) {
-            when (event) {
-                // iOS PaywallWebViewRenderedEvent → log openedPaywall + stamp the ID.
-                is PaywallWebViewRendered -> {
-                    PaywallController.setCurrentPaywallID(event.paywallName)
-                    userInfo?.let {
-                        Logger.logEvent(
-                            it.loggingID,
-                            LogEventType.openedPaywall,
-                            mapOf(
-                                LogEventExtraDataType.TYPE to event.paywallName,
-                                LogEventExtraDataType.TITLE to "helium",
-                                LogEventExtraDataType.PLACEMENT to event.triggerName,
-                            ),
-                        )
-                    }
+    val eventHandlers = PaywallEventHandlers(
+        // Soft paywalls close to free mode on dismiss; hard paywalls block
+        // dismissal (disableSystemBackNavigation = hard).
+        onDismissed = { if (!hard) onCompleted(null) },
+        onOpenFailed = { onFallback() },
+        onAnyEvent = { event ->
+            // iOS PaywallWebViewRenderedEvent → log openedPaywall + stamp the ID.
+            if (event is PaywallWebViewRendered) {
+                PaywallController.setCurrentPaywallID(event.paywallName)
+                userInfo?.let {
+                    Logger.logEvent(
+                        it.loggingID,
+                        LogEventType.openedPaywall,
+                        mapOf(
+                            LogEventExtraDataType.TYPE to event.paywallName,
+                            LogEventExtraDataType.TITLE to "helium",
+                            LogEventExtraDataType.PLACEMENT to event.triggerName,
+                        ),
+                    )
                 }
-                is PurchaseSucceeded -> complete(false)
-                is PurchaseRestored -> complete(true)
-                // Soft paywalls close to free mode on dismiss; hard paywalls block
-                // dismissal (disableSystemBackNavigation = hard).
-                is PaywallDismissed -> if (!hard) onCompleted(null)
-                else -> Unit
             }
-        }
-    }
+        },
+    )
 
     val config = PaywallPresentationConfig(
         fromActivityContext = activity,
@@ -163,13 +155,13 @@ private fun presentHeliumPaywall(
 
     runCatching {
         Helium.presentPaywall(
-            trigger,
-            config,
-            { complete(false) }, // onEntitled (purchased or already entitled)
-            listener,
-            { reason ->          // onPaywallNotShown
+            trigger = trigger,
+            config = config,
+            onEntitled = complete, // purchased, restored, or already entitled
+            eventListener = eventHandlers,
+            onPaywallNotShown = { reason ->
                 when (reason) {
-                    is PaywallNotShownReason.AlreadyEntitled -> complete(false)
+                    is PaywallNotShownReason.AlreadyEntitled -> complete()
                     else -> onFallback() // targeting holdout / error → native paywall
                 }
             },

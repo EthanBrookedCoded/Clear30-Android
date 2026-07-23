@@ -14,6 +14,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -26,6 +27,11 @@ import com.revenuecat.purchases.Offering
 import com.revenuecat.purchases.Package
 import com.revenuecat.purchases.PackageType
 import kotlinx.coroutines.launch
+import org.clear30.BuildConfig
+import org.clear30.data.AlertHandler
+import org.clear30.data.LogEventExtraDataType
+import org.clear30.data.LogEventType
+import org.clear30.data.Logger
 import org.clear30.data.PaywallController
 import org.clear30.data.model.EntitlementType
 import org.clear30.data.model.UserInfo
@@ -67,8 +73,8 @@ fun Paywall(
  * RevenueCat `Default` offering directly (`$rc_annual` / `$rc_monthly`). Tapping a
  * package launches the Google Play purchase; success resolves the [EntitlementType]
  * (`Plus` / `Core`) via [PaywallController]. When RevenueCat isn't configured (no
- * API key / no offering, e.g. local dev), a dev "Continue" pass-through keeps
- * onboarding runnable.
+ * API key / no offering, e.g. local dev), debug builds retain a developer
+ * pass-through while release builds fail closed with retry and restore actions.
  */
 @Composable
 private fun NativePaywall(
@@ -82,8 +88,10 @@ private fun NativePaywall(
     var offering by remember { mutableStateOf<Offering?>(null) }
     var loading by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
+    var reloadAttempt by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(reloadAttempt) {
+        loading = true
         // iOS Paywall auto-completes when a free code is present
         // (HeliumPaywallView.registerFreeCodePayment — logs a free `subscribed`).
         val freeCode = userInfo?.freeCode
@@ -118,6 +126,30 @@ private fun NativePaywall(
         }
     }
 
+    fun restorePurchases() {
+        if (busy) return
+        busy = true
+        scope.launch {
+            val entitlement = PaywallController.restore()
+            busy = false
+            if (entitlement != null) {
+                userInfo?.let {
+                    Logger.logEvent(
+                        it.loggingID,
+                        LogEventType.subscribed,
+                        mapOf(
+                            LogEventExtraDataType.POPUP to "$popup",
+                            LogEventExtraDataType.EXTRA to "restored",
+                        ),
+                    )
+                }
+                onCompleted(entitlement)
+            } else {
+                AlertHandler.error(message = "No purchases were found to restore.")
+            }
+        }
+    }
+
     // iOS Paywall.onDisappear — drop the render-scoped paywall state.
     androidx.compose.runtime.DisposableEffect(Unit) {
         onDispose { PaywallController.clearPaywallPresentation() }
@@ -142,10 +174,36 @@ private fun NativePaywall(
         when {
             loading -> CircularProgressIndicator(color = Clear30Colors.accent)
             packages.isEmpty() -> {
-                // RevenueCat not configured (no key / offering) — dev pass-through.
-                SmallText("Store unavailable — continue in developer mode.", color = Color.Gray)
-                DefaultButton("Continue", gradient = Clear30Gradients.clear30, modifier = Modifier.fillMaxWidth()) {
-                    onCompleted(EntitlementType.DEFAULT)
+                if (BuildConfig.DEBUG) {
+                    // Keep local onboarding usable without store configuration.
+                    SmallText("Store unavailable — continue in developer mode.", color = Color.Gray)
+                    DefaultButton(
+                        "Continue",
+                        gradient = Clear30Gradients.clear30,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        onCompleted(EntitlementType.DEFAULT)
+                    }
+                } else {
+                    Heading3("The store couldn't load")
+                    SmallText(
+                        "Check your connection and try again. If you already subscribed, you can restore your purchase.",
+                        color = Clear30Colors.text.copy(alpha = 0.5f),
+                    )
+                    DefaultButton(
+                        "Try again",
+                        gradient = Clear30Gradients.clear30,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        reloadAttempt++
+                    }
+                    SmallText(
+                        if (busy) "Restoring…" else "Restore purchases",
+                        color = Clear30Colors.text.copy(alpha = 0.5f),
+                        modifier = Modifier.fillMaxWidth()
+                            .padding(top = Dimens.cardSpacing / 2)
+                            .pressScale { restorePurchases() },
+                    )
                 }
             }
             else -> {
@@ -177,34 +235,7 @@ private fun NativePaywall(
                     if (busy) "Processing…" else "Restore purchases",
                     color = Clear30Colors.text.copy(alpha = 0.5f),
                     modifier = Modifier.fillMaxWidth().padding(top = Dimens.cardSpacing / 2)
-                        .pressScale {
-                            if (busy) return@pressScale
-                            busy = true
-                            scope.launch {
-                                val entitlement = PaywallController.restore()
-                                busy = false
-                                if (entitlement != null) {
-                                    // iOS handlePaid(restored: true).
-                                    userInfo?.let {
-                                        org.clear30.data.Logger.logEvent(
-                                            it.loggingID,
-                                            org.clear30.data.LogEventType.subscribed,
-                                            mapOf(
-                                                org.clear30.data.LogEventExtraDataType.POPUP to "$popup",
-                                                org.clear30.data.LogEventExtraDataType.EXTRA to "restored",
-                                            ),
-                                        )
-                                    }
-                                    onCompleted(entitlement)
-                                } else {
-                                    // iOS restore surfaces a "nothing to restore" /
-                                    // failure state via the master alert.
-                                    org.clear30.data.AlertHandler.error(
-                                        message = "No purchases were found to restore.",
-                                    )
-                                }
-                            }
-                        },
+                        .pressScale { restorePurchases() },
                 )
             }
         }

@@ -189,7 +189,7 @@ object PaywallController {
     /**
      * The current RevenueCat offering (`Default`, packages `$rc_annual` /
      * `$rc_monthly`). Null when RevenueCat isn't configured (no API key) or the
-     * fetch fails — the paywall then shows its dev pass-through.
+     * fetch fails — the paywall then shows a retryable error in release builds.
      */
     suspend fun currentOffering(): Offering? {
         if (BuildConfig.REVENUECAT_API_KEY.isBlank()) return null
@@ -250,8 +250,9 @@ object PaywallController {
                 ?: entitlementFrom(Purchases.sharedInstance.awaitCustomerInfo())
         } catch (e: Exception) {
             android.util.Log.w("Paywall", "entitlement check failed: ${e.message}")
-            // iOS falls back to the stored entitlement (or default) on error.
-            userInfo?.currentEntitlementType ?: userInfo?.let { EntitlementType.DEFAULT }
+            // Preserve a previously confirmed entitlement while offline, but do
+            // not grant paid access merely because a user record exists.
+            userInfo?.currentEntitlementType
         }
     }
 

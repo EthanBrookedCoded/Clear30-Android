@@ -19,7 +19,7 @@ android {
         applicationId = "org.clear30.Clear30v1"
         minSdk = 26
         targetSdk = 35
-        versionCode = 21601
+        versionCode = 21602
         versionName = "2.16.1"
         vectorDrawables { useSupportLibrary = true }
 

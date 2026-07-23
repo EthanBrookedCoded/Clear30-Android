@@ -44,6 +44,7 @@ import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import org.clear30.BuildConfig
 import org.clear30.data.AlertHandler
 import org.clear30.data.Clear30Store
 import org.clear30.data.LogEventType
@@ -384,11 +385,23 @@ private fun AccountSection(userInfo: UserInfo, onSignOut: () -> Unit) {
                 primaryLabel = "Delete",
                 onPrimary = {
                     scope.launch {
-                        Logger.logEvent(userInfo.loggingID, LogEventType.deletedAccount)
-                        org.clear30.data.LoadingCoordinator.tracked {
+                        val error = org.clear30.data.LoadingCoordinator.tracked {
                             SupabaseController.deleteAccount()
                         }
-                        onSignOut()
+                        if (error == null) {
+                            Logger.logEvent(userInfo.loggingID, LogEventType.deletedAccount)
+                            onSignOut()
+                        } else {
+                            val detail = if (BuildConfig.DEBUG) {
+                                "\n\n${error.code?.let { "$it: " }.orEmpty()}${error.message}"
+                            } else {
+                                ""
+                            }
+                            AlertHandler.error(
+                                title = "Account not deleted",
+                                message = "We couldn't delete your account. Please check your connection and try again.$detail",
+                            )
+                        }
                     }
                 },
                 secondaryLabel = "Cancel",

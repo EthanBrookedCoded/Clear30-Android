@@ -20,11 +20,11 @@ kotlinxCoroutines = "1.9.0"
 supabase = "3.0.3"          # supabase-kt (jan-tennert) -> Supabase
 ktor = "3.0.1"              # HTTP engine for supabase-kt + RestHandler
 firebaseBom = "33.7.0"     # Firebase (Messaging, Crashlytics, Analytics)
-revenuecat = "9.7.0"       # RevenueCat (Purchases) -> PaywallController. Bumped
-                           # 8.10.5 → 9.7.0 to match Helium's revenue-cat module
-                           # (Helium 4.0.0 depends on RC 9.7.0; existing code
-                           # compiles unchanged against 9.x).
-helium = "4.0.0"           # Helium paywall SDK (com.tryhelium.paywall) + RC bridge
+revenuecat = "9.7.0"       # RevenueCat (Purchases) -> PaywallController; matches
+                           # Helium's revenue-cat bridge.
+helium = "4.4.7"           # Helium paywall SDK + RC bridge. Unlike 4.0.0, this
+                           # release has no Ktor 2 dependency, so it can coexist
+                           # with Supabase's Ktor 3 stack.
 playReview = "2.0.2"       # Play In-App Review (iOS requestReview parity)
 googleServices = "4.4.2"
 firebaseCrashlyticsPlugin = "3.0.2"
