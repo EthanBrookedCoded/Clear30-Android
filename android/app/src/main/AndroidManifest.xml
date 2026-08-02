@@ -7,11 +7,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <!-- SMS sign-up flow reads the user's contacts (Clear30 accountability texts) -->
-    <uses-permission android:name="android.permission.READ_CONTACTS" />
     <!-- Background meditation audio (iOS UIBackgroundModes: audio) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />

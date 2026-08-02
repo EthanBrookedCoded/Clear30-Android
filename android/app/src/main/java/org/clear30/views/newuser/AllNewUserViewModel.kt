@@ -19,7 +19,6 @@ import org.clear30.data.model.Program
 import org.clear30.data.model.ToggleSettings
 import org.clear30.data.model.UserInfo
 import org.clear30.data.supabase.SupabaseController
-import org.clear30.data.supabase.isHardPaywall
 
 /**
  * Onboarding flow controller — ported from `AllNewUser` (AllNewUser.swift).
@@ -28,7 +27,7 @@ import org.clear30.data.supabase.isHardPaywall
  * payment state machine, including the experiment-gated sales-slide sequencing
  * and terms agreement. Handler calls that depend on not-yet-ported subsystems
  * (initialFeedback, AssessmentSubmissionHandler, onboardingSetup.setup,
- * isHardPaywall, NotificationHandler) are marked TODO and ported with them.
+ * NotificationHandler) are marked TODO and ported with them.
  */
 class AllNewUserViewModel(
     private val userInfo: UserInfo,
@@ -150,18 +149,6 @@ class AllNewUserViewModel(
         // by AllTabs on first load (matching iOS's AllTabs fallback); the
         // customCheckIn/accountabilityLevel halves are never set by the short
         // flow (dormant on iOS too).
-
-        // iOS: look up whether the paywall the user saw is hard (payment.hard_paywalls).
-        // currentPaywallID is only set by Helium-driven paywalls, so this is dormant
-        // until the Helium Android SDK lands — same guard as iOS.
-        org.clear30.data.PaywallController.currentPaywallID.value?.let { paywallID ->
-            scope.launch {
-                SupabaseController.isHardPaywall(paywallID)?.let { hard ->
-                    userInfo.paywallHard = hard
-                    Clear30Store.save(userInfo)
-                }
-            }
-        }
         userInfo.currentEntitlementType = entitlement
         userInfo.setPaidFalseOn = setPaidFalseOn
         userInfo.completedOnboarding = true

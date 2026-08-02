@@ -21,7 +21,7 @@ android {
         // not strand Android 7.0/7.1 users in Play's device catalog.
         minSdk = 24
         targetSdk = 35
-        versionCode = 21605
+        versionCode = 21614
         versionName = "2.16.1"
         vectorDrawables { useSupportLibrary = true }
 
@@ -59,6 +59,11 @@ android {
         // disabled → PaywallController falls back to the native RevenueCat paywall,
         // exactly like a blank REVENUECAT_API_KEY no-ops purchases.
         buildConfigField("String", "HELIUM_API_KEY", "\"${props.getProperty("HELIUM_API_KEY", "")}\"")
+        // Purchase-flow diagnostics (PaywallDiag + RevenueCat DEBUG logging).
+        // Logging only — no behaviour change. Needed in RELEASE builds because
+        // Play Billing can only be exercised by a Play-installed release build.
+        // Set PAYWALL_DIAG=false in local.properties for the public release.
+        buildConfigField("boolean", "PAYWALL_DIAG", props.getProperty("PAYWALL_DIAG", "true"))
     }
 
     signingConfigs {

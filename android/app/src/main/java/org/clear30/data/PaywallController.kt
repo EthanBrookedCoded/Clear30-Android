@@ -5,14 +5,12 @@ import android.content.Context
 import com.revenuecat.purchases.CustomerInfo
 import com.revenuecat.purchases.Offering
 import com.revenuecat.purchases.Package
-import com.revenuecat.purchases.PeriodType
 import com.revenuecat.purchases.PurchaseParams
 import com.revenuecat.purchases.Purchases
 import com.revenuecat.purchases.PurchasesConfiguration
 import com.revenuecat.purchases.PurchasesErrorCode
 import com.revenuecat.purchases.PurchasesException
 import com.revenuecat.purchases.awaitCustomerInfo
-import com.revenuecat.purchases.awaitGetProducts
 import com.revenuecat.purchases.awaitLogIn
 import com.revenuecat.purchases.awaitOfferings
 import com.revenuecat.purchases.awaitPurchase
@@ -38,9 +36,8 @@ import org.clear30.data.model.toDictionary
  * iOS stacked RevenueCat + Helium + StoreKit + Stripe Apple Pay. On Android:
  *  - RevenueCat -> com.revenuecat.purchases (Google Play Billing under the hood)
  *  - Helium -> Helium Android SDK (different API; wired in the paywall-views segment)
- *  - StoreKit Message.messages -> no Android analog (Play/RevenueCat surface
- *    billing issues themselves), so [listenForStoreKitMessages] is a no-op
- *  - Apple Pay -> not applicable
+ *  - StoreKit Message.messages / Apple Pay -> no Android analog (Play and
+ *    RevenueCat surface billing issues themselves)
  *
  * The Swift original is kept for reference until the paywall views are built.
  */
@@ -84,7 +81,7 @@ object PaywallController {
     }
 
     /** iOS sets `currentPaywallID` when a paywall renders and nils it on
-     *  disappear (Paywall.onDisappear) — `isHardPaywall` keys off it. */
+     *  disappear (Paywall.onDisappear). */
     fun setCurrentPaywallID(id: String?) { _currentPaywallID.value = id }
 
     /** iOS Paywall.onDisappear — clear the render-scoped paywall state. */
@@ -95,10 +92,14 @@ object PaywallController {
 
     /** RevenueCat init — call from Application.onCreate (Swift `initRevenueCat`). */
     fun initRevenueCat(context: Context) {
+        PaywallDiag.dumpEnvironment(context)
         if (BuildConfig.REVENUECAT_API_KEY.isBlank()) return
+        // Before configure(), so the SDK's own setup logs are captured too.
+        PaywallDiag.enableRevenueCatDebugLogging()
         Purchases.configure(
             PurchasesConfiguration.Builder(context, BuildConfig.REVENUECAT_API_KEY).build()
         )
+        PaywallDiag.dumpIdentity("after configure")
     }
 
     /**
@@ -117,6 +118,17 @@ object PaywallController {
      */
     fun initHeliumSDK(context: Context) {
         if (!heliumEnabled()) return
+        // Helium's logger defaults to ERROR, which hides its Play Billing product
+        // load completely — including which product ids it queries and what Play
+        // returns. That pipeline is separate from RevenueCat's, so it is invisible
+        // in the [Purchases] logs. Raise it before initialize() so setup is covered.
+        if (PaywallDiag.enabled) {
+            runCatching {
+                com.tryhelium.paywall.core.logger.HeliumLogger.Stdout.logLevel =
+                    com.tryhelium.paywall.core.logger.HeliumLogLevel.VERBOSE
+                PaywallDiag.log("helium logger raised to VERBOSE")
+            }.onFailure { PaywallDiag.warn("helium log level could not be raised: ${it.message}") }
+        }
         runCatching {
             com.tryhelium.paywall.core.Helium.initialize(
                 context,
@@ -236,9 +248,6 @@ object PaywallController {
         return com.tryhelium.paywall.core.HeliumUserTraits(traits)
     }
 
-    /** No-op on Android — Google Play / RevenueCat surface billing messages. */
-    suspend fun listenForStoreKitMessages() { /* iOS StoreKit Message.messages only */ }
-
     // MARK: - Offerings / purchase / restore / entitlement (RevenueCat 8.x coroutines)
 
     /**
@@ -251,6 +260,7 @@ object PaywallController {
         return runCatching { Purchases.sharedInstance.awaitOfferings().current }
             .onFailure { android.util.Log.w("Paywall", "offerings failed: ${it.message}") }
             .getOrNull()
+            .also { PaywallDiag.dumpOffering(it) }
     }
 
     /**
@@ -260,16 +270,31 @@ object PaywallController {
      */
     suspend fun purchase(activity: Activity, pkg: Package): EntitlementType? {
         if (BuildConfig.REVENUECAT_API_KEY.isBlank()) return null
+        PaywallDiag.dumpIdentity("before purchase")
+        PaywallDiag.log("purchase ▶ native path productId=${pkg.product.id} package=${pkg.identifier}")
         return runCatching {
             val result = Purchases.sharedInstance.awaitPurchase(PurchaseParams.Builder(activity, pkg).build())
             _event.value = PaywallEvent.USER_SUBSCRIBED
-            entitlementFrom(result.customerInfo) ?: EntitlementType.DEFAULT
+            val entitlement = entitlementFrom(result.customerInfo)
+            PaywallDiag.purchaseResolved(
+                "SUCCEEDED",
+                pkg.product.id,
+                "entitlement=${entitlement?.rawValue ?: "none-matched(Plus/Core)"} " +
+                    "activeKeys=${result.customerInfo.entitlements.active.keys}",
+            )
+            entitlement ?: EntitlementType.DEFAULT
         }.getOrElse { e ->
-            if (e is PurchasesException && e.error.code == PurchasesErrorCode.PurchaseCancelledError) {
+            val code = (e as? PurchasesException)?.error?.code
+            if (code == PurchasesErrorCode.PurchaseCancelledError) {
                 _event.value = PaywallEvent.USER_CANCELED
             } else {
                 android.util.Log.w("Paywall", "purchase failed: ${e.message}")
             }
+            PaywallDiag.purchaseResolved(
+                "FAILED",
+                pkg.product.id,
+                "code=${code ?: "none"} underlying=${(e as? PurchasesException)?.error?.underlyingErrorMessage ?: e.message}",
+            )
             null
         }
     }
@@ -286,18 +311,10 @@ object PaywallController {
 
     /**
      * The user's currently-active paid entitlement, or null (Swift
-     * `getCurrentEntitlement`). With a [userInfo], also honours the
-     * `bypassPaidUntil` bridge (Stripe purchases reach RevenueCat with a delay)
-     * and tracks trial → paid conversion for analytics.
+     * `getCurrentEntitlement`).
      */
-    suspend fun activeEntitlement(
-        userInfo: UserInfo? = null,
-        bypassEntitlement: EntitlementType? = null,
-    ): EntitlementType? {
+    suspend fun activeEntitlement(userInfo: UserInfo? = null): EntitlementType? {
         if (BuildConfig.REVENUECAT_API_KEY.isBlank()) return null
-        if (userInfo?.bypassPaidUntil?.let { it > org.clear30.util.now() } == true) {
-            return bypassEntitlement ?: userInfo.currentEntitlementType ?: EntitlementType.DEFAULT
-        }
 
         // Never query the anonymous/previous RevenueCat account for a known
         // Clear30 user. This also closes the cold-start race between AppRoot and
@@ -322,7 +339,6 @@ object PaywallController {
                 )
                 return userInfo?.currentEntitlementType
             }
-            if (userInfo != null) checkTrialStatus(userInfo, info)
             entitlementFrom(info).also {
                 android.util.Log.i(
                     "SubscriptionState",
@@ -363,35 +379,6 @@ object PaywallController {
         }
     }
 
-    // MARK: - Trial conversion detection (Swift checkTrialStatus / logTrialConversion)
-
-    private suspend fun checkTrialStatus(userInfo: UserInfo, info: CustomerInfo) {
-        val entitlement = info.entitlements.active.values.firstOrNull { it.isActive } ?: return
-        val onTrial = entitlement.periodType == PeriodType.TRIAL || entitlement.periodType == PeriodType.INTRO
-        if (onTrial && userInfo.wasOnTrial != true) userInfo.wasOnTrial = true
-        if (entitlement.periodType == PeriodType.NORMAL &&
-            userInfo.wasOnTrial == true && userInfo.trialConversionLogged != true
-        ) {
-            logTrialConversion(userInfo, entitlement.productIdentifier)
-        }
-    }
-
-    private suspend fun logTrialConversion(userInfo: UserInfo, productId: String) {
-        val product = runCatching {
-            Purchases.sharedInstance.awaitGetProducts(listOf(productId)).firstOrNull()
-        }.getOrNull() ?: return
-        val price = product.price.amountMicros / 1_000_000.0
-        Logger.logEvent(
-            userInfo.loggingID,
-            LogEventType.trialConverted,
-            mapOf(
-                LogEventExtraDataType.REVENUE to String.format(java.util.Locale.US, "%.2f", price),
-                LogEventExtraDataType.CURRENCY to product.price.currencyCode,
-                LogEventExtraDataType.TYPE to productId,
-            ),
-        )
-        userInfo.trialConversionLogged = true
-    }
 
     /**
      * Paywall-targeting user traits (Swift static `getUserParams(userInfo:assessmentResponses:)`).

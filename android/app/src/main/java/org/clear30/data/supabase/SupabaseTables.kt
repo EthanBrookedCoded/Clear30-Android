@@ -104,23 +104,3 @@ suspend fun SupabaseController.removeFeatureIdeaVote(userID: String, featureIdea
         .delete { filter { eq("user_id", userID); eq("feature_idea_id", featureIdeaID) } }
 }.fold({ null }, { it.toError() })
 
-// MARK: - Hard paywalls — payment.hard_paywalls (Swift isHardPaywall)
-
-private const val PAYMENT_SCHEMA = "payment"
-
-@Serializable
-data class HardPaywall(
-    @SerialName("paywall_id") val paywallID: String,
-    val hard: Boolean,
-)
-
-/**
- * Whether [paywallID] is a hard paywall (no close button). Unknown paywalls
- * default to hard, matching iOS; null only on a fetch error.
- */
-suspend fun SupabaseController.isHardPaywall(paywallID: String): Boolean? = runCatching {
-    client.postgrest.from(PAYMENT_SCHEMA, "hard_paywalls")
-        .select { filter { eq("paywall_id", paywallID) } }
-        .decodeList<HardPaywall>()
-        .firstOrNull()?.hard ?: true
-}.getOrNull()
